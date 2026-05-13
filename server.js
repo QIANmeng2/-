@@ -389,6 +389,17 @@ app.delete('/api/schedules/:id', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ message: '删除失败' }); }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-});
+async function startServer() {
+  try {
+    await initDB();
+    console.log("✅ 数据库表创建成功");
+    
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 服务已启动: ${PORT}`);
+    });
+  } catch (err) {
+    console.error("❌ 启动失败", err);
+  }
+}
+
+startServer();
