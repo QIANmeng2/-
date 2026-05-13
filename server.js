@@ -3,18 +3,24 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const { Pool } = require('pg');
+const dns = require('dns');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-me';
 
-// ⚠️ 把下面这行替换成你自己的 Supabase 连接字符串（密码填真实的）
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-  host: process.env.PGHOST
+// 强制使用 IPv4 解析域名，解决 Railway IPv6 连接失败问题
+dns.lookup('db.kfgqinvoxzgdsdjsdpkl.supabase.co', 4, (err, address) => {
+  if (err) console.error('DNS lookup failed:', err);
+  else console.log('Resolved to IPv4:', address);
 });
 
+// 修复后的连接配置：直接写死连接字符串 + 强制 IPv4
+const pool = new Pool({
+  connectionString: 'postgresql://postgres:qianmeng1019@db.kfgqinvoxzgdsdjsdpkl.supabase.co:5432/postgres',
+  ssl: { rejectUnauthorized: false },
+  host: 'db.kfgqinvoxzgdsdjsdpkl.supabase.co'
+});
 // 初始化数据表
 async function initDB() {
   const client = await pool.connect();
