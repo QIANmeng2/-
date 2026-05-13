@@ -12,17 +12,31 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-me';
 app.use(cors());
 app.use(express.json());
 
-// JSON 文件数据库
+// ========== 内存数据库缓存 ==========
 const DB_PATH = path.join(__dirname, 'data.json');
-function readDB() {
-  if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, JSON.stringify({ users: [], schedules: [] }));
+let MEMORY_DB = { users: [], schedules: [] };
+
+// 启动时读盘
+function loadFromDisk() {
+  if (fs.existsSync(DB_PATH)) {
+    try {
+      MEMORY_DB = JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
+    } catch (e) {
+      MEMORY_DB = { users: [], schedules: [] };
+    }
   }
-  return JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
 }
-function writeDB(data) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
+// 定时存盘（每5秒）
+function saveToDisk() {
+  fs.writeFileSync(DB_PATH, JSON.stringify(MEMORY_DB, null, 2));
 }
+setInterval(saveToDisk, 5000);
+// 进程退出时立即存盘
+process.on('SIGTERM', () => { saveToDisk(); process.exit(0); });
+process.on('SIGINT', () => { saveToDisk(); process.exit(0); });
+
+// 启动加载
+loadFromDisk();
 
 // 认证中间件
 function authMiddleware(req, res, next) {
@@ -39,14 +53,13 @@ function authMiddleware(req, res, next) {
   }
 }
 
-// ==================== 用户注册 / 登录 ====================
+// ========== 用户相关 ==========
 app.post('/api/auth/register', (req, res) => {
   const { username, password, teamName, coachName, wechat } = req.body;
   if (!username || !password || !teamName || !coachName || !wechat) {
     return res.status(400).json({ message: '信息不完整' });
   }
-  const db = readDB();
-  if (db.users.find(u => u.username === username)) {
+  if (MEMORY_DB.users.find(u => u.username === username)) {
     return res.status(400).json({ message: '用户名已存在' });
   }
   const newUser = {
@@ -56,18 +69,17 @@ app.post('/api/auth/register', (req, res) => {
     teamName,
     coachName,
     wechat,
-    disabledDates: []   // 新增：灰掉的日期数组
+    disabledDates: []
   };
-  db.users.push(newUser);
-  writeDB(db);
+  MEMORY_DB.users.push(newUser);
+  saveToDisk();  // 注册立即存盘
   const token = jwt.sign({ userId: newUser.id }, JWT_SECRET, { expiresIn: '7d' });
   res.json({ token, user: { id: newUser.id, teamName, coachName, wechat, disabledDates: [] } });
 });
 
 app.post('/api/auth/login', (req, res) => {
   const { username, password } = req.body;
-  const db = readDB();
-  const user = db.users.find(u => u.username === username);
+  const user = MEMORY_DB.users.find(u => u.username === username);
   if (!user || !bcrypt.compareSync(password, user.password)) {
     return res.status(400).json({ message: '用户名或密码错误' });
   }
@@ -76,38 +88,32 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 app.get('/api/auth/me', authMiddleware, (req, res) => {
-  const db = readDB();
-  const user = db.users.find(u => u.id === req.userId);
+  const user = MEMORY_DB.users.find(u => u.id === req.userId);
   if (!user) return res.status(404).json({ message: '用户不存在' });
   res.json({ user: { id: user.id, teamName: user.teamName, coachName: user.coachName, wechat: user.wechat, disabledDates: user.disabledDates || [] } });
 });
 
-// ==================== 灰掉 / 恢复日期 ====================
 app.put('/api/users/me/disabled-dates', authMiddleware, (req, res) => {
-  const { date } = req.body;   // 要切换灰掉状态的日期
+  const { date } = req.body;
   if (!date) return res.status(400).json({ message: '日期不能为空' });
-  const db = readDB();
-  const user = db.users.find(u => u.id === req.userId);
+  const user = MEMORY_DB.users.find(u => u.id === req.userId);
   if (!user) return res.status(404).json({ message: '用户不存在' });
   if (!user.disabledDates) user.disabledDates = [];
   const index = user.disabledDates.indexOf(date);
   if (index === -1) {
-    user.disabledDates.push(date);   // 添加灰掉
+    user.disabledDates.push(date);
   } else {
-    user.disabledDates.splice(index, 1);   // 移除灰掉
+    user.disabledDates.splice(index, 1);
   }
-  writeDB(db);
+  saveToDisk();  // 灰掉日期操作立即存盘
   res.json({ disabledDates: user.disabledDates });
 });
 
-// ==================== 档期相关 ====================
-
-// 获取所有可申请的档期（status = 'available'）
+// ========== 档期相关 ==========
 app.get('/api/schedules', (req, res) => {
-  const db = readDB();
-  const available = db.schedules.filter(s => s.status === 'available');
+  const available = MEMORY_DB.schedules.filter(s => s.status === 'available');
   const schedules = available.map(s => {
-    const user = db.users.find(u => u.id === s.userId);
+    const user = MEMORY_DB.users.find(u => u.id === s.userId);
     return {
       id: s.id,
       date: s.date,
@@ -121,16 +127,14 @@ app.get('/api/schedules', (req, res) => {
   res.json({ schedules });
 });
 
-// 获取我的档期（所有状态），用于日历
 app.get('/api/schedules/mine', authMiddleware, (req, res) => {
-  const db = readDB();
-  const user = db.users.find(u => u.id === req.userId);
-  const schedules = db.schedules
+  const user = MEMORY_DB.users.find(u => u.id === req.userId);
+  const schedules = MEMORY_DB.schedules
     .filter(s => s.userId === req.userId)
     .map(s => {
       let applicantInfo = null;
       if (s.applicantUserId) {
-        const applicant = db.users.find(u => u.id === s.applicantUserId);
+        const applicant = MEMORY_DB.users.find(u => u.id === s.applicantUserId);
         if (applicant) applicantInfo = { teamName: applicant.teamName, coachName: applicant.coachName, wechat: applicant.wechat };
       }
       return {
@@ -147,13 +151,11 @@ app.get('/api/schedules/mine', authMiddleware, (req, res) => {
   res.json({ schedules, disabledDates: user.disabledDates || [] });
 });
 
-// 发布档期（简化：只需日期 + 开始时间 + 模式 + 是否全局bp）
 app.post('/api/schedules', authMiddleware, (req, res) => {
   const { date, startTime, mode, globalBp } = req.body;
   if (!date || !startTime) {
     return res.status(400).json({ message: '请填写日期和时间' });
   }
-  const db = readDB();
   const newSchedule = {
     id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6),
     userId: req.userId,
@@ -164,54 +166,46 @@ app.post('/api/schedules', authMiddleware, (req, res) => {
     status: 'available',
     applicantUserId: null
   };
-  db.schedules.push(newSchedule);
-  writeDB(db);
+  MEMORY_DB.schedules.push(newSchedule);
+  saveToDisk();
   res.json({ schedule: newSchedule });
 });
 
-// 申请约队
 app.post('/api/schedules/:id/apply', authMiddleware, (req, res) => {
-  const db = readDB();
-  const schedule = db.schedules.find(s => s.id === req.params.id);
+  const schedule = MEMORY_DB.schedules.find(s => s.id === req.params.id);
   if (!schedule) return res.status(404).json({ message: '档期不存在' });
   if (schedule.userId === req.userId) return res.status(400).json({ message: '不能申请自己的档期' });
   if (schedule.status !== 'available') return res.status(400).json({ message: '该档期已被申请或已约' });
   schedule.status = 'pending';
   schedule.applicantUserId = req.userId;
-  writeDB(db);
+  saveToDisk();
   res.json({ success: true });
 });
 
-// 确认申请
 app.put('/api/schedules/:id/confirm', authMiddleware, (req, res) => {
-  const db = readDB();
-  const schedule = db.schedules.find(s => s.id === req.params.id && s.userId === req.userId);
+  const schedule = MEMORY_DB.schedules.find(s => s.id === req.params.id && s.userId === req.userId);
   if (!schedule) return res.status(404).json({ message: '档期不存在' });
   if (schedule.status !== 'pending') return res.status(400).json({ message: '当前状态无法确认' });
   schedule.status = 'confirmed';
-  writeDB(db);
+  saveToDisk();
   res.json({ success: true });
 });
 
-// 拒绝申请
 app.put('/api/schedules/:id/reject', authMiddleware, (req, res) => {
-  const db = readDB();
-  const schedule = db.schedules.find(s => s.id === req.params.id && s.userId === req.userId);
+  const schedule = MEMORY_DB.schedules.find(s => s.id === req.params.id && s.userId === req.userId);
   if (!schedule) return res.status(404).json({ message: '档期不存在' });
   if (schedule.status !== 'pending') return res.status(400).json({ message: '当前状态无法拒绝' });
   schedule.status = 'available';
   schedule.applicantUserId = null;
-  writeDB(db);
+  saveToDisk();
   res.json({ success: true });
 });
 
-// 删除档期
 app.delete('/api/schedules/:id', authMiddleware, (req, res) => {
-  const db = readDB();
-  const index = db.schedules.findIndex(s => s.id === req.params.id && s.userId === req.userId);
+  const index = MEMORY_DB.schedules.findIndex(s => s.id === req.params.id && s.userId === req.userId);
   if (index === -1) return res.status(404).json({ message: '档期不存在' });
-  db.schedules.splice(index, 1);
-  writeDB(db);
+  MEMORY_DB.schedules.splice(index, 1);
+  saveToDisk();
   res.json({ success: true });
 });
 
