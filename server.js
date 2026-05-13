@@ -8,11 +8,14 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-me';
 
-// 终极解决方案：直接使用 Supabase 数据库的 IPv4 地址，彻底绕过 DNS 解析
+// ========== 数据库连接 ==========
+// 如果你想把密码藏起来，可以在 Railway 环境变量中设置 DATABASE_URL，
+// 然后把下面这行改成：connectionString: process.env.DATABASE_URL,
 const pool = new Pool({
   connectionString: 'postgresql://postgres:OHgfbDBtBUxgcBbwSUTVglzoyEimCAgD@postgres.railway.internal:5432/railway',
   ssl: { rejectUnauthorized: false }
 });
+
 // 初始化数据表
 async function initDB() {
   const client = await pool.connect();
@@ -244,6 +247,10 @@ app.post('/api/schedules/:id/modify-request', authMiddleware, async (req, res) =
     if (sRes.rows.length === 0) return res.status(404).json({ message: '档期不存在' });
     const schedule = sRes.rows[0];
     if (schedule.status !== 'confirmed') return res.status(400).json({ message: '只有已确认的档期才能修改' });
+    // ✅ 防止重复发起修改请求
+    if (schedule.modification && schedule.modification.status === 'pending') {
+      return res.status(400).json({ message: '已有待处理的修改请求，请等待对方处理' });
+    }
     // 必须是双方之一
     if (req.userId !== schedule.userid && req.userId !== schedule.confirmedapplicant) {
       return res.status(403).json({ message: '无权修改' });
@@ -295,7 +302,11 @@ app.post('/api/schedules/:id/republish', authMiddleware, async (req, res) => {
     const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1 AND userId = $2', [req.params.id, req.userId]);
     if (sRes.rows.length === 0) return res.status(404).json({ message: '档期不存在' });
     if (sRes.rows[0].status !== 'cancelled') return res.status(400).json({ message: '只有已取消的档期才能重新发布' });
-    await pool.query("UPDATE schedules SET status = 'available', confirmedApplicant = NULL WHERE id = $1", [req.params.id]);
+    // ✅ 彻底清理旧数据
+    await pool.query(
+      "UPDATE schedules SET status = 'available', confirmedApplicant = NULL, applicants = '{}', modification = NULL WHERE id = $1",
+      [req.params.id]
+    );
     res.json({ success: true });
   } catch (e) { res.status(500).json({ message: '重新发布失败' }); }
 });
