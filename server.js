@@ -55,12 +55,13 @@ app.post('/api/auth/register', (req, res) => {
     password: bcrypt.hashSync(password, 10),
     teamName,
     coachName,
-    wechat
+    wechat,
+    disabledDates: []   // 新增：灰掉的日期数组
   };
   db.users.push(newUser);
   writeDB(db);
   const token = jwt.sign({ userId: newUser.id }, JWT_SECRET, { expiresIn: '7d' });
-  res.json({ token, user: { id: newUser.id, teamName, coachName, wechat } });
+  res.json({ token, user: { id: newUser.id, teamName, coachName, wechat, disabledDates: [] } });
 });
 
 app.post('/api/auth/login', (req, res) => {
@@ -71,19 +72,37 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(400).json({ message: '用户名或密码错误' });
   }
   const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
-  res.json({ token, user: { id: user.id, teamName: user.teamName, coachName: user.coachName, wechat: user.wechat } });
+  res.json({ token, user: { id: user.id, teamName: user.teamName, coachName: user.coachName, wechat: user.wechat, disabledDates: user.disabledDates || [] } });
 });
 
 app.get('/api/auth/me', authMiddleware, (req, res) => {
   const db = readDB();
   const user = db.users.find(u => u.id === req.userId);
   if (!user) return res.status(404).json({ message: '用户不存在' });
-  res.json({ user: { id: user.id, teamName: user.teamName, coachName: user.coachName, wechat: user.wechat } });
+  res.json({ user: { id: user.id, teamName: user.teamName, coachName: user.coachName, wechat: user.wechat, disabledDates: user.disabledDates || [] } });
+});
+
+// ==================== 灰掉 / 恢复日期 ====================
+app.put('/api/users/me/disabled-dates', authMiddleware, (req, res) => {
+  const { date } = req.body;   // 要切换灰掉状态的日期
+  if (!date) return res.status(400).json({ message: '日期不能为空' });
+  const db = readDB();
+  const user = db.users.find(u => u.id === req.userId);
+  if (!user) return res.status(404).json({ message: '用户不存在' });
+  if (!user.disabledDates) user.disabledDates = [];
+  const index = user.disabledDates.indexOf(date);
+  if (index === -1) {
+    user.disabledDates.push(date);   // 添加灰掉
+  } else {
+    user.disabledDates.splice(index, 1);   // 移除灰掉
+  }
+  writeDB(db);
+  res.json({ disabledDates: user.disabledDates });
 });
 
 // ==================== 档期相关 ====================
 
-// 获取所有**可申请**的档期（status = 'available'）
+// 获取所有可申请的档期（status = 'available'）
 app.get('/api/schedules', (req, res) => {
   const db = readDB();
   const available = db.schedules.filter(s => s.status === 'available');
@@ -92,7 +111,9 @@ app.get('/api/schedules', (req, res) => {
     return {
       id: s.id,
       date: s.date,
-      timeLabel: s.timeLabel,     // 例如 "14:30-16:00"
+      startTime: s.startTime,
+      mode: s.mode || 'bo1',
+      globalBp: s.globalBp || false,
       status: s.status,
       team: user ? { teamName: user.teamName, coachName: user.coachName, wechat: user.wechat } : null
     };
@@ -100,7 +121,7 @@ app.get('/api/schedules', (req, res) => {
   res.json({ schedules });
 });
 
-// 获取我的档期（所有状态）
+// 获取我的档期（所有状态），用于日历
 app.get('/api/schedules/mine', authMiddleware, (req, res) => {
   const db = readDB();
   const user = db.users.find(u => u.id === req.userId);
@@ -110,34 +131,36 @@ app.get('/api/schedules/mine', authMiddleware, (req, res) => {
       let applicantInfo = null;
       if (s.applicantUserId) {
         const applicant = db.users.find(u => u.id === s.applicantUserId);
-        if (applicant) {
-          applicantInfo = { teamName: applicant.teamName, coachName: applicant.coachName, wechat: applicant.wechat };
-        }
+        if (applicant) applicantInfo = { teamName: applicant.teamName, coachName: applicant.coachName, wechat: applicant.wechat };
       }
       return {
         id: s.id,
         date: s.date,
-        timeLabel: s.timeLabel,
+        startTime: s.startTime,
+        mode: s.mode || 'bo1',
+        globalBp: s.globalBp || false,
         status: s.status,
         applicant: applicantInfo,
         team: { teamName: user.teamName, coachName: user.coachName, wechat: user.wechat }
       };
     });
-  res.json({ schedules });
+  res.json({ schedules, disabledDates: user.disabledDates || [] });
 });
 
-// 发布档期
+// 发布档期（简化：只需日期 + 开始时间 + 模式 + 是否全局bp）
 app.post('/api/schedules', authMiddleware, (req, res) => {
-  const { date, startTime, endTime } = req.body;   // 改为具体开始/结束时间
-  if (!date || !startTime || !endTime) {
-    return res.status(400).json({ message: '请完整填写日期和时间' });
+  const { date, startTime, mode, globalBp } = req.body;
+  if (!date || !startTime) {
+    return res.status(400).json({ message: '请填写日期和时间' });
   }
   const db = readDB();
   const newSchedule = {
     id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6),
     userId: req.userId,
     date,
-    timeLabel: `${startTime}-${endTime}`,
+    startTime,
+    mode: mode || 'bo1',
+    globalBp: globalBp || false,
     status: 'available',
     applicantUserId: null
   };
@@ -146,39 +169,36 @@ app.post('/api/schedules', authMiddleware, (req, res) => {
   res.json({ schedule: newSchedule });
 });
 
-// 申请约队（其他教练点击）
+// 申请约队
 app.post('/api/schedules/:id/apply', authMiddleware, (req, res) => {
   const db = readDB();
   const schedule = db.schedules.find(s => s.id === req.params.id);
   if (!schedule) return res.status(404).json({ message: '档期不存在' });
   if (schedule.userId === req.userId) return res.status(400).json({ message: '不能申请自己的档期' });
   if (schedule.status !== 'available') return res.status(400).json({ message: '该档期已被申请或已约' });
-
   schedule.status = 'pending';
   schedule.applicantUserId = req.userId;
   writeDB(db);
   res.json({ success: true });
 });
 
-// 确认申请（发布者操作）
+// 确认申请
 app.put('/api/schedules/:id/confirm', authMiddleware, (req, res) => {
   const db = readDB();
   const schedule = db.schedules.find(s => s.id === req.params.id && s.userId === req.userId);
   if (!schedule) return res.status(404).json({ message: '档期不存在' });
   if (schedule.status !== 'pending') return res.status(400).json({ message: '当前状态无法确认' });
-
-  schedule.status = 'confirmed';   // 已约
+  schedule.status = 'confirmed';
   writeDB(db);
   res.json({ success: true });
 });
 
-// 拒绝申请（发布者操作，恢复为可约）
+// 拒绝申请
 app.put('/api/schedules/:id/reject', authMiddleware, (req, res) => {
   const db = readDB();
   const schedule = db.schedules.find(s => s.id === req.params.id && s.userId === req.userId);
   if (!schedule) return res.status(404).json({ message: '档期不存在' });
   if (schedule.status !== 'pending') return res.status(400).json({ message: '当前状态无法拒绝' });
-
   schedule.status = 'available';
   schedule.applicantUserId = null;
   writeDB(db);
