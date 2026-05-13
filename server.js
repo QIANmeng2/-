@@ -17,12 +17,8 @@ dns.lookup('db.kfgqinvoxzgdsdjsdpkl.supabase.co', 4, (err, address) => {
 
 // 终极解决方案：直接使用 Supabase 数据库的 IPv4 地址，彻底绕过 DNS 解析
 const pool = new Pool({
-  user: 'postgres',
-  password: 'qianmeng1019',
-  host: '13.232.100.178', // 这是 db.kfgqinvoxzgdsdjsdpkl.supabase.co 的 IPv4 地址
-  port: 5432,
-  database: 'postgres',
-  ssl: { rejectUnauthorized: false }
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 // 初始化数据表
 async function initDB() {
