@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-me';
 
 // ========== 数据库连接 ==========
-// 如果你想把密码藏起来，可以在 Railway 环境变量中设置 DATABASE_URL，
+// 如果以后想隐藏密码，可在 Railway 环境变量中设置 DATABASE_URL，
 // 然后把下面这行改成：connectionString: process.env.DATABASE_URL,
 const pool = new Pool({
   connectionString: 'postgresql://postgres:OHgfbDBtBUxgcBbwSUTVglzoyEimCAgD@postgres.railway.internal:5432/railway',
@@ -158,7 +158,7 @@ app.get('/api/schedules', async (req, res) => {
   } catch (e) { res.status(500).json({ message: '加载失败' }); }
 });
 
-// ==================== 我的日程（包含双方） ====================
+// ==================== 我的日程（包含双方 + 申请者列表） ====================
 app.get('/api/schedules/mine', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
@@ -174,6 +174,13 @@ app.get('/api/schedules/mine', authMiddleware, async (req, res) => {
         const oppRes = await pool.query('SELECT id, teamName, coachName, level FROM users WHERE id = $1', [s.confirmedapplicant]);
         opponent = oppRes.rows[0] || null;
       }
+      // ✅ 查询申请者信息
+      let applicants = [];
+      if (s.applicants && s.applicants.length > 0) {
+        const appRes = await pool.query('SELECT id, teamName, coachName, level FROM users WHERE id = ANY($1)', [s.applicants]);
+        applicants = appRes.rows.map(a => ({ id: a.id, teamName: a.teamname, coachName: a.coachname, level: a.level }));
+      }
+
       schedules.push({
         id: s.id,
         date: s.date,
@@ -183,6 +190,7 @@ app.get('/api/schedules/mine', authMiddleware, async (req, res) => {
         status: s.status,
         publisher: { id: publisher.id, teamName: publisher.teamname, coachName: publisher.coachname, level: publisher.level },
         opponent: opponent ? { id: opponent.id, teamName: opponent.teamname, coachName: opponent.coachname, level: opponent.level } : null,
+        applicants,          // 现在会返回申请者列表
         modification: s.modification,
         isPublisher: s.userid === req.userId
       });
@@ -241,13 +249,13 @@ app.put('/api/schedules/:id/confirm-applicant', authMiddleware, async (req, res)
 
 // 发起修改请求
 app.post('/api/schedules/:id/modify-request', authMiddleware, async (req, res) => {
-  const { type, newTime } = req.body;  // type: 'cancel' 或 'modify'
+  const { type, newTime } = req.body;
   try {
     const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1', [req.params.id]);
     if (sRes.rows.length === 0) return res.status(404).json({ message: '档期不存在' });
     const schedule = sRes.rows[0];
     if (schedule.status !== 'confirmed') return res.status(400).json({ message: '只有已确认的档期才能修改' });
-    // ✅ 防止重复发起修改请求
+    // 防止重复发起修改请求
     if (schedule.modification && schedule.modification.status === 'pending') {
       return res.status(400).json({ message: '已有待处理的修改请求，请等待对方处理' });
     }
@@ -266,9 +274,9 @@ app.post('/api/schedules/:id/modify-request', authMiddleware, async (req, res) =
   } catch (e) { res.status(500).json({ message: '发起修改失败' }); }
 });
 
-// 处理修改请求（同意/拒绝）
+// 处理修改请求
 app.put('/api/schedules/:id/modify-response', authMiddleware, async (req, res) => {
-  const { action } = req.body;  // 'accept' 或 'reject'
+  const { action } = req.body;
   try {
     const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1', [req.params.id]);
     if (sRes.rows.length === 0) return res.status(404).json({ message: '档期不存在' });
@@ -276,7 +284,6 @@ app.put('/api/schedules/:id/modify-response', authMiddleware, async (req, res) =
     if (!schedule.modification || schedule.modification.status !== 'pending') {
       return res.status(400).json({ message: '没有待处理的修改请求' });
     }
-    // 只能是对方操作
     const otherUserId = schedule.modification.fromUserId === schedule.userid ? schedule.confirmedapplicant : schedule.userid;
     if (req.userId !== otherUserId) return res.status(403).json({ message: '只有对方可以处理请求' });
 
@@ -296,13 +303,13 @@ app.put('/api/schedules/:id/modify-response', authMiddleware, async (req, res) =
   } catch (e) { res.status(500).json({ message: '处理失败' }); }
 });
 
-// 重新发布已取消的档期（回到广场）
+// 重新发布已取消的档期
 app.post('/api/schedules/:id/republish', authMiddleware, async (req, res) => {
   try {
     const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1 AND userId = $2', [req.params.id, req.userId]);
     if (sRes.rows.length === 0) return res.status(404).json({ message: '档期不存在' });
     if (sRes.rows[0].status !== 'cancelled') return res.status(400).json({ message: '只有已取消的档期才能重新发布' });
-    // ✅ 彻底清理旧数据
+    // 彻底清理旧数据
     await pool.query(
       "UPDATE schedules SET status = 'available', confirmedApplicant = NULL, applicants = '{}', modification = NULL WHERE id = $1",
       [req.params.id]
