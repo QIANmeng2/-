@@ -18,7 +18,7 @@ dns.lookup('db.kfgqinvoxzgdsdjsdpkl.supabase.co', 4, (err, address) => {
 // 终极解决方案：直接使用 Supabase 数据库的 IPv4 地址，彻底绕过 DNS 解析
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: { rejectUnauthorized: false }
 });
 // 初始化数据表
 async function initDB() {
