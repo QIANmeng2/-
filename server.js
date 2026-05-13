@@ -2,48 +2,52 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
+const { Pool } = require('pg');  // 用 PostgreSQL 客户端
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-me';
 
-app.use(cors());
-app.use(express.json());
+// ========== 连接 Supabase 数据库 ==========
+const pool = new Pool({
+  connectionString: 'postgresql://postgres:[YOUR-PASSWORD]@db.kfgqinvoxzgdsdjsdpkl.supabase.co:5432/postgres',  // ⚠️ 替换这里！！！
+  ssl: { rejectUnauthorized: false }
+});
 
-// ========== 持久化数据文件 ==========
-// Railway Volume 挂载到 /data，数据文件存在那里
-const DB_PATH = path.join('/data', 'data.json');
-
-// 确保 /data 目录存在
-if (!fs.existsSync('/data')) {
-  fs.mkdirSync('/data');
-}
-
-// 内存数据库缓存
-let MEMORY_DB = { users: [], schedules: [] };
-
-function loadFromDisk() {
-  if (fs.existsSync(DB_PATH)) {
-    try {
-      MEMORY_DB = JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
-    } catch (e) {
-      MEMORY_DB = { users: [], schedules: [] };
-    }
+// 初始化数据表（第一次运行自动创建）
+async function initDB() {
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        teamName TEXT NOT NULL,
+        coachName TEXT NOT NULL,
+        wechat TEXT NOT NULL,
+        disabledDates TEXT[] DEFAULT '{}'
+      );
+      CREATE TABLE IF NOT EXISTS schedules (
+        id TEXT PRIMARY KEY,
+        userId TEXT NOT NULL,
+        date TEXT NOT NULL,
+        startTime TEXT NOT NULL,
+        mode TEXT DEFAULT 'bo1',
+        globalBp BOOLEAN DEFAULT false,
+        status TEXT DEFAULT 'available',
+        applicants TEXT[] DEFAULT '{}',
+        confirmedApplicant TEXT
+      );
+    `);
+  } finally {
+    client.release();
   }
 }
-function saveToDisk() {
-  fs.writeFileSync(DB_PATH, JSON.stringify(MEMORY_DB, null, 2));
-}
+initDB();
 
-// 定时存盘（每 5 秒）
-setInterval(saveToDisk, 5000);
-process.on('SIGTERM', () => { saveToDisk(); process.exit(0); });
-process.on('SIGINT', () => { saveToDisk(); process.exit(0); });
-
-// 启动时加载
-loadFromDisk();
+app.use(cors());
+app.use(express.json());
 
 // 认证中间件
 function authMiddleware(req, res, next) {
@@ -61,180 +65,175 @@ function authMiddleware(req, res, next) {
 }
 
 // ==================== 用户注册 / 登录 ====================
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   const { username, password, teamName, coachName, wechat } = req.body;
   if (!username || !password || !teamName || !coachName || !wechat) {
     return res.status(400).json({ message: '信息不完整' });
   }
-  if (MEMORY_DB.users.find(u => u.username === username)) {
-    return res.status(400).json({ message: '用户名已存在' });
-  }
-  const newUser = {
-    id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6),
-    username,
-    password: bcrypt.hashSync(password, 10),
-    teamName,
-    coachName,
-    wechat,
-    disabledDates: []
-  };
-  MEMORY_DB.users.push(newUser);
-  saveToDisk();
-  const token = jwt.sign({ userId: newUser.id }, JWT_SECRET, { expiresIn: '7d' });
-  res.json({ token, user: { id: newUser.id, teamName, coachName, wechat, disabledDates: [] } });
+  try {
+    const userExists = await pool.query('SELECT id FROM users WHERE username = $1', [username]);
+    if (userExists.rows.length > 0) {
+      return res.status(400).json({ message: '用户名已存在' });
+    }
+    const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    await pool.query(
+      'INSERT INTO users (id, username, password, teamName, coachName, wechat) VALUES ($1,$2,$3,$4,$5,$6)',
+      [id, username, hashedPassword, teamName, coachName, wechat]
+    );
+    const token = jwt.sign({ userId: id }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, user: { id, teamName, coachName, wechat, disabledDates: [] } });
+  } catch (e) { res.status(500).json({ message: '注册失败' }); }
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
-  const user = MEMORY_DB.users.find(u => u.username === username);
-  if (!user || !bcrypt.compareSync(password, user.password)) {
-    return res.status(400).json({ message: '用户名或密码错误' });
-  }
-  const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
-  res.json({ token, user: { id: user.id, teamName: user.teamName, coachName: user.coachName, wechat: user.wechat, disabledDates: user.disabledDates || [] } });
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    if (result.rows.length === 0 || !bcrypt.compareSync(password, result.rows[0].password)) {
+      return res.status(400).json({ message: '用户名或密码错误' });
+    }
+    const user = result.rows[0];
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, user: { id: user.id, teamName: user.teamName, coachName: user.coachName, wechat: user.wechat, disabledDates: user.disabledDates || [] } });
+  } catch (e) { res.status(500).json({ message: '登录失败' }); }
 });
 
-app.get('/api/auth/me', authMiddleware, (req, res) => {
-  const user = MEMORY_DB.users.find(u => u.id === req.userId);
-  if (!user) return res.status(404).json({ message: '用户不存在' });
-  res.json({ user: { id: user.id, teamName: user.teamName, coachName: user.coachName, wechat: user.wechat, disabledDates: user.disabledDates || [] } });
+app.get('/api/auth/me', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM users WHERE id = $1', [req.userId]);
+    if (result.rows.length === 0) return res.status(404).json({ message: '用户不存在' });
+    const user = result.rows[0];
+    res.json({ user: { id: user.id, teamName: user.teamName, coachName: user.coachName, wechat: user.wechat, disabledDates: user.disabledDates || [] } });
+  } catch (e) { res.status(500).json({ message: '获取用户失败' }); }
 });
 
-app.put('/api/users/me/disabled-dates', authMiddleware, (req, res) => {
+app.put('/api/users/me/disabled-dates', authMiddleware, async (req, res) => {
   const { date } = req.body;
   if (!date) return res.status(400).json({ message: '日期不能为空' });
-  const user = MEMORY_DB.users.find(u => u.id === req.userId);
-  if (!user) return res.status(404).json({ message: '用户不存在' });
-  if (!user.disabledDates) user.disabledDates = [];
-  const index = user.disabledDates.indexOf(date);
-  if (index === -1) user.disabledDates.push(date);
-  else user.disabledDates.splice(index, 1);
-  saveToDisk();
-  res.json({ disabledDates: user.disabledDates });
+  try {
+    const userRes = await pool.query('SELECT disabledDates FROM users WHERE id = $1', [req.userId]);
+    let disabled = userRes.rows[0].disableddates || [];
+    const index = disabled.indexOf(date);
+    if (index === -1) disabled.push(date);
+    else disabled.splice(index, 1);
+    await pool.query('UPDATE users SET disabledDates = $1 WHERE id = $2', [disabled, req.userId]);
+    res.json({ disabledDates: disabled });
+  } catch (e) { res.status(500).json({ message: '操作失败' }); }
 });
 
-// ==================== 档期相关（多人申请） ====================
-
-// 获取所有可申请的档期（status = 'available'）
-app.get('/api/schedules', (req, res) => {
-  const available = MEMORY_DB.schedules.filter(s => s.status === 'available');
-  const schedules = available.map(s => {
-    const user = MEMORY_DB.users.find(u => u.id === s.userId);
-    const applicants = (s.applicants || []).map(aid => {
-      const applicant = MEMORY_DB.users.find(u => u.id === aid);
-      return applicant ? { id: applicant.id, teamName: applicant.teamName, coachName: applicant.coachName, wechat: applicant.wechat } : null;
-    }).filter(Boolean);
-    return {
-      id: s.id,
-      date: s.date,
-      startTime: s.startTime,
-      mode: s.mode || 'bo1',
-      globalBp: s.globalBp || false,
-      status: s.status,
-      applicantCount: applicants.length,
-      team: user ? { teamName: user.teamName, coachName: user.coachName, wechat: user.wechat } : null
-    };
-  });
-  res.json({ schedules });
-});
-
-// 获取我的档期（全部状态，包含申请者列表）
-app.get('/api/schedules/mine', authMiddleware, (req, res) => {
-  const user = MEMORY_DB.users.find(u => u.id === req.userId);
-  const schedules = MEMORY_DB.schedules
-    .filter(s => s.userId === req.userId)
-    .map(s => {
-      const applicants = (s.applicants || []).map(aid => {
-        const applicant = MEMORY_DB.users.find(u => u.id === aid);
-        return applicant ? { id: applicant.id, teamName: applicant.teamName, coachName: applicant.coachName, wechat: applicant.wechat } : null;
-      }).filter(Boolean);
+// ==================== 档期相关 ====================
+app.get('/api/schedules', async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM schedules WHERE status = 'available'");
+    const schedules = await Promise.all(result.rows.map(async (s) => {
+      const userRes = await pool.query('SELECT teamName, coachName, wechat FROM users WHERE id = $1', [s.userid]);
+      const user = userRes.rows[0] || {};
       return {
         id: s.id,
         date: s.date,
-        startTime: s.startTime,
-        mode: s.mode || 'bo1',
-        globalBp: s.globalBp || false,
+        startTime: s.starttime,
+        mode: s.mode,
+        globalBp: s.globalbp,
+        status: s.status,
+        applicantCount: (s.applicants || []).length,
+        team: { teamName: user.teamname, coachName: user.coachname, wechat: user.wechat }
+      };
+    }));
+    res.json({ schedules });
+  } catch (e) { res.status(500).json({ message: '加载失败' }); }
+});
+
+app.get('/api/schedules/mine', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM schedules WHERE userId = $1', [req.userId]);
+    const userRes = await pool.query('SELECT teamName, coachName, wechat FROM users WHERE id = $1', [req.userId]);
+    const user = userRes.rows[0] || {};
+    const schedules = await Promise.all(result.rows.map(async (s) => {
+      let applicants = [];
+      if (s.applicants && s.applicants.length > 0) {
+        const appRes = await pool.query('SELECT id, teamName, coachName, wechat FROM users WHERE id = ANY($1)', [s.applicants]);
+        applicants = appRes.rows.map(a => ({ id: a.id, teamName: a.teamname, coachName: a.coachname, wechat: a.wechat }));
+      }
+      return {
+        id: s.id,
+        date: s.date,
+        startTime: s.starttime,
+        mode: s.mode,
+        globalBp: s.globalbp,
         status: s.status,
         applicants,
-        confirmedApplicant: s.confirmedApplicant || null,  // 被确认的申请者 ID
-        team: { teamName: user.teamName, coachName: user.coachName, wechat: user.wechat }
+        confirmedApplicant: s.confirmedapplicant,
+        team: { teamName: user.teamname, coachName: user.coachname, wechat: user.wechat }
       };
-    });
-  res.json({ schedules, disabledDates: user.disabledDates || [] });
+    }));
+    const userRow = await pool.query('SELECT disabledDates FROM users WHERE id = $1', [req.userId]);
+    res.json({ schedules, disabledDates: userRow.rows[0]?.disableddates || [] });
+  } catch (e) { res.status(500).json({ message: '加载失败' }); }
 });
 
-// 发布档期
-app.post('/api/schedules', authMiddleware, (req, res) => {
+app.post('/api/schedules', authMiddleware, async (req, res) => {
   const { date, startTime, mode, globalBp } = req.body;
-  if (!date || !startTime) {
-    return res.status(400).json({ message: '请填写日期和时间' });
-  }
-  const newSchedule = {
-    id: Date.now().toString(36) + Math.random().toString(36).substr(2, 6),
-    userId: req.userId,
-    date,
-    startTime,
-    mode: mode || 'bo1',
-    globalBp: globalBp || false,
-    status: 'available',
-    applicants: [],          // 申请者 userId 数组
-    confirmedApplicant: null
-  };
-  MEMORY_DB.schedules.push(newSchedule);
-  saveToDisk();
-  res.json({ schedule: newSchedule });
+  if (!date || !startTime) return res.status(400).json({ message: '请填写日期和时间' });
+  const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
+  try {
+    await pool.query(
+      'INSERT INTO schedules (id, userId, date, startTime, mode, globalBp) VALUES ($1,$2,$3,$4,$5,$6)',
+      [id, req.userId, date, startTime, mode || 'bo1', globalBp || false]
+    );
+    res.json({ schedule: { id, date, startTime, mode, globalBp } });
+  } catch (e) { res.status(500).json({ message: '发布失败' }); }
 });
 
-// 申请档期（允许多人）
-app.post('/api/schedules/:id/apply', authMiddleware, (req, res) => {
-  const schedule = MEMORY_DB.schedules.find(s => s.id === req.params.id);
-  if (!schedule) return res.status(404).json({ message: '档期不存在' });
-  if (schedule.userId === req.userId) return res.status(400).json({ message: '不能申请自己的档期' });
-  if (schedule.status !== 'available') return res.status(400).json({ message: '该档期不可申请' });
-  if (!schedule.applicants) schedule.applicants = [];
-  if (schedule.applicants.includes(req.userId)) return res.status(400).json({ message: '你已经申请过了' });
-  schedule.applicants.push(req.userId);
-  saveToDisk();
-  res.json({ success: true });
+app.post('/api/schedules/:id/apply', authMiddleware, async (req, res) => {
+  try {
+    const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1', [req.params.id]);
+    if (sRes.rows.length === 0) return res.status(404).json({ message: '档期不存在' });
+    const schedule = sRes.rows[0];
+    if (schedule.userid === req.userId) return res.status(400).json({ message: '不能申请自己的档期' });
+    if (schedule.status !== 'available') return res.status(400).json({ message: '该档期不可申请' });
+    let applicants = schedule.applicants || [];
+    if (applicants.includes(req.userId)) return res.status(400).json({ message: '你已经申请过了' });
+    applicants.push(req.userId);
+    await pool.query('UPDATE schedules SET applicants = $1 WHERE id = $2', [applicants, req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ message: '申请失败' }); }
 });
 
-// 发布者确认某一个申请者
-app.put('/api/schedules/:id/confirm-applicant', authMiddleware, (req, res) => {
-  const schedule = MEMORY_DB.schedules.find(s => s.id === req.params.id && s.userId === req.userId);
-  if (!schedule) return res.status(404).json({ message: '档期不存在' });
+app.put('/api/schedules/:id/confirm-applicant', authMiddleware, async (req, res) => {
   const { applicantId } = req.body;
-  if (!applicantId) return res.status(400).json({ message: '缺少申请者 ID' });
-  if (!schedule.applicants || !schedule.applicants.includes(applicantId)) {
-    return res.status(400).json({ message: '该用户未申请' });
-  }
-  schedule.status = 'confirmed';
-  schedule.confirmedApplicant = applicantId;
-  // 可选：清除其他申请者，但保留申请记录
-  saveToDisk();
-  res.json({ success: true });
+  try {
+    const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1 AND userId = $2', [req.params.id, req.userId]);
+    if (sRes.rows.length === 0) return res.status(404).json({ message: '档期不存在' });
+    const schedule = sRes.rows[0];
+    if (!schedule.applicants || !schedule.applicants.includes(applicantId)) {
+      return res.status(400).json({ message: '该用户未申请' });
+    }
+    await pool.query("UPDATE schedules SET status = 'confirmed', confirmedApplicant = $1 WHERE id = $2", [applicantId, req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ message: '确认失败' }); }
 });
 
-// 拒绝某个申请者（只是从 applicants 里移除，如果只剩一个可以选择拒绝并恢复）
-app.put('/api/schedules/:id/reject-applicant', authMiddleware, (req, res) => {
-  const schedule = MEMORY_DB.schedules.find(s => s.id === req.params.id && s.userId === req.userId);
-  if (!schedule) return res.status(404).json({ message: '档期不存在' });
+app.put('/api/schedules/:id/reject-applicant', authMiddleware, async (req, res) => {
   const { applicantId } = req.body;
-  if (schedule.status !== 'available') return res.status(400).json({ message: '档期状态不可操作' });
-  if (!schedule.applicants) schedule.applicants = [];
-  const index = schedule.applicants.indexOf(applicantId);
-  if (index === -1) return res.status(400).json({ message: '未找到该申请者' });
-  schedule.applicants.splice(index, 1);
-  saveToDisk();
-  res.json({ success: true });
+  try {
+    const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1 AND userId = $2', [req.params.id, req.userId]);
+    if (sRes.rows.length === 0) return res.status(404).json({ message: '档期不存在' });
+    let applicants = sRes.rows[0].applicants || [];
+    const index = applicants.indexOf(applicantId);
+    if (index === -1) return res.status(400).json({ message: '未找到该申请者' });
+    applicants.splice(index, 1);
+    await pool.query('UPDATE schedules SET applicants = $1 WHERE id = $2', [applicants, req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ message: '拒绝失败' }); }
 });
 
-// 删除档期
-app.delete('/api/schedules/:id', authMiddleware, (req, res) => {
-  const index = MEMORY_DB.schedules.findIndex(s => s.id === req.params.id && s.userId === req.userId);
-  if (index === -1) return res.status(404).json({ message: '档期不存在' });
-  MEMORY_DB.schedules.splice(index, 1);
-  saveToDisk();
-  res.json({ success: true });
+app.delete('/api/schedules/:id', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query('DELETE FROM schedules WHERE id = $1 AND userId = $2', [req.params.id, req.userId]);
+    if (result.rowCount === 0) return res.status(404).json({ message: '档期不存在' });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ message: '删除失败' }); }
 });
 
 app.listen(PORT, '0.0.0.0', () => {
