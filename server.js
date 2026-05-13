@@ -12,8 +12,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-me';
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
-  // 强制使用 IPv4 连接，解决 ENETUNREACH 问题
-  host: process.env.DATABASE_URL.split('@')[1].split('/')[0].split(':')[0]
+  host: process.env.PGHOST
 });
 
 // 初始化数据表
