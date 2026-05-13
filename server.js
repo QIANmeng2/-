@@ -10,8 +10,10 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-me';
 
 // ⚠️ 把下面这行替换成你自己的 Supabase 连接字符串（密码填真实的）
 const pool = new Pool({
-  connectionString: 'postgresql://postgres:qianmeng1019@db.kfgqinvoxzgdsdjsdpkl.supabase.co:5432/postgres',
-  ssl: { rejectUnauthorized: false }
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  // 强制使用 IPv4 连接，解决 ENETUNREACH 问题
+  host: process.env.DATABASE_URL.split('@')[1].split('/')[0].split(':')[0]
 });
 
 // 初始化数据表
