@@ -13,7 +13,6 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// 初始化数据表（新增 public 字段）
 async function initDB() {
   const client = await pool.connect();
   try {
@@ -39,7 +38,7 @@ async function initDB() {
         applicants TEXT[] DEFAULT '{}',
         confirmedApplicant TEXT,
         modification JSONB,
-        public BOOLEAN DEFAULT false
+        is_public BOOLEAN DEFAULT false
       );
     `);
   } finally {
@@ -51,7 +50,6 @@ initDB();
 app.use(cors());
 app.use(express.json());
 
-// 认证中间件
 function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -133,17 +131,15 @@ app.put('/api/users/me/disabled-dates', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ message: '操作失败' }); }
 });
 
-// ==================== 档期广场（仅可申请的） ====================
+// ==================== 档期广场 ====================
 app.get('/api/schedules', async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM schedules WHERE status = 'available'");
     if (result.rows.length === 0) return res.json({ schedules: [] });
-
     const userIds = [...new Set(result.rows.map(s => s.userid))];
     const usersRes = await pool.query('SELECT id, teamName, coachName, level FROM users WHERE id = ANY($1)', [userIds]);
     const usersMap = {};
     usersRes.rows.forEach(u => { usersMap[u.id] = u; });
-
     const schedules = result.rows.map(s => {
       const user = usersMap[s.userid] || {};
       return {
@@ -161,12 +157,11 @@ app.get('/api/schedules', async (req, res) => {
   } catch (e) { res.status(500).json({ message: '加载失败' }); }
 });
 
-// ==================== 公示榜（已确认且公开的） ====================
+// ==================== 公示榜（已确认且 is_public = true） ====================
 app.get('/api/public-schedules', async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM schedules WHERE status = 'confirmed' AND public = true ORDER BY date, startTime");
+    const result = await pool.query("SELECT * FROM schedules WHERE status = 'confirmed' AND is_public = true ORDER BY date, startTime");
     if (result.rows.length === 0) return res.json({ schedules: [] });
-
     const userIds = new Set();
     result.rows.forEach(s => {
       userIds.add(s.userid);
@@ -176,7 +171,6 @@ app.get('/api/public-schedules', async (req, res) => {
     const usersRes = await pool.query('SELECT id, teamName, coachName, level FROM users WHERE id = ANY($1)', [idsArray]);
     const usersMap = {};
     usersRes.rows.forEach(u => { usersMap[u.id] = u; });
-
     const schedules = result.rows.map(s => {
       const pubUser = usersMap[s.userid] || {};
       const opponent = s.confirmedapplicant ? usersMap[s.confirmedapplicant] : null;
@@ -205,7 +199,6 @@ app.get('/api/schedules/mine', authMiddleware, async (req, res) => {
       const user = await pool.query('SELECT disabledDates FROM users WHERE id = $1', [req.userId]);
       return res.json({ schedules: [], disabledDates: user.rows[0]?.disableddates || [] });
     }
-
     const userIds = new Set();
     result.rows.forEach(s => {
       userIds.add(s.userid);
@@ -218,7 +211,6 @@ app.get('/api/schedules/mine', authMiddleware, async (req, res) => {
     const usersRes = await pool.query('SELECT id, teamName, coachName, level FROM users WHERE id = ANY($1)', [idsArray]);
     const usersMap = {};
     usersRes.rows.forEach(u => { usersMap[u.id] = u; });
-
     const schedules = result.rows.map(s => {
       const publisher = usersMap[s.userid] || {};
       const opponent = s.confirmedapplicant ? (usersMap[s.confirmedapplicant] || null) : null;
@@ -226,7 +218,6 @@ app.get('/api/schedules/mine', authMiddleware, async (req, res) => {
         const app = usersMap[id];
         return app ? { id: app.id, teamName: app.teamname, coachName: app.coachname, level: app.level } : null;
       }).filter(Boolean);
-
       return {
         id: s.id,
         date: s.date,
@@ -234,7 +225,7 @@ app.get('/api/schedules/mine', authMiddleware, async (req, res) => {
         mode: s.mode,
         globalBp: s.globalbp,
         status: s.status,
-        public: s.public,
+        isPublic: s.is_public,            // 注意：这里字段名改为 isPublic，与前端对应
         publisher: { id: publisher.id, teamName: publisher.teamname, coachName: publisher.coachname, level: publisher.level },
         opponent: opponent ? { id: opponent.id, teamName: opponent.teamname, coachName: opponent.coachname, level: opponent.level } : null,
         applicants,
@@ -242,7 +233,6 @@ app.get('/api/schedules/mine', authMiddleware, async (req, res) => {
         isPublisher: s.userid === req.userId
       };
     });
-
     const user = await pool.query('SELECT disabledDates FROM users WHERE id = $1', [req.userId]);
     res.json({ schedules, disabledDates: user.rows[0]?.disableddates || [] });
   } catch (e) { res.status(500).json({ message: '加载失败' }); }
@@ -278,9 +268,9 @@ app.post('/api/schedules/:id/apply', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ message: '申请失败' }); }
 });
 
-// 确认申请者（可带 public 字段）
+// 确认申请者（含 isPublic）
 app.put('/api/schedules/:id/confirm-applicant', authMiddleware, async (req, res) => {
-  const { applicantId, isPublic } = req.body;  // isPublic 可选
+  const { applicantId, isPublic } = req.body;
   try {
     const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1 AND userId = $2', [req.params.id, req.userId]);
     if (sRes.rows.length === 0) return res.status(404).json({ message: '档期不存在' });
@@ -288,38 +278,38 @@ app.put('/api/schedules/:id/confirm-applicant', authMiddleware, async (req, res)
       return res.status(400).json({ message: '该用户未申请' });
     }
     await pool.query(
-      "UPDATE schedules SET status = 'confirmed', confirmedApplicant = $1, applicants = '{}', public = COALESCE($3, false) WHERE id = $2",
+      "UPDATE schedules SET status = 'confirmed', confirmedApplicant = $1, applicants = '{}', is_public = COALESCE($3, false) WHERE id = $2",
       [applicantId, req.params.id, isPublic || false]
     );
     res.json({ success: true });
   } catch (e) { res.status(500).json({ message: '确认失败' }); }
 });
 
-// 撤回确认（回到 available，保留被选中的队伍？不，撤回后应该清空确认者，让发布者重选）
+// 撤回选择
 app.put('/api/schedules/:id/unconfirm', authMiddleware, async (req, res) => {
   try {
     const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1 AND userId = $2 AND status = \'confirmed\'', [req.params.id, req.userId]);
     if (sRes.rows.length === 0) return res.status(404).json({ message: '档期不存在或未确认' });
     await pool.query(
-      "UPDATE schedules SET status = 'available', confirmedApplicant = NULL, public = false WHERE id = $1",
+      "UPDATE schedules SET status = 'available', confirmedApplicant = NULL, is_public = false WHERE id = $1",
       [req.params.id]
     );
     res.json({ success: true });
   } catch (e) { res.status(500).json({ message: '撤回失败' }); }
 });
 
-// 修改公开状态
+// 切换公示状态
 app.put('/api/schedules/:id/toggle-public', authMiddleware, async (req, res) => {
   try {
     const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1 AND userId = $2 AND status = \'confirmed\'', [req.params.id, req.userId]);
     if (sRes.rows.length === 0) return res.status(404).json({ message: '档期不存在' });
-    const current = sRes.rows[0].public;
-    await pool.query('UPDATE schedules SET public = NOT public WHERE id = $1', [req.params.id]);
-    res.json({ public: !current });
+    const current = sRes.rows[0].is_public;
+    await pool.query('UPDATE schedules SET is_public = NOT is_public WHERE id = $1', [req.params.id]);
+    res.json({ isPublic: !current });
   } catch (e) { res.status(500).json({ message: '修改失败' }); }
 });
 
-// 发起修改请求（与之前相同）
+// 发起修改请求
 app.post('/api/schedules/:id/modify-request', authMiddleware, async (req, res) => {
   const { type, newTime } = req.body;
   try {
@@ -350,7 +340,6 @@ app.put('/api/schedules/:id/modify-response', authMiddleware, async (req, res) =
     }
     const otherUserId = schedule.modification.fromUserId === schedule.userid ? schedule.confirmedapplicant : schedule.userid;
     if (req.userId !== otherUserId) return res.status(403).json({ message: '只有对方可以处理请求' });
-
     if (action === 'accept') {
       if (schedule.modification.type === 'cancel') {
         await pool.query("UPDATE schedules SET status = 'cancelled', modification = NULL WHERE id = $1", [req.params.id]);
@@ -370,7 +359,7 @@ app.post('/api/schedules/:id/republish', authMiddleware, async (req, res) => {
     if (sRes.rows.length === 0) return res.status(404).json({ message: '档期不存在' });
     if (sRes.rows[0].status !== 'cancelled') return res.status(400).json({ message: '只有已取消的档期才能重新发布' });
     await pool.query(
-      "UPDATE schedules SET status = 'available', confirmedApplicant = NULL, applicants = '{}', modification = NULL, public = false WHERE id = $1",
+      "UPDATE schedules SET status = 'available', confirmedApplicant = NULL, applicants = '{}', modification = NULL, is_public = false WHERE id = $1",
       [req.params.id]
     );
     res.json({ success: true });
