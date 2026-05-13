@@ -10,7 +10,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-me';
 
 // 终极解决方案：直接使用 Supabase 数据库的 IPv4 地址，彻底绕过 DNS 解析
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: 'postgresql://postgres:OHgfbDBtBUxgcBbwSUTVglzoyEimCAgD@postgres.railway.internal:5432/railway',
   ssl: { rejectUnauthorized: false }
 });
 // 初始化数据表
