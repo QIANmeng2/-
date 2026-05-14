@@ -53,7 +53,7 @@ async function initDB() {
       );
     `);
 
-    // 自动修复数据库缺失列，解决所有报错
+    // 自动修复数据库缺失列
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT \'\'');
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS disabledDates TEXT[] DEFAULT \'{}\'');
     await client.query('ALTER TABLE schedules ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT false');
@@ -64,6 +64,11 @@ async function initDB() {
 // 全局中间件
 app.use(cors());
 app.use(express.json());
+
+// ✅ 关键修复：添加健康检查接口，防止Railway关闭服务
+app.get('/', (req, res) => {
+  res.status(200).send('OK');
+});
 
 // 登录验证中间件
 function authMiddleware(req, res, next) {
@@ -183,6 +188,14 @@ app.get('/api/schedules', async (req, res) => {
       return { id: s.id, date: s.date, startTime: s.starttime, mode: s.mode, globalBp: s.globalbp, status: s.status, applicantCount: (s.applicants || []).length, team: { id: user.id, teamName: user.teamname, coachName: user.coachname, level: user.level, bio: user.bio } };
     });
     res.json({ schedules });
+  } catch (e) { res.status(500).json({ message: '加载失败' }); }
+});
+
+// ✅ 关键修复：添加「我的日程」接口
+app.get('/api/schedules/my', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM schedules WHERE userId = $1 ORDER BY date DESC, startTime DESC', [req.userId]);
+    res.json({ schedules: result.rows });
   } catch (e) { res.status(500).json({ message: '加载失败' }); }
 });
 
