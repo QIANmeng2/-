@@ -288,18 +288,25 @@ app.post('/api/recruitment', authMiddleware, async (req, res) => {
     // 模式3：预占位置
     if (mode === 3 && positions && positions.length > 0) {
       for (const pos of positions) {
-        if (pos.playerId) {
+        if (pos.locked) {
+          // 仅锁位，不绑定玩家
+          await client.query(
+            'INSERT INTO recruitment_positions (matchId, team, lane, lockedBy, isOrganizerLock) VALUES ($1,$2,$3,$4,$5)',
+            [id, pos.team, pos.lane, req.userId, true]
+          );
+        } else if (pos.playerId) {
+          // 已知用户ID
           const userRes = await client.query('SELECT teamName FROM users WHERE id = $1', [pos.playerId]);
           const playerName = userRes.rows[0]?.teamname || '未知';
           await client.query(
             'INSERT INTO recruitment_positions (matchId, team, lane, playerId, playerName, lockedBy, isOrganizerLock) VALUES ($1,$2,$3,$4,$5,$6,$7)',
             [id, pos.team, pos.lane, pos.playerId, playerName, req.userId, true]
           );
-        } else if (pos.locked) {
-          // 仅锁位，不绑定玩家
+        } else if (pos.playerName) {
+          // 预占队友（无用户ID，只有名字）
           await client.query(
-            'INSERT INTO recruitment_positions (matchId, team, lane, lockedBy, isOrganizerLock) VALUES ($1,$2,$3,$4,$5)',
-            [id, pos.team, pos.lane, req.userId, true]
+            'INSERT INTO recruitment_positions (matchId, team, lane, playerName, lockedBy, isOrganizerLock) VALUES ($1,$2,$3,$4,$5,$6)',
+            [id, pos.team, pos.lane, pos.playerName, req.userId, true]
           );
         }
       }
@@ -658,15 +665,9 @@ app.get('/api/admin/recruitments', authMiddleware, adminMiddleware, async (req, 
   try {
     const matches = await pool.query('SELECT * FROM recruitment_matches ORDER BY createdAt DESC');
     const matchIds = matches.rows.map(m => m.id);
-    let positions = [], orgMap = {};
-
-    if (matchIds.length > 0) {
-      const allPos = await pool.query('SELECT * FROM recruitment_positions WHERE matchId = ANY($1)', [matchIds]);
-      allPos.rows.forEach(p => { if (!posMap_global(p)) positions.push(p); });
-    }
-    function posMap_global(p) { return false; }
 
     const orgIds = [...new Set(matches.rows.map(m => m.organizerid))];
+    let orgMap = {};
     if (orgIds.length > 0) {
       const orgs = await pool.query('SELECT id, teamName, username FROM users WHERE id = ANY($1)', [orgIds]);
       orgs.rows.forEach(u => { orgMap[u.id] = u; });
