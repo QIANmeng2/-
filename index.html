@@ -216,14 +216,16 @@
     }
 
     .btn-outline {
-      background: transparent;
-      color: var(--primary);
-      border: 1.5px solid var(--primary);
+      background: rgba(22, 93, 255, 0.08);
+      color: #6BA3FF;
+      border: 1.5px solid rgba(22, 93, 255, 0.5);
     }
 
     .btn-outline:hover {
-      background: rgba(22, 93, 255, 0.1);
-      box-shadow: 0 0 20px rgba(22, 93, 255, 0.2);
+      background: rgba(22, 93, 255, 0.18);
+      color: #8BB8FF;
+      border-color: rgba(22, 93, 255, 0.7);
+      box-shadow: 0 0 20px rgba(22, 93, 255, 0.25);
       transform: translateY(-1px) scale(1.02);
     }
 
@@ -2470,13 +2472,13 @@ function renderCalendar(schedules, disabledDates) {
   schedules.forEach(s => { if (!map[s.date]) map[s.date] = []; map[s.date].push(s); });
 
   let html = `<div class="card"><div style="display:flex; justify-content:space-between; align-items:center;"><button class="btn btn-sm btn-outline" onclick="loadCalendar(${year}, ${month-1})">◀ 上月</button><h3>${year}年${month}月</h3><button class="btn btn-sm btn-outline" onclick="loadCalendar(${year}, ${month+1})">下月 ▶</button></div><div style="display:grid; grid-template-columns: repeat(7, 1fr); gap:4px; text-align:center;">`;
-  ['日','一','二','三','四','五','六'].forEach(d => html += `<div style="font-weight:600; padding:4px;">${d}</div>`);
+  ['日','一','二','三','四','五','六'].forEach(d => html += `<div style="font-weight:600; padding:4px; color:var(--text-secondary);">${d}</div>`);
   for (let i = 0; i < firstDay; i++) html += '<div></div>';
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isDisabled = disabledDates.includes(dateStr);
     const daySchedules = map[dateStr] || [];
-    html += `<div style="min-height:60px; padding:4px; background:${isDisabled ? 'rgba(255,255,255,0.05)' : '#1A1A2E'}; border-radius:6px; cursor:pointer;border:1px solid ${isDisabled ? 'rgba(255,255,255,0.08)' : 'rgba(22,93,255,0.15)'};" onclick="toggleDisableDate('${dateStr}')"><strong style="color:${isDisabled ? 'var(--text-muted)' : '#fff'}">${d}</strong>`;
+    html += `<div style="min-height:60px; padding:4px; background:${isDisabled ? 'rgba(255,255,255,0.05)' : '#1A1A2E'}; border-radius:6px; cursor:pointer;border:1px solid ${isDisabled ? 'rgba(255,255,255,0.08)' : 'rgba(22,93,255,0.25)'};" onclick="toggleDisableDate('${dateStr}')"><strong style="color:${isDisabled ? 'var(--text-muted)' : '#E5E7EB'}">${d}</strong>`;
     daySchedules.forEach(s => html += `<div style="font-size:0.65rem; background:var(--accent); color:#fff; padding:1px 4px; border-radius:4px; margin-top:2px;">${s.startTime} ${s.status==='confirmed' ? '已约' : ''}</div>`);
     html += '</div>';
   }
@@ -2486,16 +2488,16 @@ function renderCalendar(schedules, disabledDates) {
   schedules.forEach(s => {
     let actions = '';
     if (s.status === 'available' && s.isPublisher) {
-      actions += '<div><strong>申请者：</strong>';
+      actions += '<div style="color:var(--text-secondary);margin-bottom:8px;"><strong style="color:var(--text-primary);">申请者：</strong>';
       if (s.applicants.length > 0) {
-        s.applicants.forEach(app => actions += `<div>${app.teamName} (${app.coachName}) <button class="btn btn-xs btn-primary" onclick="confirmApplicant('${s.id}', '${app.id}')">✅ 选择</button></div>`);
-      } else actions += '暂无';
+        s.applicants.forEach(app => actions += `<div style="color:var(--text-secondary);margin-top:4px;">${app.teamName} (${app.coachName}) <button class="btn btn-xs btn-primary" onclick="confirmApplicant('${s.id}', '${app.id}')">✅ 选择</button></div>`);
+      } else actions += '<span style="color:var(--text-muted);">暂无</span>';
       actions += '</div>';
       actions += `<button class="btn btn-sm btn-danger" onclick="cancelPublishedSchedule('${s.id}')" style="margin-top:6px;">取消发布</button>`;
     }
     if (s.status === 'confirmed') {
       const partner = s.isPublisher ? s.opponent : s.publisher;
-      actions += `<p>对手：${partner.teamName} (${partner.coachName}) <span class="badge badge-confirmed">${partner.level}</span></p>`;
+      actions += `<p style="color:var(--text-secondary);"><strong style="color:var(--text-primary);">对手：</strong>${partner.teamName} (${partner.coachName}) <span class="badge badge-confirmed">${partner.level}</span></p>`;
       if (s.isPublisher) {
         actions += `<button class="btn btn-sm btn-outline" onclick="unconfirmSchedule('${s.id}')">撤回选择</button>`;
         actions += `<button class="btn btn-sm btn-outline" onclick="togglePublic('${s.id}')">${s.isPublic ? '取消公示' : '设为公示'}</button>`;
@@ -2506,7 +2508,7 @@ function renderCalendar(schedules, disabledDates) {
     if (s.status === 'cancelled' && s.isPublisher) {
       actions += `<button class="btn btn-sm btn-primary" onclick="republishSchedule('${s.id}')">重新发布</button>`;
     }
-    html += `<div class="card"><strong>${s.date} ${s.startTime}</strong> | ${s.mode.toUpperCase()} ${s.globalBp ? '全局BP' : ''} <span class="badge badge-available">${s.status}</span><div>${actions}</div></div>`;
+    html += `<div class="card"><strong style="color:#fff;">${s.date} ${s.startTime}</strong> <span style="color:var(--text-secondary);">| ${s.mode.toUpperCase()} ${s.globalBp ? '全局BP' : ''}</span> <span class="badge badge-available">${s.status}</span><div style="margin-top:8px;">${actions}</div></div>`;
   });
   document.getElementById('tabContent').innerHTML = html;
 }
