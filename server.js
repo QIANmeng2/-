@@ -10,7 +10,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-me';
 const ADMIN_USER_ID = process.env.ADMIN_USER_ID || '';
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:OHgfbDBtBUxgcBbwSUTVglzoyEimCAgD@postgres.railway.internal:5432/railway',
+  connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
@@ -52,29 +52,21 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT \'\'');
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS disabledDates TEXT[] DEFAULT \'{}\'');
     await client.query('ALTER TABLE schedules ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT false');
-
   } finally { client.release(); }
 }
 
-app.use(cors());
+// ✅ 万能跨域（解决所有前端访问失败）
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
-// 双路径健康检查
-app.get('/', (req, res) => {
-  console.log("✅ 收到根路径健康检查请求");
-  res.status(200).send('OK');
-});
+// ✅ 健康检查
+app.get('/', (req, res) => res.send('OK'));
+app.get('/health', (req, res) => res.send('OK'));
 
-app.get('/health', (req, res) => {
-  console.log("✅ 收到/health路径健康检查请求");
-  res.status(200).send('OK');
-});
-
-// 登录验证中间件
+// 登录验证
 function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ message: '未登录' });
@@ -85,18 +77,18 @@ function authMiddleware(req, res, next) {
   } catch { return res.status(401).json({ message: '登录已过期' }); }
 }
 
-// 管理员中间件
+// 管理员
 async function adminMiddleware(req, res, next) {
-  if (req.userId !== ADMIN_USER_ID) return res.status(403).json({ message: '无管理员权限' });
+  if (req.userId !== ADMIN_USER_ID) return res.status(403).json({ message: '无权限' });
   next();
 }
 
-// 发送通知函数
+// 通知
 async function sendNotification(userId, type, content, relatedId = null) {
   await pool.query('INSERT INTO notifications (userId, type, content, relatedId) VALUES ($1,$2,$3,$4)', [userId, type, content, relatedId]);
 }
 
-// ---------- 用户 ----------
+// ====================== 接口 ======================
 app.post('/api/auth/register', async (req, res) => {
   const { username, password, teamName, coachName, wechat, level, bio } = req.body;
   if (!username || !password || !teamName || !coachName || !wechat) return res.status(400).json({ message: '信息不完整' });
@@ -163,7 +155,6 @@ app.get('/api/users/:id', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ message: '获取失败' }); }
 });
 
-// ---------- 通知 ----------
 app.get('/api/notifications', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM notifications WHERE userId = $1 ORDER BY created_at DESC LIMIT 50', [req.userId]);
@@ -178,7 +169,6 @@ app.put('/api/notifications/read-all', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ message: '标记失败' }); }
 });
 
-// ---------- 档期广场 ----------
 app.get('/api/schedules', async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM schedules WHERE status = 'available'");
@@ -195,7 +185,6 @@ app.get('/api/schedules', async (req, res) => {
   } catch (e) { res.status(500).json({ message: '加载失败' }); }
 });
 
-// 我的日程接口
 app.get('/api/schedules/my', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM schedules WHERE userId = $1 ORDER BY date DESC, startTime DESC', [req.userId]);
@@ -203,7 +192,6 @@ app.get('/api/schedules/my', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ message: '加载失败' }); }
 });
 
-// 发布档期
 app.post('/api/schedules', authMiddleware, async (req, res) => {
   const { date, startTime, mode, globalBp } = req.body;
   if (!date || !startTime) return res.status(400).json({ message: '请填写日期和时间' });
@@ -214,7 +202,6 @@ app.post('/api/schedules', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ message: '发布失败' }); }
 });
 
-// 发布人取消自己发布的档期
 app.delete('/api/schedules/:id/cancel-post', authMiddleware, async (req, res) => {
   try {
     const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1 AND userId = $2', [req.params.id, req.userId]);
@@ -231,7 +218,6 @@ app.delete('/api/schedules/:id/cancel-post', authMiddleware, async (req, res) =>
   } catch (e) { res.status(500).json({ message: '取消失败' }); }
 });
 
-// 申请约队
 app.post('/api/schedules/:id/apply', authMiddleware, async (req, res) => {
   try {
     const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1', [req.params.id]);
@@ -248,7 +234,6 @@ app.post('/api/schedules/:id/apply', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ message: '申请失败' }); }
 });
 
-// 确认申请者
 app.put('/api/schedules/:id/confirm-applicant', authMiddleware, async (req, res) => {
   const { applicantId, isPublic } = req.body;
   try {
@@ -261,7 +246,6 @@ app.put('/api/schedules/:id/confirm-applicant', authMiddleware, async (req, res)
   } catch (e) { res.status(500).json({ message: '确认失败' }); }
 });
 
-// 撤回确认
 app.put('/api/schedules/:id/unconfirm', authMiddleware, async (req, res) => {
   try {
     const sRes = await pool.query("SELECT * FROM schedules WHERE id = $1 AND userId = $2 AND status = 'confirmed'", [req.params.id, req.userId]);
@@ -271,7 +255,6 @@ app.put('/api/schedules/:id/unconfirm', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ message: '撤回失败' }); }
 });
 
-// 直接取消训练
 app.post('/api/schedules/:id/cancel', authMiddleware, async (req, res) => {
   try {
     const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1', [req.params.id]);
@@ -286,7 +269,6 @@ app.post('/api/schedules/:id/cancel', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ message: '取消失败' }); }
 });
 
-// 直接修改时间
 app.put('/api/schedules/:id/modify-time', authMiddleware, async (req, res) => {
   const { newTime } = req.body;
   if (!newTime) return res.status(400).json({ message: '请提供新时间' });
@@ -301,7 +283,6 @@ app.put('/api/schedules/:id/modify-time', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ message: '修改失败' }); }
 });
 
-// 切换公开
 app.put('/api/schedules/:id/toggle-public', authMiddleware, async (req, res) => {
   try {
     const sRes = await pool.query("SELECT * FROM schedules WHERE id = $1 AND userId = $2 AND status = 'confirmed'", [req.params.id, req.userId]);
@@ -312,7 +293,6 @@ app.put('/api/schedules/:id/toggle-public', authMiddleware, async (req, res) => 
   } catch (e) { res.status(500).json({ message: '修改失败' }); }
 });
 
-// 重新发布
 app.post('/api/schedules/:id/republish', authMiddleware, async (req, res) => {
   try {
     const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1 AND userId = $2', [req.params.id, req.userId]);
@@ -323,7 +303,6 @@ app.post('/api/schedules/:id/republish', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ message: '重新发布失败' }); }
 });
 
-// ---------- 管理员 ----------
 app.get('/api/admin/schedules', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM schedules ORDER BY date DESC, startTime DESC');
@@ -345,21 +324,13 @@ app.delete('/api/admin/users/:id', authMiddleware, adminMiddleware, async (req, 
   } catch (e) { res.status(500).json({ message: '删除失败' }); }
 });
 
-// 启动服务 + 守护进程（防止被Railway主动杀掉）
+// 启动
 async function startServer() {
   await initDB();
-  console.log("✅ 数据库表创建成功");
-  
-  const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 服务已启动，监听端口: ${PORT}`);
-    console.log(`🔍 根路径健康检查地址: http://0.0.0.0:${PORT}/`);
-    console.log(`🔍 /health路径健康检查地址: http://0.0.0.0:${PORT}/health`);
+  console.log("✅ 数据库就绪");
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 服务运行在端口 ${PORT}`);
   });
-
-  // 守护进程：保持进程不退出，防止Railway主动终止
-  setInterval(() => {
-    console.log("⏳ 守护进程运行中，服务保持在线");
-  }, 60000);
 }
 
 startServer();
