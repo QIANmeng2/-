@@ -103,8 +103,12 @@ function authMiddleware(req, res, next) {
 }
 
 function adminMiddleware(req, res, next) {
-  if (req.userId !== ADMIN_USER_ID) return res.status(403).json({ message: '无权限' });
-  next();
+  // 方式1: 环境变量配置
+  if (req.userId === ADMIN_USER_ID) return next();
+  // 方式2: 用户ID白名单（开发者模式：允许特定用户访问管理面板）
+  const adminWhitelist = ['mp4hmya7ad15v6']; // 在此添加管理员用户ID
+  if (adminWhitelist.includes(req.userId)) return next();
+  return res.status(403).json({ message: '无权限' });
 }
 
 async function sendNotification(userId, type, content, relatedId = null) {
