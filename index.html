@@ -2079,8 +2079,8 @@ async function loadMyTeamForRecruit() {
       team.members.forEach((m, i) => {
         const isSelf = m.userId === currentUser.id;
         html += `
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px;background:#f5f5f5;border-radius:8px;">
-            <span style="font-size:0.85rem;flex:1;">${m.coachName || m.username}${isSelf ? ' <span style="color:var(--primary);font-weight:600;">（我）</span>' : ''}</span>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px;background:#1A1A2E;border:1px solid rgba(22,93,255,0.15);border-radius:var(--radius-sm);">
+            <span style="font-size:0.85rem;flex:1;color:var(--text-primary);">${m.coachName || m.username}${isSelf ? ' <span style="color:var(--primary);font-weight:600;">（我）</span>' : ''}</span>
             <select class="form-select" id="teamLaneTeam_${m.userId}" style="width:80px;padding:5px 8px;font-size:0.8rem;">
               <option value="blue">🟦</option>
               <option value="red">🟥</option>
@@ -2476,7 +2476,7 @@ function renderCalendar(schedules, disabledDates) {
     const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isDisabled = disabledDates.includes(dateStr);
     const daySchedules = map[dateStr] || [];
-    html += `<div style="min-height:60px; padding:4px; background:${isDisabled ? '#eee' : '#f9f9f9'}; border-radius:6px; cursor:pointer;" onclick="toggleDisableDate('${dateStr}')"><strong>${d}</strong>`;
+    html += `<div style="min-height:60px; padding:4px; background:${isDisabled ? 'rgba(255,255,255,0.05)' : '#1A1A2E'}; border-radius:6px; cursor:pointer;border:1px solid ${isDisabled ? 'rgba(255,255,255,0.08)' : 'rgba(22,93,255,0.15)'};" onclick="toggleDisableDate('${dateStr}')"><strong style="color:${isDisabled ? 'var(--text-muted)' : '#fff'}">${d}</strong>`;
     daySchedules.forEach(s => html += `<div style="font-size:0.65rem; background:var(--accent); color:#fff; padding:1px 4px; border-radius:4px; margin-top:2px;">${s.startTime} ${s.status==='confirmed' ? '已约' : ''}</div>`);
     html += '</div>';
   }
@@ -2501,7 +2501,7 @@ function renderCalendar(schedules, disabledDates) {
         actions += `<button class="btn btn-sm btn-outline" onclick="togglePublic('${s.id}')">${s.isPublic ? '取消公示' : '设为公示'}</button>`;
       }
       actions += `<button class="btn btn-sm btn-outline" onclick="requestModify('${s.id}')">修改时间</button>`;
-      actions += `<button class="btn btn-sm btn-outline" onclick="requestCancel('${s.id}')" style="color:#e74c3c;">取消训练</button>`;
+      actions += `<button class="btn btn-sm btn-outline" onclick="requestCancel('${s.id}')" style="color:var(--danger);border-color:var(--danger);">取消训练</button>`;
     }
     if (s.status === 'cancelled' && s.isPublisher) {
       actions += `<button class="btn btn-sm btn-primary" onclick="republishSchedule('${s.id}')">重新发布</button>`;
@@ -2691,17 +2691,17 @@ function renderMyTeam(team) {
     const isSelf = m.userId === currentUser.id;
     const roleBadge = m.role === 'captain' ? '<span class="badge badge-recruiting">队长</span>' : '<span class="badge badge-level">队员</span>';
     memberRows += `
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:#f9f9f9;border-radius:10px;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:#1A1A2E;border:1px solid rgba(22,93,255,0.2);border-radius:var(--radius-md);margin-bottom:8px;">
         <div style="display:flex;align-items:center;gap:10px;">
           <div>
-            <div style="font-weight:700;">${m.coachName || m.username} ${isSelf ? '<span style="font-size:0.75rem;color:#999;">（你）</span>' : ''}</div>
-            <div style="font-size:0.78rem;color:var(--text-light);">
+            <div style="font-weight:700;color:#fff;">${m.coachName || m.username} ${isSelf ? '<span style="font-size:0.75rem;color:var(--text-muted);">（你）</span>' : ''}</div>
+            <div style="font-size:0.78rem;color:var(--text-secondary);">
               ${roleBadge}
               <span class="badge badge-level" style="margin-left:4px;">${m.level || ''}</span>
-              ${m.gameRank ? `<span style="font-size:0.78rem;color:#666;margin-left:4px;">段位：${m.gameRank}</span>` : ''}
-              ${m.peakScore ? `<span style="font-size:0.78rem;color:#666;margin-left:4px;">巅峰：${m.peakScore}</span>` : ''}
+              ${m.gameRank ? `<span style="font-size:0.78rem;color:var(--text-muted);margin-left:4px;">段位：${m.gameRank}</span>` : ''}
+              ${m.peakScore ? `<span style="font-size:0.78rem;color:var(--text-muted);margin-left:4px;">巅峰：${m.peakScore}</span>` : ''}
             </div>
-            ${m.heroPool ? `<div style="font-size:0.78rem;color:#888;margin-top:2px;">🎯 ${m.heroPool}</div>` : ''}
+            ${m.heroPool ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">🎯 ${m.heroPool}</div>` : ''}
           </div>
         </div>
         ${isCaptain && !isSelf ? `<div style="display:flex;gap:6px;">
@@ -2723,7 +2723,7 @@ function renderMyTeam(team) {
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
             <span class="badge ${team.status==='open'?'badge-recruiting':'badge-closed'}">${team.status==='open'?'招人中':'已满'}</span>
             <span style="font-size:0.85rem;color:var(--text-light);">${team.memberCount} / ${team.maxMembers} 人</span>
-            ${isCaptain ? '<span class="badge" style="background:#eef2ff;color:var(--primary);">你是队长</span>' : ''}
+            ${isCaptain ? '<span class="badge" style="background:rgba(22,93,255,0.18);color:var(--primary);border:1px solid rgba(22,93,255,0.35);">你是队长</span>' : ''}
           </div>
           ${team.bio ? `<p style="font-size:0.85rem;color:var(--text-light);margin-top:8px;">📝 ${team.bio}</p>` : ''}
         </div>
@@ -2757,7 +2757,7 @@ async function renderAllTeams() {
     data.teams.forEach(t => {
       const captain = t.members.find(m => m.role === 'captain');
       html += `
-        <div style="padding:14px;background:#f9f9f9;border-radius:10px;margin-bottom:10px;">
+        <div style="padding:14px;background:#1A1A2E;border:1px solid rgba(114,46,209,0.2);border-radius:var(--radius-md);margin-bottom:10px;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <div>
               <strong>${t.name}</strong> ${t.bio ? `<span style="font-size:0.82rem;color:var(--text-light);"> · ${t.bio}</span>` : ''}
@@ -2898,7 +2898,7 @@ async function loadAdminSubTab() {
       case 'security': await loadAdminSecurity(container); break;
     }
   } catch (err) {
-    container.innerHTML = `<p style="color:#e74c3c;">加载失败：${err.message}</p>`;
+    container.innerHTML = `<p style="color:var(--danger);">加载失败：${err.message}</p>`;
   }
 }
 
@@ -2912,19 +2912,19 @@ async function loadAdminTeams(container) {
   data.teams.forEach(t => {
     const captain = t.members.find(m => m.role === 'captain');
     html += `
-      <div style="padding:16px;background:#f9f9f9;border-radius:12px;margin-bottom:14px;">
+      <div style="padding:16px;background:#1A1A2E;border:1px solid rgba(22,93,255,0.18);border-radius:var(--radius-lg);margin-bottom:14px;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
           <div>
-            <strong style="font-size:1rem;">🏆 ${t.name}</strong>
-            ${t.bio ? `<span style="font-size:0.82rem;color:var(--text-light);"> · ${t.bio}</span>` : ''}
-            <div style="font-size:0.8rem;color:var(--text-light);margin-top:4px;">
+            <strong style="font-size:1rem;color:#fff;">🏆 ${t.name}</strong>
+            ${t.bio ? `<span style="font-size:0.82rem;color:var(--text-secondary);"> · ${t.bio}</span>` : ''}
+            <div style="font-size:0.8rem;color:var(--text-secondary);margin-top:4px;">
               队长：${captain?.coachName || captain?.username || '未知'} | ${t.memberCount}/${t.maxMembers}人 | 状态：${t.status === 'open' ? '<span style="color:var(--available);">🟢招人中</span>' : '<span style="color:var(--booked);">🔴已满</span>'}
             </div>
           </div>
           <button class="btn btn-xs btn-danger" onclick="adminDeleteTeam('${t.id}')">🗑️ 解散队伍</button>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;">
-          ${t.members.map(m => `<span style="font-size:0.78rem;background:#eee;padding:3px 10px;border-radius:12px;">${m.coachName || m.username}${m.role==='captain'?' 👑':''}</span>`).join('')}
+          ${t.members.map(m => `<span style="font-size:0.78rem;background:rgba(22,93,255,0.12);color:var(--text-primary);padding:3px 10px;border-radius:12px;border:1px solid rgba(22,93,255,0.25);">${m.coachName || m.username}${m.role==='captain'?' 👑':''}</span>`).join('')}
         </div>
       </div>`;
   });
@@ -2980,15 +2980,15 @@ async function loadAdminRecruitments(container) {
     return;
   }
   let html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
-  html += '<tr style="background:#f5f5f5;"><th style="padding:8px;text-align:left;">时间</th><th>发起人</th><th>模式</th><th>状态</th><th>人数</th><th>操作</th></tr>';
+  html += '<tr style="background:rgba(22,93,255,0.10);"><th style="padding:8px;text-align:left;color:var(--text-primary);">时间</th><th>发起人</th><th>模式</th><th>状态</th><th>人数</th><th>操作</th></tr>';
   data.recruitments.forEach(r => {
     const statusBadge = r.status==='full' ? '<span class="badge badge-full">已满</span>' : r.status==='closed' ? '<span class="badge badge-closed">已关闭</span>' : '<span class="badge badge-recruiting">招募中</span>';
-    html += `<tr style="border-bottom:1px solid #eee;">
-      <td style="padding:8px;">${r.startTime}</td>
-      <td style="padding:8px;">${r.organizer.teamName}</td>
-      <td style="padding:8px;">模式${r.mode}</td>
+    html += `<tr style="border-bottom:1px solid var(--border-color);">
+      <td style="padding:8px;color:var(--text-primary);">${r.startTime}</td>
+      <td style="padding:8px;color:var(--text-primary);">${r.organizer.teamName}</td>
+      <td style="padding:8px;color:var(--text-secondary);">模式${r.mode}</td>
       <td style="padding:8px;">${statusBadge}</td>
-      <td style="padding:8px;">${r.totalCount}/10</td>
+      <td style="padding:8px;color:var(--text-secondary);">${r.totalCount}/10</td>
       <td style="padding:8px;"><button class="btn btn-xs btn-danger" onclick="adminDeleteRecruitment('${r.id}')">删除</button></td>
     </tr>`;
   });
@@ -3003,12 +3003,12 @@ async function loadAdminSchedules(container) {
     return;
   }
   let html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
-  html += '<tr style="background:#f5f5f5;"><th style="padding:8px;text-align:left;">日期</th><th>时间</th><th>模式</th><th>状态</th><th>操作</th></tr>';
+  html += '<tr style="background:rgba(22,93,255,0.10);"><th style="padding:8px;text-align:left;color:var(--text-primary);">日期</th><th>时间</th><th>模式</th><th>状态</th><th>操作</th></tr>';
   data.schedules.forEach(s => {
-    html += `<tr style="border-bottom:1px solid #eee;">
-      <td style="padding:8px;">${s.date}</td>
-      <td style="padding:8px;">${s.starttime}</td>
-      <td style="padding:8px;">${s.mode.toUpperCase()}</td>
+    html += `<tr style="border-bottom:1px solid var(--border-color);">
+      <td style="padding:8px;color:var(--text-primary);">${s.date}</td>
+      <td style="padding:8px;color:var(--text-secondary);">${s.starttime}</td>
+      <td style="padding:8px;color:var(--text-secondary);">${s.mode.toUpperCase()}</td>
       <td style="padding:8px;">${s.status}</td>
       <td style="padding:8px;"><button class="btn btn-xs btn-danger" onclick="adminDeleteSchedule('${s.id}')">删除</button></td>
     </tr>`;
@@ -3024,15 +3024,15 @@ async function loadAdminUsers(container) {
     return;
   }
   let html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.82rem;">';
-  html += '<tr style="background:#f5f5f5;"><th style="padding:8px;text-align:left;">用户名</th><th>队伍/教练</th><th>等级</th><th>游戏ID</th><th>段位/巅峰</th><th>擅长英雄</th><th>操作</th></tr>';
+  html += '<tr style="background:rgba(22,93,255,0.10);"><th style="padding:8px;text-align:left;color:var(--text-primary);">用户名</th><th>队伍/教练</th><th>等级</th><th>游戏ID</th><th>段位/巅峰</th><th>擅长英雄</th><th>操作</th></tr>';
   data.users.forEach(u => {
-    html += `<tr style="border-bottom:1px solid #eee;">
-      <td style="padding:8px;">${u.username}</td>
-      <td style="padding:8px;">${u.teamName}<br><span style="font-size:0.75rem;color:#888;">${u.coachName}</span></td>
+    html += `<tr style="border-bottom:1px solid var(--border-color);">
+      <td style="padding:8px;color:var(--text-primary);">${u.username}</td>
+      <td style="padding:8px;color:var(--text-primary);">${u.teamName}<br><span style="font-size:0.75rem;color:var(--text-muted);">${u.coachName}</span></td>
       <td style="padding:8px;"><span class="badge badge-level">${u.level}</span></td>
-      <td style="padding:8px;">${u.gameId ? `${u.gameId} <span style="font-size:0.72rem;">(${u.gameServer || '手Q区'})</span>` : '<span style="color:#ccc;">未填写</span>'}</td>
-      <td style="padding:8px;">${u.gameRank || '<span style="color:#ccc;">未填</span>'}${u.peakScore ? ` / ${u.peakScore}` : ''}</td>
-      <td style="padding:8px;">${u.heroPool || '<span style="color:#ccc;">未填</span>'}</td>
+      <td style="padding:8px;color:var(--text-secondary);">${u.gameId ? `${u.gameId} <span style="font-size:0.72rem;color:var(--text-muted);">(${u.gameServer || '手Q区'})</span>` : '<span style="color:var(--text-muted);">未填写</span>'}</td>
+      <td style="padding:8px;color:var(--text-secondary);">${u.gameRank || '<span style="color:var(--text-muted);">未填</span>'}${u.peakScore ? ` / ${u.peakScore}` : ''}</td>
+      <td style="padding:8px;color:var(--text-secondary);">${u.heroPool || '<span style="color:var(--text-muted);">未填</span>'}</td>
       <td style="padding:8px;"><button class="btn btn-xs btn-danger" onclick="adminDeleteUser('${u.id}')">删除</button></td>
     </tr>`;
   });
@@ -3049,10 +3049,10 @@ async function loadAdminLogs(container) {
   let html = '<div style="max-height:400px;overflow-y:auto;">';
   data.logs.forEach(l => {
     const typeColors = { new_apply: '#4a90d9', confirmed: '#27ae60', cancelled: '#e74c3c', schedule_cancelled: '#f0a030' };
-    html += `<div style="padding:8px 12px;border-bottom:1px solid #f0f0f0;font-size:0.82rem;">
-      <span style="color:${typeColors[l.type]||'#666'};font-weight:600;">[${l.type}]</span>
-      <span style="color:var(--text-light);margin-left:8px;">${l.content}</span>
-      <span style="color:#bbb;float:right;">${new Date(l.createdAt).toLocaleString()}</span>
+    html += `<div style="padding:8px 12px;border-bottom:1px solid var(--border-color);font-size:0.82rem;">
+      <span style="color:${typeColors[l.type]||'var(--text-muted)'};font-weight:600;">[${l.type}]</span>
+      <span style="color:var(--text-secondary);margin-left:8px;">${l.content}</span>
+      <span style="color:var(--text-muted);float:right;">${new Date(l.createdAt).toLocaleString()}</span>
     </div>`;
   });
   html += '</div>';
@@ -3062,15 +3062,15 @@ async function loadAdminLogs(container) {
 async function loadAdminSecurity(container) {
   const data = await api('/api/admin/security');
   container.innerHTML = `
-    <div style="background:#f9f9f9;padding:16px;border-radius:12px;margin-bottom:16px;">
-      <h4 style="margin-bottom:12px;">🔐 安全状态</h4>
-      <p><strong>管理员ID：</strong>${data.adminUserId}</p>
-      <p><strong>总用户数：</strong>${data.totalUsers}</p>
-      <p><strong>管理员账户存在：</strong>${data.hasAdmin ? '✅ 是' : '❌ 否'}</p>
+    <div style="background:#1A1A2E;padding:16px;border-radius:var(--radius-lg);margin-bottom:16px;border:1px solid rgba(22,93,255,0.18);">
+      <h4 style="margin-bottom:12px;color:var(--text-primary);">🔐 安全状态</h4>
+      <p style="color:var(--text-secondary);"><strong style="color:var(--text-primary);">管理员ID：</strong>${data.adminUserId}</p>
+      <p style="color:var(--text-secondary);"><strong style="color:var(--text-primary);">总用户数：</strong>${data.totalUsers}</p>
+      <p style="color:var(--text-secondary);"><strong style="color:var(--text-primary);">管理员账户存在：</strong>${data.hasAdmin ? '✅ 是' : '❌ 否'}</p>
     </div>
-    <div style="background:#fff9f0;padding:16px;border-radius:12px;border-left:4px solid var(--accent);">
-      <h4 style="margin-bottom:12px;">💡 安全建议</h4>
-      <ul style="padding-left:20px;line-height:2;color:var(--text-light);">
+    <div style="background:rgba(22,93,255,0.08);padding:16px;border-radius:var(--radius-lg);border-left:4px solid var(--accent);">
+      <h4 style="margin-bottom:12px;color:var(--text-primary);">💡 安全建议</h4>
+      <ul style="padding-left:20px;line-height:2;color:var(--text-secondary);">
         ${data.tips.map(t => `<li>${t}</li>`).join('')}
       </ul>
     </div>
