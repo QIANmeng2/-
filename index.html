@@ -10,6 +10,8 @@
       --available: #27ae60; --booked: #e74c3c; --text: #2c3e50;
       --text-light: #6b7b8d; --border: #e0e4e8; --shadow: 0 4px 16px rgba(0,0,0,0.06);
       --radius: 14px;
+      --blue-color: #4a90d9; --red-color: #e05050;
+      --blue-bg: #e8f2fc; --red-bg: #fdeaec;
     }
     * { margin:0; padding:0; box-sizing:border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: linear-gradient(160deg, #f0f4f8 0%, #e2e8f0 100%); min-height: 100vh; color: var(--text); }
@@ -17,7 +19,7 @@
     .header-inner { max-width: 900px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 60px; }
     .logo { color: #fff; font-weight: 700; font-size: 1.2rem; display: flex; align-items: center; gap: 6px; letter-spacing: 0.5px; }
     .user-area { display: flex; align-items: center; gap: 12px; color: #fff; }
-    .btn { padding: 8px 20px; border-radius: 24px; border: none; cursor: pointer; font-weight: 600; transition: all 0.2s ease; white-space: normal; font-size: 0.9rem; }
+    .btn { padding: 8px 20px; border-radius: 24px; border: none; cursor: pointer; font-weight: 600; transition: all 0.2s ease; white-space: nowrap; font-size: 0.9rem; }
     .btn-primary { background: var(--accent); color: #1a1a2e; box-shadow: 0 4px 12px rgba(240,160,48,0.3); }
     .btn-primary:hover { background: #f5b840; transform: translateY(-1px); }
     .btn-outline { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.4); }
@@ -26,42 +28,129 @@
     .btn-xs { padding: 4px 12px; font-size: 0.72rem; border-radius: 16px; }
     .btn-danger { background: #e74c3c; color: #fff; }
     .btn-ghost { background: transparent; color: #555; border: 1px solid #ddd; }
+    .btn-blue { background: var(--blue-color); color: #fff; }
+    .btn-blue:hover { background: #3a7fc8; }
+    .btn-red { background: var(--red-color); color: #fff; }
+    .btn-red:hover { background: #c94040; }
     .main-container { max-width: 900px; margin: 0 auto; padding: 20px; }
-    .tab-nav { display: flex; gap:6px; background: var(--card); border-radius: var(--radius); padding: 6px; margin-bottom: 20px; box-shadow: var(--shadow); overflow-x: auto; }
-    .tab-btn { flex:1; padding: 10px 16px; border:none; background: transparent; border-radius: 12px; cursor: pointer; font-weight: 600; color: var(--text-light); white-space: nowrap; transition: all 0.2s; }
+    .tab-nav { display: flex; gap:6px; background: var(--card); border-radius: var(--radius); padding: 6px; margin-bottom: 20px; box-shadow: var(--shadow); overflow-x: auto; flex-wrap: wrap; }
+    .tab-btn { padding: 10px 16px; border:none; background: transparent; border-radius: 12px; cursor: pointer; font-weight: 600; color: var(--text-light); white-space: nowrap; transition: all 0.2s; }
     .tab-btn.active { background: var(--primary); color: #fff; box-shadow: 0 4px 12px rgba(59,89,152,0.3); }
     .card { background: var(--card); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow); transition: transform 0.1s; }
     .card:hover { transform: translateY(-1px); }
-    .badge { padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+    .badge { padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; display: inline-block; }
     .badge-available { background: #eafaf1; color: var(--available); }
     .badge-confirmed { background: #fdedec; color: var(--booked); }
     .badge-level { background: #eef2ff; color: var(--primary); }
-    .form-input, .form-select { width: 100%; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 0.9rem; transition: border 0.2s; }
+    .badge-blue { background: var(--blue-bg); color: var(--blue-color); }
+    .badge-red { background: var(--red-bg); color: var(--red-color); }
+    .badge-full { background: #fdedec; color: var(--booked); }
+    .badge-recruiting { background: #eafaf1; color: var(--available); }
+    .badge-closed { background: #eee; color: #999; }
+    .form-input, .form-select { width: 100%; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 0.9rem; transition: border 0.2s; box-sizing: border-box; }
     .form-input:focus, .form-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59,89,152,0.1); }
     .form-group { margin-bottom: 16px; }
     .form-group label { display: block; font-weight: 600; font-size: 0.85rem; color: var(--text-light); margin-bottom: 6px; }
     .form-group label input[type="checkbox"] { width: auto; margin-right: 6px; vertical-align: middle; }
-    .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); z-index:200; display: flex; align-items: center; justify-content: center; }
-    .modal { background: #fff; border-radius: var(--radius); padding: 28px; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 48px rgba(0,0,0,0.2); }
+    .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); z-index:200; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .modal { background: #fff; border-radius: var(--radius); padding: 28px; width: 100%; max-width: 540px; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 48px rgba(0,0,0,0.2); }
+    .modal-sm { max-width: 400px; }
     .toast { position: fixed; top:20px; left:50%; transform: translateX(-50%); z-index:300; padding: 12px 28px; border-radius: 30px; font-weight: 600; color: #fff; animation: slideDown 0.3s; }
     .toast-success { background: #27ae60; } .toast-error { background: #e74c3c; } .toast-info { background: var(--primary); }
     @keyframes slideDown { from { opacity:0; transform: translateX(-50%) translateY(-30px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
-    .notification-bell { position: relative; cursor: pointer; font-size: 1.4rem; }
-    .notification-badge { position: absolute; top: -6px; right: -8px; background: #e74c3c; color: #fff; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
     .loading-spinner { text-align: center; padding: 60px 20px; }
     .loading-spinner::after { content: ""; display: inline-block; width: 32px; height: 32px; border: 3px solid #ddd; border-top-color: var(--primary); border-radius: 50%; animation: spin 0.7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .card .btn-outline { color: #333 !important; border-color: #ccc !important; }
-
-    /* 自定义确认/提示弹窗 */
     .dialog-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); z-index:400; display: flex; align-items: center; justify-content: center; }
     .dialog { background: #fff; border-radius: 16px; padding: 24px; width: calc(100% - 48px); max-width: 360px; box-shadow: 0 24px 48px rgba(0,0,0,0.2); animation: slideDown 0.25s ease; }
     .dialog-title { font-size: 1rem; font-weight: 700; margin-bottom: 10px; color: var(--text); }
     .dialog-body { font-size: 0.9rem; color: var(--text-light); margin-bottom: 20px; line-height: 1.6; }
-    .dialog-actions { display: flex; gap: 10px; justify-content: flex-end; }
-    .dialog-actions .btn { flex: 1; text-align: center; padding: 10px; border-radius: 10px; font-size: 0.9rem; }
+    .dialog-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+    .dialog-actions .btn { flex: 1; text-align: center; padding: 10px; border-radius: 10px; font-size: 0.9rem; min-width: 80px; }
     .dialog-input { width: 100%; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 0.9rem; box-sizing: border-box; }
     .dialog-input:focus { outline: none; border-color: var(--primary); }
+    .notification-bell { position: relative; cursor: pointer; font-size: 1.4rem; }
+    .notification-badge { position: absolute; top: -6px; right: -8px; background: #e74c3c; color: #fff; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
+
+    /* ===== 招募系统样式 ===== */
+    .recruit-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .recruit-tab { padding: 8px 16px; border-radius: 20px; border: 1.5px solid var(--border); background: #fff; cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--text-light); transition: all 0.2s; }
+    .recruit-tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .recruit-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+
+    /* 招募卡片 */
+    .match-card { background: var(--card); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow); border-left: 4px solid var(--border); transition: transform 0.1s; }
+    .match-card:hover { transform: translateY(-1px); }
+    .match-card.recruiting { border-left-color: var(--available); }
+    .match-card.full { border-left-color: var(--booked); }
+    .match-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 6px; }
+    .match-card-org { font-size: 0.82rem; color: var(--text-light); margin-bottom: 8px; }
+    .match-card-org strong { color: var(--text); }
+    .match-card-slots { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .slot-badge { padding: 3px 10px; border-radius: 12px; font-size: 0.72rem; font-weight: 600; }
+    .slot-blue { background: var(--blue-bg); color: var(--blue-color); }
+    .slot-red { background: var(--red-bg); color: var(--red-color); }
+    .slot-empty { background: #f5f5f5; color: #bbb; }
+    .progress-bar-wrap { background: #e8e8e8; border-radius: 8px; height: 8px; margin: 8px 0; overflow: hidden; }
+    .progress-bar-fill { height: 100%; border-radius: 8px; background: linear-gradient(90deg, var(--blue-color) 50%, var(--red-color) 50%); transition: width 0.4s ease; }
+    .progress-text { text-align: center; font-size: 0.8rem; color: var(--text-light); margin-bottom: 10px; font-weight: 600; }
+
+    /* 对局详情页 */
+    .match-detail-header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+    .match-detail-header h2 { font-size: 1.1rem; margin-bottom: 8px; }
+    .match-detail-meta { display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.85rem; opacity: 0.9; }
+    .back-btn { display: inline-flex; align-items: center; gap: 6px; color: rgba(255,255,255,0.8); cursor: pointer; margin-bottom: 12px; font-size: 0.85rem; }
+    .back-btn:hover { color: #fff; }
+    .teams-container { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 600px) { .teams-container { grid-template-columns: 1fr; } }
+    .team-panel { border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+    .team-panel-header { padding: 12px 16px; text-align: center; font-weight: 700; font-size: 1rem; color: #fff; }
+    .team-panel-header.blue { background: var(--blue-color); }
+    .team-panel-header.red { background: var(--red-color); }
+    .team-panel-body { padding: 12px; background: var(--card); }
+    .lane-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 8px; margin-bottom: 6px; transition: background 0.15s; }
+    .lane-row.blue { background: var(--blue-bg); }
+    .lane-row.red { background: var(--red-bg); }
+    .lane-row.filled.blue { background: #d4e8f9; }
+    .lane-row.filled.red { background: #f9d4d4; }
+    .lane-info { display: flex; flex-direction: column; gap: 2px; }
+    .lane-name { font-size: 0.82rem; color: var(--text-light); }
+    .player-name { font-weight: 700; font-size: 0.9rem; color: var(--text); }
+    .player-name.empty { color: #ccc; font-weight: 400; }
+    .lane-action { display: flex; align-items: center; gap: 6px; }
+
+    /* 创建招募表单 */
+    .mode-selector { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+    .mode-option { border: 2px solid var(--border); border-radius: 12px; padding: 14px; cursor: pointer; transition: all 0.2s; }
+    .mode-option:hover { border-color: var(--primary); }
+    .mode-option.selected { border-color: var(--primary); background: #f0f4ff; }
+    .mode-option-title { font-weight: 700; font-size: 0.9rem; margin-bottom: 4px; }
+    .mode-option-desc { font-size: 0.78rem; color: var(--text-light); }
+    .mode-form-section { background: #f8f9fa; border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+    .mode-form-section h4 { font-size: 0.85rem; color: var(--text-light); margin-bottom: 10px; }
+
+    /* 预占位置网格 */
+    .preset-positions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+    .preset-team-section h5 { font-size: 0.85rem; margin-bottom: 8px; padding: 6px 10px; border-radius: 8px; text-align: center; }
+    .preset-team-section h5.blue { background: var(--blue-bg); color: var(--blue-color); }
+    .preset-team-section h5.red { background: var(--red-bg); color: var(--red-color); }
+    .preset-lane { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 0.82rem; }
+    .preset-lane label { width: 56px; color: var(--text-light); }
+    .preset-lane input { flex: 1; padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.82rem; }
+    .preset-lane input:disabled { background: #f5f5f5; color: #bbb; }
+    .preset-lane .lock-icon { color: var(--available); font-size: 0.8rem; }
+
+    /* 满员弹窗 */
+    .full-modal { background: #fff; border-radius: var(--radius); padding: 32px; width: calc(100% - 32px); max-width: 420px; text-align: center; box-shadow: 0 24px 48px rgba(0,0,0,0.2); animation: slideDown 0.3s ease; }
+    .full-modal-icon { font-size: 3rem; margin-bottom: 16px; }
+    .full-modal h3 { font-size: 1.1rem; color: var(--text); margin-bottom: 16px; }
+    .full-modal p { font-size: 0.9rem; color: var(--text-light); line-height: 1.7; margin-bottom: 24px; text-align: left; }
+    .full-modal .btn { width: 100%; }
+
+    /* 空状态 */
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-light); }
+    .empty-state-icon { font-size: 3rem; margin-bottom: 12px; }
   </style>
 </head>
 <body>
@@ -83,6 +172,7 @@
   <div class="tab-nav" id="tabNav">
     <button class="tab-btn active" data-tab="square">📋 档期广场</button>
     <button class="tab-btn" data-tab="public">📢 公示榜</button>
+    <button class="tab-btn" data-tab="recruit" id="tabRecruit">⚔️ 招募大厅</button>
     <button class="tab-btn" data-tab="publish" style="display:none;">➕ 发布档期</button>
     <button class="tab-btn" data-tab="mine" style="display:none;">📅 我的日程</button>
     <button class="tab-btn" data-tab="profile" style="display:none;">👤 个人信息</button>
@@ -93,7 +183,7 @@
 
 <!-- 登录/注册弹窗 -->
 <div id="authModalOverlay" style="display:none;" class="modal-overlay">
-  <div class="modal">
+  <div class="modal modal-sm">
     <h3 id="authModalTitle">登录</h3>
     <form id="authForm" onsubmit="handleAuth(event)">
       <div class="form-group"><label>用户名</label><input class="form-input" type="text" id="authUsername" required></div>
@@ -112,6 +202,100 @@
   </div>
 </div>
 
+<!-- 创建招募弹窗 -->
+<div id="createRecruitModal" style="display:none;" class="modal-overlay">
+  <div class="modal">
+    <h3 style="margin-bottom:16px;">⚔️ 新建5v5训练赛招募</h3>
+    <form id="createRecruitForm" onsubmit="handleCreateRecruit(event)">
+      <!-- 开赛时间 -->
+      <div class="form-group">
+        <label>开赛时间</label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-sm" id="btnNow" onclick="setNow()" style="background:#eef2ff;color:var(--primary);border:1px solid var(--primary);">即刻开打</button>
+          <input class="form-input" type="datetime-local" id="recruitStartTime" style="flex:1;min-width:160px;">
+        </div>
+      </div>
+      <!-- 段位门槛 -->
+      <div class="form-group">
+        <label>段位门槛</label>
+        <select class="form-select" id="recruitLevelReq">
+          <option value="不限">不限</option>
+          <option value="星耀">星耀及以上</option>
+          <option value="王者">王者及以上</option>
+          <option value="荣耀王者">荣耀王者及以上</option>
+        </select>
+      </div>
+      <!-- 备注 -->
+      <div class="form-group">
+        <label>自定义备注</label>
+        <textarea class="form-input" id="recruitNotes" rows="2" placeholder="可填写BP规则、开赛群号等..."></textarea>
+      </div>
+      <!-- 发起人模式 -->
+      <div class="form-group">
+        <label>发起人模式</label>
+        <div class="mode-selector">
+          <div class="mode-option selected" id="mode1Option" onclick="selectMode(1)">
+            <div class="mode-option-title">模式1 · 我也要参赛</div>
+            <div class="mode-option-desc">我自己也要上场，可自选阵营+分路占位</div>
+          </div>
+          <div class="mode-option" id="mode2Option" onclick="selectMode(2)">
+            <div class="mode-option-title">模式2 · 我只组织</div>
+            <div class="mode-option-desc">我自己不参赛，纯组织者</div>
+          </div>
+          <div class="mode-option" id="mode3Option" onclick="selectMode(3)">
+            <div class="mode-option-title">模式3 · 我带部分队友</div>
+            <div class="mode-option-desc">自带队友进来，只缺外人补位，可预设已有人员位置</div>
+          </div>
+        </div>
+      </div>
+      <!-- 模式1：自选阵营分路 -->
+      <div id="mode1Section" class="mode-form-section" style="display:none;">
+        <h4>① 选择你要加入的阵营和分路</h4>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <select class="form-select" id="mode1Team" style="flex:1;">
+            <option value="blue">🟦 蓝方</option>
+            <option value="red">🟥 红方</option>
+          </select>
+          <select class="form-select" id="mode1Lane" style="flex:1;">
+            <option value="对抗路">对抗路</option>
+            <option value="打野">打野</option>
+            <option value="中路">中路</option>
+            <option value="发育路">发育路</option>
+            <option value="游走">游走</option>
+          </select>
+        </div>
+      </div>
+      <!-- 模式3：预设人员 -->
+      <div id="mode3Section" class="mode-form-section" style="display:none;">
+        <h4>② 预设已有队友（可不填，跳过即全部对外开放）</h4>
+        <p style="font-size:0.78rem;color:var(--text-light);margin-bottom:10px;">填写已知队友的阵营+分路，占位后自动锁定不对外报名</p>
+        <div class="preset-positions">
+          <div class="preset-team-section">
+            <h5 class="blue">🟦 蓝方</h5>
+            <div id="presetBlue"></div>
+          </div>
+          <div class="preset-team-section">
+            <h5 class="red">🟥 红方</h5>
+            <div id="presetRed"></div>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-primary" type="submit" style="width:100%;margin-top:8px;font-size:1rem;padding:12px;">发布招募</button>
+      <button type="button" class="btn btn-ghost" style="width:100%;margin-top:8px;" onclick="closeCreateRecruitModal()">取消</button>
+    </form>
+  </div>
+</div>
+
+<!-- 满员成功弹窗 -->
+<div id="fullSuccessModal" style="display:none;" class="modal-overlay">
+  <div class="full-modal">
+    <div class="full-modal-icon">🎉</div>
+    <h3>训练赛组队成功！</h3>
+    <p>本局红蓝10人已全部凑齐，训练赛组队成功<br><br>请所有参赛人员前往官方QQ群/微信会员群<br>统一确认开赛时间、BP规则、英雄禁用、队内沟通细节<br>按约定时间准时开局即可</p>
+    <button class="btn btn-primary" onclick="closeFullModal()">知道了！</button>
+  </div>
+</div>
+
 <div id="toastContainer"></div>
 
 <script>
@@ -122,6 +306,13 @@ let currentTab = 'square';
 let authMode = 'login';
 let calendarYear, calendarMonth;
 let unreadNotifs = 0;
+let selectedRecruitMode = 1;
+let currentRecruitSubTab = 'active';
+let currentMatchId = null;
+let recruitPollingTimer = null;
+
+const LANES = ['对抗路', '打野', '中路', '发育路', '游走'];
+const LANE_ICONS = { '对抗路': '⚔️', '打野': '🦁', '中路': '🔮', '发育路': '🏹', '游走': '🛡️' };
 
 const cacheStore = new Map();
 async function api(path, options = {}, retries = 2) {
@@ -194,6 +385,7 @@ async function handleAuth(e) {
 }
 function logout() {
   authToken = null; localStorage.removeItem('local_current_user'); currentUser = null;
+  stopRecruitPolling();
   updateUI(); switchTab('square'); showToast('已退出','info');
 }
 
@@ -208,10 +400,7 @@ function updateUI() {
     ui('displayTeam').textContent = currentUser.teamName;
     document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="mine"], #tabNav .tab-btn[data-tab="profile"]').forEach(b => b.style.display = '');
     ui('notificationBell').style.display = 'inline-block';
-    // 检查是否为管理员
-    if (currentUser.id === 'mp4hmya7ad15v6') { // ⚠️ 请替换为实际管理员ID，或通过环境变量设置
-      ui('tabAdmin').style.display = '';
-    }
+    if (currentUser.id === 'mp4hmya7ad15v6') { ui('tabAdmin').style.display = ''; }
   } else {
     ui('userInfoDisplay').style.display = 'none';
     ui('btnLoginTop').style.display = 'inline-block';
@@ -252,7 +441,6 @@ async function openNotifications() {
   panel.style.cssText = 'position:fixed;top:70px;right:16px;width:300px;max-height:400px;background:#fff;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.15);z-index:150;padding:16px;overflow-y:auto;';
   panel.innerHTML = `<div style="font-weight:700;font-size:0.95rem;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">🔔 消息通知 <span onclick="document.getElementById('notifPanel').remove()" style="cursor:pointer;font-size:1.2rem;color:#999;">&times;</span></div>${html}`;
   document.body.appendChild(panel);
-  // 点击外部关闭
   const closeOnOutside = (e) => { if (!panel.contains(e.target) && e.target.id !== 'notificationBell') { panel.remove(); document.removeEventListener('click', closeOnOutside); } };
   setTimeout(() => document.addEventListener('click', closeOnOutside), 0);
 }
@@ -265,10 +453,12 @@ async function markAllRead() {
 
 // ---------- Tab 切换 ----------
 async function switchTab(tab) {
+  stopRecruitPolling();
   currentTab = tab; updateUI();
   if (tab === 'square') cacheStore.delete('/api/schedules');
   else if (tab === 'mine') cacheStore.delete('/api/schedules/mine');
   else if (tab === 'public') cacheStore.delete('/api/public-schedules');
+  else if (tab === 'recruit') { cacheStore.delete('/api/recruitment/active'); cacheStore.delete('/api/recruitment/full'); }
   const content = document.getElementById('tabContent');
   content.innerHTML = '<div class="loading-spinner"></div>';
   try {
@@ -277,7 +467,8 @@ async function switchTab(tab) {
     else if (tab === 'publish') renderPublishForm();
     else if (tab === 'mine') await loadCalendar();
     else if (tab === 'profile') renderProfileForm();
-    else if (tab === 'admin') renderAdminPanel();
+    else if (tab === 'admin') await renderAdminPanel();
+    else if (tab === 'recruit') { currentRecruitSubTab = 'active'; await loadRecruitHall(); startRecruitPolling(); }
   } catch {
     content.innerHTML = '<div class="card"><p>加载失败</p><button class="btn btn-sm btn-primary" onclick="switchTab(\''+tab+'\')">重试</button></div>';
   }
@@ -288,6 +479,374 @@ document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', (
   if (['publish','mine','profile','admin'].includes(tab) && !currentUser) { showToast('请先登录','info'); openAuthModal('login'); return; }
   switchTab(tab);
 }));
+
+// ==================== 招募大厅系统 ====================
+
+// 加载招募大厅
+async function loadRecruitHall() {
+  const content = document.getElementById('tabContent');
+  content.innerHTML = `
+    <div class="recruit-header">
+      <div class="recruit-tabs">
+        <button class="recruit-tab ${currentRecruitSubTab==='active'?'active':''}" onclick="switchRecruitSubTab('active')">🔥 招募中</button>
+        <button class="recruit-tab ${currentRecruitSubTab==='full'?'active':''}" onclick="switchRecruitSubTab('full')">✅ 已满专区</button>
+      </div>
+      ${currentUser ? '<button class="btn btn-primary btn-sm" onclick="openCreateRecruitModal()">➕ 新建招募</button>' : ''}
+    </div>
+    <div id="recruitListContainer"><div class="loading-spinner"></div></div>
+  `;
+  await loadRecruitList();
+}
+
+async function switchRecruitSubTab(sub) {
+  currentRecruitSubTab = sub;
+  cacheStore.delete('/api/recruitment/active');
+  cacheStore.delete('/api/recruitment/full');
+  document.querySelectorAll('.recruit-tab').forEach(t => t.classList.toggle('active', t.textContent.includes(sub==='active'?'招募中':'已满')));
+  document.getElementById('recruitListContainer').innerHTML = '<div class="loading-spinner"></div>';
+  await loadRecruitList();
+}
+
+async function loadRecruitList() {
+  const endpoint = currentRecruitSubTab === 'active' ? '/api/recruitment/active' : '/api/recruitment/full';
+  const data = await api(endpoint, { skipCache: true });
+  renderRecruitList(data.matches || []);
+}
+
+function renderRecruitList(matches) {
+  const container = document.getElementById('recruitListContainer');
+  if (!matches.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">${currentRecruitSubTab==='active'?'🔍':'✅'}</div>
+        <p>${currentRecruitSubTab==='active'?'暂无招募中的对局，快来发起第一场吧！':'暂无已满的对局'}</p>
+        ${currentRecruitSubTab==='active'&&currentUser?'<br><button class="btn btn-primary" onclick="openCreateRecruitModal()">发起招募</button>':''}
+      </div>`;
+    return;
+  }
+  let html = '';
+  matches.forEach(m => {
+    const blueCount = m.positions.filter(p => p.team === 'blue').length;
+    const redCount = m.positions.filter(p => p.team === 'red').length;
+    const modeLabels = { 1: '模式1·参赛', 2: '模式2·组织', 3: '模式3·组队' };
+    const statusLabel = m.status === 'full' ? '已满' : m.status === 'closed' ? '已关闭' : '招募中';
+    const statusClass = m.status === 'full' ? 'badge-full' : m.status === 'closed' ? 'badge-closed' : 'badge-recruiting';
+    const cardClass = m.status === 'full' ? 'full' : 'recruiting';
+    const progress = (m.totalCount / 10) * 100;
+    const isOrg = currentUser && currentUser.id === m.organizer.id;
+
+    html += `
+      <div class="match-card ${cardClass}" onclick="openMatchDetail('${m.id}')" style="cursor:pointer;">
+        <div class="match-card-header">
+          <div>
+            <span class="badge ${statusClass}">${statusLabel}</span>
+            <span class="badge badge-level" style="margin-left:4px;">${m.levelReq}</span>
+            <span class="badge" style="background:#f0f0f0;color:#666;margin-left:4px;">${modeLabels[m.mode]||'模式'+m.mode}</span>
+          </div>
+          <span style="font-size:0.82rem;color:var(--text-light);">⏰ ${m.startTime}</span>
+        </div>
+        <div class="match-card-org">发起人：<strong>${m.organizer.teamName}</strong> <span class="badge badge-level">${m.organizer.level}</span></div>
+        ${m.notes ? `<p style="font-size:0.82rem;color:var(--text-light);margin-bottom:8px;">📝 ${m.notes}</p>` : ''}
+        <div class="progress-text">${m.totalCount} / 10 人已就位</div>
+        <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${progress}%;"></div></div>
+        <div class="match-card-slots">
+          <span class="slot-badge slot-blue">🟦 蓝方 ${blueCount}/5</span>
+          <span class="slot-badge slot-red">🟥 红方 ${redCount}/5</span>
+        </div>
+        ${isOrg ? `<div style="margin-top:10px;display:flex;gap:8px;" onclick="event.stopPropagation();">
+          <button class="btn btn-xs btn-ghost" onclick="cancelMatch('${m.id}', event)">撤销招募</button>
+          ${m.status==='recruiting'?'<button class="btn btn-xs btn-ghost" onclick="closeMatch(\''+m.id+'\', event)">关闭报名</button>':''}
+        </div>` : ''}
+      </div>`;
+  });
+  container.innerHTML = html;
+}
+
+// 打开对局详情页
+async function openMatchDetail(matchId) {
+  currentMatchId = matchId;
+  const data = await api(`/api/recruitment/${matchId}`, { skipCache: true });
+  if (!data || !data.match) { showToast('加载失败','error'); return; }
+  renderMatchDetail(data.match);
+}
+
+function renderMatchDetail(match) {
+  stopRecruitPolling();
+  const content = document.getElementById('tabContent');
+  const LANES = ['对抗路', '打野', '中路', '发育路', '游走'];
+  const isOrg = currentUser && currentUser.id === match.organizer.id;
+  const myPos = currentUser ? match.positions.find(p => p.playerId === currentUser.id) : null;
+  const isFull = match.status === 'full';
+  const isClosed = match.status === 'closed';
+  const canJoin = currentUser && !isFull && !isClosed && currentUser.id !== match.organizer.id && !myPos;
+  const modeLabels = { 1: '模式1·参赛', 2: '模式2·组织', 3: '模式3·组队' };
+
+  // 构成分路面板
+  function buildLanePanel(team, teamLabel, teamColor, teamBg) {
+    let html = `<div class="team-panel">
+      <div class="team-panel-header ${team}">${teamColor} ${teamLabel}</div>
+      <div class="team-panel-body">`;
+    LANES.forEach(lane => {
+      const pos = match.positions.find(p => p.team === team && p.lane === lane);
+      const filled = !!pos;
+      const isMine = pos && currentUser && pos.playerId === currentUser.id;
+      const isOrgFilled = filled && !isMine;
+      const laneDisabled = isFull || isClosed;
+      const joinBtn = canJoin
+        ? `<button class="btn btn-xs btn-blue" onclick="joinLane('${match.id}','${team}','${lane}')">报名</button>`
+        : (myPos && !filled ? `<button class="btn btn-xs btn-blue" onclick="joinLane('${match.id}','${team}','${lane}')">报名</button>` : '');
+      const leaveBtn = isMine
+        ? `<button class="btn btn-xs btn-danger" onclick="leaveMatch('${match.id}')">撤销</button>`
+        : '';
+      const removeBtn = isOrg && filled
+        ? `<button class="btn btn-xs btn-ghost" onclick="removePlayer('${match.id}','${pos.playerId}')" title="清理">✕</button>`
+        : '';
+      html += `
+        <div class="lane-row ${team} ${filled?'filled':''}">
+          <div class="lane-info">
+            <div class="lane-name">${LANE_ICONS[lane]||''} ${lane}</div>
+            <div class="player-name ${filled?'':'empty'}">${filled ? pos.playerName : '🔲 空位'}</div>
+          </div>
+          <div class="lane-action">
+            ${filled && !isMine && !isOrg ? `<span style="font-size:0.72rem;color:var(--text-light);">已占</span>` : ''}
+            ${leaveBtn}
+            ${joinBtn}
+            ${removeBtn}
+          </div>
+        </div>`;
+    });
+    html += '</div></div>';
+    return html;
+  }
+
+  let headerActions = '';
+  if (isOrg) {
+    headerActions = `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-sm btn-danger" onclick="cancelMatch('${match.id}')" style="padding:5px 14px;">撤销招募</button>
+      ${!isFull&&!isClosed?'<button class="btn btn-sm btn-ghost" onclick="closeMatch(\''+match.id+'\')" style="padding:5px 14px;">关闭报名</button>':''}
+    </div>`;
+  }
+  if (myPos && !isFull && !isClosed) {
+    headerActions = `<div style="margin-top:10px;"><button class="btn btn-sm btn-danger" onclick="leaveMatch('${match.id}')">撤销报名（${myPos.team==='blue'?'🟦':'🟥'} ${myPos.lane}）</button></div>`;
+  }
+  if (isFull) {
+    headerActions = `<div style="margin-top:10px;"><span class="badge badge-full">🎉 10人已满，训练赛已成局！</span></div>`;
+  }
+  if (!currentUser) {
+    headerActions = `<div style="margin-top:10px;font-size:0.82rem;color:rgba(255,255,255,0.8);">请登录后报名参赛</div>`;
+  }
+
+  content.innerHTML = `
+    <div class="match-detail-header">
+      <div class="back-btn" onclick="backToRecruitHall()">← 返回招募大厅</div>
+      <h2>⚔️ 5v5 训练赛详情</h2>
+      <div class="match-detail-meta">
+        <span>⏰ ${match.startTime}</span>
+        <span>📊 ${match.levelReq}</span>
+        <span>${modeLabels[match.mode]||'模式'+match.mode}</span>
+        <span>👤 ${match.organizer.teamName}</span>
+      </div>
+      ${match.notes ? `<p style="font-size:0.85rem;margin-top:8px;opacity:0.9;">📝 ${match.notes}</p>` : ''}
+      ${headerActions}
+    </div>
+    <div class="progress-text">${match.positions.length} / 10 人已就位</div>
+    <div class="progress-bar-wrap" style="margin-bottom:20px;"><div class="progress-bar-fill" style="width:${(match.positions.length/10)*100}%;"></div></div>
+    <div class="teams-container">
+      ${buildLanePanel('blue', '蓝方', '🟦', '#e8f2fc')}
+      ${buildLanePanel('red', '红方', '🟥', '#fdeaec')}
+    </div>`;
+}
+
+// 返回招募大厅
+async function backToRecruitHall() {
+  currentMatchId = null;
+  await loadRecruitHall();
+  startRecruitPolling();
+}
+
+// ---------- 创建招募 ----------
+function openCreateRecruitModal() {
+  if (!currentUser) { showToast('请先登录','info'); openAuthModal('login'); return; }
+  selectedRecruitMode = 1;
+  document.getElementById('createRecruitModal').style.display = 'flex';
+  document.getElementById('recruitStartTime').value = '';
+  document.getElementById('recruitLevelReq').value = '不限';
+  document.getElementById('recruitNotes').value = '';
+  selectMode(1);
+  buildPresetPositions();
+}
+
+function closeCreateRecruitModal() {
+  document.getElementById('createRecruitModal').style.display = 'none';
+}
+
+function setNow() {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() + 5);
+  const pad = n => String(n).padStart(2, '0');
+  document.getElementById('recruitStartTime').value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}
+
+function selectMode(mode) {
+  selectedRecruitMode = mode;
+  document.querySelectorAll('.mode-option').forEach(el => el.classList.remove('selected'));
+  document.getElementById('mode' + mode + 'Option').classList.add('selected');
+  document.getElementById('mode1Section').style.display = mode === 1 ? 'block' : 'none';
+  document.getElementById('mode3Section').style.display = mode === 3 ? 'block' : 'none';
+}
+
+function buildPresetPositions() {
+  const LANES = ['对抗路', '打野', '中路', '发育路', '游走'];
+  let blueHtml = '', redHtml = '';
+  LANES.forEach(lane => {
+    blueHtml += `<div class="preset-lane">
+      <label>${LANE_ICONS[lane]}${lane}</label>
+      <input type="text" id="preset-blue-${lane}" placeholder="选填" disabled>
+      <span class="lock-icon">🔒</span>
+    </div>`;
+    redHtml += `<div class="preset-lane">
+      <label>${LANE_ICONS[lane]}${lane}</label>
+      <input type="text" id="preset-red-${lane}" placeholder="选填" disabled>
+      <span class="lock-icon">🔒</span>
+    </div>`;
+  });
+  document.getElementById('presetBlue').innerHTML = blueHtml;
+  document.getElementById('presetRed').innerHTML = redHtml;
+
+  // 点击输入框启用/禁用
+  document.querySelectorAll('.preset-lane input').forEach(input => {
+    input.addEventListener('focus', () => { input.disabled = false; input.placeholder = '输入队友的微信号'; });
+    input.addEventListener('blur', () => { if (!input.value.trim()) { input.disabled = true; input.placeholder = '选填'; } });
+  });
+}
+
+async function handleCreateRecruit(e) {
+  e.preventDefault();
+  const startTime = document.getElementById('recruitStartTime').value;
+  const levelReq = document.getElementById('recruitLevelReq').value;
+  const notes = document.getElementById('recruitNotes').value.trim();
+  const mode = selectedRecruitMode;
+
+  if (!startTime) { showToast('请选择开赛时间','error'); return; }
+
+  let positions = [];
+  if (mode === 1) {
+    const team = document.getElementById('mode1Team').value;
+    const lane = document.getElementById('mode1Lane').value;
+    positions.push({ team, lane, playerId: currentUser.id });
+  } else if (mode === 3) {
+    const LANES = ['对抗路', '打野', '中路', '发育路', '游走'];
+    ['blue', 'red'].forEach(team => {
+      LANES.forEach(lane => {
+        const input = document.getElementById(`preset-${team}-${lane}`);
+        if (input && input.value.trim()) {
+          // 模式3：填写微信号查找用户（简化处理，playerId留空让系统处理）
+          positions.push({ team, lane, playerName: input.value.trim() });
+        }
+      });
+    });
+  }
+
+  try {
+    const data = await api('/api/recruitment', {
+      method: 'POST',
+      body: JSON.stringify({ startTime, levelReq, notes, mode, positions })
+    });
+    closeCreateRecruitModal();
+    showToast('招募发布成功！','success');
+    cacheStore.delete('/api/recruitment/active');
+    cacheStore.delete('/api/recruitment/full');
+    await loadRecruitHall();
+    startRecruitPolling();
+  } catch(err) { showToast(err.message,'error'); }
+}
+
+// ---------- 报名 / 撤销 ----------
+async function joinLane(matchId, team, lane) {
+  if (!currentUser) { showToast('请先登录','info'); openAuthModal('login'); return; }
+  try {
+    const data = await api(`/api/recruitment/${matchId}/join`, {
+      method: 'POST',
+      body: JSON.stringify({ team, lane })
+    });
+    if (data.isFull) {
+      // 满员弹窗
+      showFullModal();
+      cacheStore.delete('/api/recruitment/active');
+      cacheStore.delete('/api/recruitment/full');
+    }
+    showToast('报名成功！','success');
+    await openMatchDetail(matchId);
+  } catch(err) { showToast(err.message,'error'); }
+}
+
+async function leaveMatch(matchId) {
+  if (!await dialog({ title: '撤销报名', body: '确定撤销报名吗？撤销后你的位置将空出。', confirmText: '确定撤销', cancelText: '保留', confirmBtnClass: 'btn-danger' })) return;
+  try {
+    await api(`/api/recruitment/${matchId}/leave`, { method: 'POST' });
+    showToast('已撤销报名','info');
+    await openMatchDetail(matchId);
+  } catch(err) { showToast(err.message,'error'); }
+}
+
+async function removePlayer(matchId, playerId) {
+  if (!await dialog({ title: '清理占位', body: '确定清理该占位人员吗？', confirmText: '确定清理', cancelText: '取消', confirmBtnClass: 'btn-danger' })) return;
+  try {
+    await api(`/api/recruitment/${matchId}/positions/${playerId}`, { method: 'DELETE' });
+    showToast('已清理','info');
+    await openMatchDetail(matchId);
+  } catch(err) { showToast(err.message,'error'); }
+}
+
+async function cancelMatch(matchId, event) {
+  if (event) event.stopPropagation();
+  if (!await dialog({ title: '撤销招募', body: '确定撤销整场招募吗？此操作不可恢复，所有报名人员将被移除。', confirmText: '确定撤销', cancelText: '保留', confirmBtnClass: 'btn-danger' })) return;
+  try {
+    await api(`/api/recruitment/${matchId}`, { method: 'DELETE' });
+    showToast('已撤销招募','info');
+    cacheStore.delete('/api/recruitment/active');
+    cacheStore.delete('/api/recruitment/full');
+    await loadRecruitHall();
+  } catch(err) { showToast(err.message,'error'); }
+}
+
+async function closeMatch(matchId, event) {
+  if (event) event.stopPropagation();
+  if (!await dialog({ title: '关闭报名', body: '确定关闭报名通道吗？关闭后其他人无法再报名。', confirmText: '确定关闭', cancelText: '保留' })) return;
+  try {
+    await api(`/api/recruitment/${matchId}/close`, { method: 'PUT' });
+    showToast('已关闭报名','info');
+    cacheStore.delete('/api/recruitment/active');
+    cacheStore.delete('/api/recruitment/full');
+    await loadRecruitHall();
+  } catch(err) { showToast(err.message,'error'); }
+}
+
+function showFullModal() {
+  document.getElementById('fullSuccessModal').style.display = 'flex';
+}
+function closeFullModal() {
+  document.getElementById('fullSuccessModal').style.display = 'none';
+}
+
+// ---------- 实时刷新轮询 ----------
+function startRecruitPolling() {
+  stopRecruitPolling();
+  recruitPollingTimer = setInterval(async () => {
+    if (currentTab !== 'recruit') { stopRecruitPolling(); return; }
+    try {
+      if (currentRecruitSubTab === 'active') {
+        const data = await api('/api/recruitment/active', { skipCache: true });
+        renderRecruitList(data.matches || []);
+      }
+    } catch {}
+  }, 5000);
+}
+function stopRecruitPolling() {
+  if (recruitPollingTimer) { clearInterval(recruitPollingTimer); recruitPollingTimer = null; }
+}
+
+// ==================== 原有功能 ====================
 
 // ---------- 公示榜 ----------
 async function loadPublicSchedules() {
@@ -333,7 +892,7 @@ function renderSchedules(schedules) {
   Object.keys(grouped).sort().forEach(date => {
     html += `<div class="card"><h3>📅 ${date}</h3>`;
     grouped[date].forEach(s => {
-      html += `<div class="schedule-item available-item" style="display:flex; justify-content:space-between; padding:12px; background:#f9fafb; border-left:4px solid var(--available); margin-bottom:10px; border-radius:8px;">
+      html += `<div style="display:flex; justify-content:space-between; padding:12px; background:#f9fafb; border-left:4px solid var(--available); margin-bottom:10px; border-radius:8px;">
         <div><strong>${s.team.teamName}</strong> <span class="badge badge-level">${s.team.level}</span><br>⏰ ${s.startTime} | ${s.mode.toUpperCase()} ${s.globalBp ? '全局BP' : ''}</div>
         <div style="display:flex; align-items:center; gap:12px;">
           ${currentUser && s.team.id !== currentUser.id ? `<span class="badge badge-available">${s.applicantCount}人申请</span><button class="btn btn-primary btn-sm" onclick="applySchedule('${s.id}')">申请约队</button>` : ''}
@@ -385,10 +944,9 @@ async function handlePublish(e) {
   try { await api('/api/schedules', { method:'POST', body: JSON.stringify({ date, startTime: start, mode, globalBp }) }); showToast('发布成功！','success'); switchTab('mine'); } catch(e) { showToast(e.message,'error'); }
 }
 
-// ---------- 我的日程 (日历 + 详情) ----------
+// ---------- 我的日程 ----------
 async function loadCalendar(year, month) {
   if (!year || !month) { const now = new Date(); year = now.getFullYear(); month = now.getMonth() + 1; }
-  // 边界保护：月份不能超出 1-12
   if (month > 12) { month = 1; year++; }
   if (month < 1) { month = 12; year--; }
   calendarYear = year; calendarMonth = month;
@@ -403,7 +961,7 @@ function renderCalendar(schedules, disabledDates) {
   const map = {};
   schedules.forEach(s => { if (!map[s.date]) map[s.date] = []; map[s.date].push(s); });
 
-  let html = `<div class="card"><div style="display:flex; justify-content:space-between; align-items:center;"><button class="btn btn-sm btn-outline" onclick="loadCalendar(${year}, ${month-1})">◀ 上月</button><h3>${year}年${month}月</h3><button class="btn btn-sm btn-outline" onclick="loadCalendar(${year}, ${month+1})">下月 ▶</button></div><div class="calendar-grid" style="display:grid; grid-template-columns: repeat(7, 1fr); gap:4px; text-align:center;">`;
+  let html = `<div class="card"><div style="display:flex; justify-content:space-between; align-items:center;"><button class="btn btn-sm btn-outline" onclick="loadCalendar(${year}, ${month-1})">◀ 上月</button><h3>${year}年${month}月</h3><button class="btn btn-sm btn-outline" onclick="loadCalendar(${year}, ${month+1})">下月 ▶</button></div><div style="display:grid; grid-template-columns: repeat(7, 1fr); gap:4px; text-align:center;">`;
   ['日','一','二','三','四','五','六'].forEach(d => html += `<div style="font-weight:600; padding:4px;">${d}</div>`);
   for (let i = 0; i < firstDay; i++) html += '<div></div>';
   for (let d = 1; d <= daysInMonth; d++) {
@@ -535,7 +1093,6 @@ function showToast(msg, type='info') {
   setTimeout(() => t.remove(), 2500);
 }
 
-// 自定义确认弹窗（替代 confirm）
 function dialog(options) {
   return new Promise(resolve => {
     const overlay = document.createElement('div');
@@ -546,7 +1103,7 @@ function dialog(options) {
         ${options.body ? `<div class="dialog-body">${options.body}</div>` : ''}
         <div class="dialog-actions">
           ${options.cancelText ? `<button class="btn btn-ghost" id="dialogCancel">${options.cancelText}</button>` : ''}
-          ${options.confirmText ? `<button class="btn btn-primary" id="dialogConfirm">${options.confirmText}</button>` : ''}
+          ${options.confirmText ? `<button class="btn ${options.confirmBtnClass||'btn-primary'}" id="dialogConfirm">${options.confirmText}</button>` : ''}
         </div>
       </div>`;
     document.body.appendChild(overlay);
@@ -557,7 +1114,6 @@ function dialog(options) {
   });
 }
 
-// 自定义输入弹窗（替代 prompt）
 function dialogPrompt(options) {
   return new Promise(resolve => {
     const overlay = document.createElement('div');
@@ -583,7 +1139,6 @@ function dialogPrompt(options) {
   });
 }
 
-// 带选项的确认弹窗
 function dialogChoices(options) {
   return new Promise(resolve => {
     const overlay = document.createElement('div');
