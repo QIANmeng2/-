@@ -185,10 +185,95 @@ app.get('/api/schedules', async (req, res) => {
   } catch (e) { res.status(500).json({ message: '加载失败' }); }
 });
 
-app.get('/api/schedules/my', authMiddleware, async (req, res) => {
+// ========== 公示榜接口 ==========
+app.get('/api/public-schedules', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM schedules WHERE userId = $1 ORDER BY date DESC, startTime DESC', [req.userId]);
-    res.json({ schedules: result.rows });
+    const result = await pool.query("SELECT * FROM schedules WHERE status = 'confirmed' AND is_public = true ORDER BY date DESC, startTime DESC");
+    if (result.rows.length === 0) return res.json({ schedules: [] });
+
+    // 获取所有相关用户信息（发布者和对手）
+    const allUserIds = result.rows.flatMap(s => [s.userid, s.confirmedapplicant].filter(Boolean));
+    const uniqueUserIds = [...new Set(allUserIds)];
+    const usersRes = await pool.query('SELECT id, teamName, coachName, level, bio FROM users WHERE id = ANY($1)', [uniqueUserIds]);
+    const usersMap = {};
+    usersRes.rows.forEach(u => { usersMap[u.id] = u; });
+
+    const schedules = result.rows.map(s => {
+      const publisher = usersMap[s.userid] || {};
+      const opponent = usersMap[s.confirmedapplicant] || {};
+      return {
+        id: s.id,
+        date: s.date,
+        startTime: s.starttime,
+        mode: s.mode,
+        globalBp: s.globalbp,
+        status: s.status,
+        publisher: {
+          id: publisher.id,
+          teamName: publisher.teamname,
+          coachName: publisher.coachname,
+          level: publisher.level,
+          bio: publisher.bio
+        },
+        opponent: {
+          id: opponent.id,
+          teamName: opponent.teamname,
+          coachName: opponent.coachname,
+          level: opponent.level,
+          bio: opponent.bio
+        }
+      };
+    });
+    res.json({ schedules });
+  } catch (e) { res.status(500).json({ message: '加载失败' }); }
+});
+
+app.get('/api/schedules/mine', authMiddleware, async (req, res) => {
+  try {
+    // 获取用户的档期
+    const schedules = await pool.query('SELECT * FROM schedules WHERE userId = $1 ORDER BY date DESC, startTime DESC', [req.userId]);
+
+    // 获取用户的不可用日期
+    const userResult = await pool.query('SELECT disabledDates FROM users WHERE id = $1', [req.userId]);
+    const disabledDates = userResult.rows[0]?.disableddates || [];
+
+    // 获取所有申请者的信息
+    const allApplicantIds = schedules.rows.flatMap(s => s.applicants || []).filter(Boolean);
+    const confirmedIds = schedules.rows.map(s => s.confirmedapplicant).filter(Boolean);
+    const allUserIds = [...new Set([...allApplicantIds, ...confirmedIds])];
+
+    let usersMap = {};
+    if (allUserIds.length > 0) {
+      const usersRes = await pool.query('SELECT id, teamName, coachName, level FROM users WHERE id = ANY($1)', [allUserIds]);
+      usersRes.rows.forEach(u => { usersMap[u.id] = u; });
+    }
+
+    const formattedSchedules = schedules.rows.map(s => {
+      const applicants = (s.applicants || []).map(id => {
+        const u = usersMap[id] || {};
+        return { id, teamName: u.teamname || '未知', coachName: u.coachname || '未知', level: u.level || '' };
+      });
+
+      let opponent = null;
+      if (s.confirmedapplicant) {
+        const u = usersMap[s.confirmedapplicant] || {};
+        opponent = { id: s.confirmedapplicant, teamName: u.teamname || '未知', coachName: u.coachname || '未知', level: u.level || '' };
+      }
+
+      return {
+        id: s.id,
+        date: s.date,
+        startTime: s.starttime,
+        mode: s.mode,
+        globalBp: s.globalbp,
+        status: s.status,
+        applicants,
+        opponent,
+        isPublisher: true
+      };
+    });
+
+    res.json({ schedules: formattedSchedules, disabledDates });
   } catch (e) { res.status(500).json({ message: '加载失败' }); }
 });
 
