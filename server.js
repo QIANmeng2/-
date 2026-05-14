@@ -5,7 +5,8 @@ const cors = require('cors');
 const { Pool } = require('pg');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+// 强制使用Railway注入的PORT，默认8080
+const PORT = process.env.PORT || 8080;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-me';
 const ADMIN_USER_ID = process.env.ADMIN_USER_ID || '';
 
@@ -65,8 +66,9 @@ async function initDB() {
 app.use(cors());
 app.use(express.json());
 
-// ✅ 关键修复：添加健康检查接口，防止Railway关闭服务
+// ✅ 优化健康检查接口：增加日志，确保Railway能正确识别
 app.get('/', (req, res) => {
+  console.log("✅ 收到健康检查请求，返回200 OK");
   res.status(200).send('OK');
 });
 
@@ -191,7 +193,7 @@ app.get('/api/schedules', async (req, res) => {
   } catch (e) { res.status(500).json({ message: '加载失败' }); }
 });
 
-// ✅ 关键修复：添加「我的日程」接口
+// 我的日程接口
 app.get('/api/schedules/my', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM schedules WHERE userId = $1 ORDER BY date DESC, startTime DESC', [req.userId]);
@@ -345,6 +347,11 @@ app.delete('/api/admin/users/:id', authMiddleware, adminMiddleware, async (req, 
 async function startServer() {
   await initDB();
   console.log("✅ 数据库表创建成功");
-  app.listen(PORT, '0.0.0.0', () => console.log(`🚀 服务已启动: ${PORT}`));
+  // 绑定所有网络接口，确保Railway能访问
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 服务已启动，监听端口: ${PORT}`);
+    console.log(`🔍 健康检查地址: http://0.0.0.0:${PORT}/`);
+  });
 }
+
 startServer();
