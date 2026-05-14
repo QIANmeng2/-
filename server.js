@@ -63,7 +63,7 @@ async function initDB() {
 app.use(cors());
 app.use(express.json());
 
-// ✅ 双路径健康检查，确保Railway能通过
+// 双路径健康检查
 app.get('/', (req, res) => {
   console.log("✅ 收到根路径健康检查请求");
   res.status(200).send('OK');
@@ -345,15 +345,21 @@ app.delete('/api/admin/users/:id', authMiddleware, adminMiddleware, async (req, 
   } catch (e) { res.status(500).json({ message: '删除失败' }); }
 });
 
-// 启动服务
+// 启动服务 + 守护进程（防止被Railway主动杀掉）
 async function startServer() {
   await initDB();
   console.log("✅ 数据库表创建成功");
-  app.listen(PORT, '0.0.0.0', () => {
+  
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 服务已启动，监听端口: ${PORT}`);
     console.log(`🔍 根路径健康检查地址: http://0.0.0.0:${PORT}/`);
     console.log(`🔍 /health路径健康检查地址: http://0.0.0.0:${PORT}/health`);
   });
+
+  // 守护进程：保持进程不退出，防止Railway主动终止
+  setInterval(() => {
+    console.log("⏳ 守护进程运行中，服务保持在线");
+  }, 60000);
 }
 
 startServer();
