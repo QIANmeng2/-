@@ -53,13 +53,40 @@ async function initDB() {
       );
     `);
 
-    // 自动修复缺失的数据库列（小白专用，不用管原理）
+    // 自动修复数据库缺失列，解决所有报错
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT \'\'');
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS disabledDates TEXT[] DEFAULT \'{}\'');
     await client.query('ALTER TABLE schedules ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT false');
 
   } finally { client.release(); }
 }
+
+// 全局中间件
+app.use(cors());
+app.use(express.json());
+
+// 登录验证中间件
+function authMiddleware(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ message: '未登录' });
+  try {
+    const payload = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
+    req.userId = payload.userId;
+    next();
+  } catch { return res.status(401).json({ message: '登录已过期' }); }
+}
+
+// 管理员中间件
+async function adminMiddleware(req, res, next) {
+  if (req.userId !== ADMIN_USER_ID) return res.status(403).json({ message: '无管理员权限' });
+  next();
+}
+
+// 发送通知函数
+async function sendNotification(userId, type, content, relatedId = null) {
+  await pool.query('INSERT INTO notifications (userId, type, content, relatedId) VALUES ($1,$2,$3,$4)', [userId, type, content, relatedId]);
+}
+
 // ---------- 用户 ----------
 app.post('/api/auth/register', async (req, res) => {
   const { username, password, teamName, coachName, wechat, level, bio } = req.body;
@@ -212,7 +239,6 @@ app.put('/api/schedules/:id/confirm-applicant', authMiddleware, async (req, res)
     if (sRes.rows.length === 0) return res.status(404).json({ message: '档期不存在' });
     if (!sRes.rows[0].applicants || !sRes.rows[0].applicants.includes(applicantId)) return res.status(400).json({ message: '该用户未申请' });
     await pool.query("UPDATE schedules SET status = 'confirmed', confirmedApplicant = $1, applicants = '{}', is_public = COALESCE($3, false) WHERE id = $2", [applicantId, req.params.id, isPublic || false]);
-    // 通知对方
     await sendNotification(applicantId, 'confirmed', `你的申请被接受！档期 ${sRes.rows[0].date} ${sRes.rows[0].starttime} 已确认`);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ message: '确认失败' }); }
@@ -302,7 +328,7 @@ app.delete('/api/admin/users/:id', authMiddleware, adminMiddleware, async (req, 
   } catch (e) { res.status(500).json({ message: '删除失败' }); }
 });
 
-// 启动
+// 启动服务
 async function startServer() {
   await initDB();
   console.log("✅ 数据库表创建成功");
