@@ -52,31 +52,14 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
+
+    // 自动修复缺失的数据库列（小白专用，不用管原理）
+    await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT \'\'');
+    await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS disabledDates TEXT[] DEFAULT \'{}\'');
+    await client.query('ALTER TABLE schedules ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT false');
+
   } finally { client.release(); }
 }
-
-app.use(cors());
-app.use(express.json());
-
-function authMiddleware(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ message: '未登录' });
-  try {
-    const payload = jwt.verify(authHeader.split(' ')[1], JWT_SECRET);
-    req.userId = payload.userId;
-    next();
-  } catch { return res.status(401).json({ message: '登录已过期' }); }
-}
-
-async function adminMiddleware(req, res, next) {
-  if (req.userId !== ADMIN_USER_ID) return res.status(403).json({ message: '无管理员权限' });
-  next();
-}
-
-async function sendNotification(userId, type, content, relatedId = null) {
-  await pool.query('INSERT INTO notifications (userId, type, content, relatedId) VALUES ($1,$2,$3,$4)', [userId, type, content, relatedId]);
-}
-
 // ---------- 用户 ----------
 app.post('/api/auth/register', async (req, res) => {
   const { username, password, teamName, coachName, wechat, level, bio } = req.body;
