@@ -27,11 +27,18 @@ async function initDB() {
         wechat TEXT NOT NULL,
         level TEXT DEFAULT '大众',
         bio TEXT DEFAULT '',
-        disabledDates TEXT[] DEFAULT '{}'
+        disabledDates TEXT[] DEFAULT '{}',
+        gameId TEXT DEFAULT '',
+        gameServer TEXT DEFAULT '手Q区',
+        gameRank TEXT DEFAULT '星耀',
+        peakScore INTEGER DEFAULT 0,
+        laneStats TEXT DEFAULT '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}',
+        heroPool TEXT DEFAULT ''
       );
       CREATE TABLE IF NOT EXISTS schedules (
         id TEXT PRIMARY KEY,
         userId TEXT NOT NULL,
+        teamId TEXT,
         date TEXT NOT NULL,
         startTime TEXT NOT NULL,
         mode TEXT DEFAULT 'bo1',
@@ -54,6 +61,7 @@ async function initDB() {
       CREATE TABLE IF NOT EXISTS recruitment_matches (
         id TEXT PRIMARY KEY,
         organizerId TEXT NOT NULL,
+        teamId TEXT,
         startTime TEXT NOT NULL,
         levelReq TEXT DEFAULT '不限',
         notes TEXT DEFAULT '',
@@ -71,10 +79,35 @@ async function initDB() {
         playerName TEXT,
         createdAt TIMESTAMP DEFAULT NOW()
       );
+      CREATE TABLE IF NOT EXISTS teams (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        bio TEXT DEFAULT '',
+        captainId TEXT NOT NULL,
+        maxMembers INTEGER DEFAULT 7,
+        status TEXT DEFAULT 'open',
+        createdAt TIMESTAMP DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS team_members (
+        id SERIAL PRIMARY KEY,
+        teamId TEXT NOT NULL,
+        userId TEXT NOT NULL,
+        role TEXT DEFAULT 'member',
+        joinedAt TIMESTAMP DEFAULT NOW(),
+        UNIQUE(teamId, userId)
+      );
     `);
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT \'\'');
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS disabledDates TEXT[] DEFAULT \'{}\'');
     await client.query('ALTER TABLE schedules ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT false');
+    await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS gameId TEXT DEFAULT \'\'');
+    await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS gameServer TEXT DEFAULT \'手Q区\'');
+    await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS gameRank TEXT DEFAULT \'星耀\'');
+    await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS peakScore INTEGER DEFAULT 0');
+    await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS laneStats TEXT DEFAULT \'{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}\'');
+    await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS heroPool TEXT DEFAULT \'\'');
+    await client.query('ALTER TABLE schedules ADD COLUMN IF NOT EXISTS teamId TEXT');
+    await client.query('ALTER TABLE recruitment_matches ADD COLUMN IF NOT EXISTS teamId TEXT');
   } finally { client.release(); }
 }
 
@@ -204,19 +237,19 @@ app.get('/api/recruitment/:id', async (req, res) => {
 
 // 创建招募对局
 app.post('/api/recruitment', authMiddleware, async (req, res) => {
-  const { startTime, levelReq, notes, mode, positions } = req.body;
+  const { startTime, levelReq, notes, mode, positions, teamId } = req.body;
   if (!startTime) return res.status(400).json({ message: '请选择开赛时间' });
   const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     await client.query(
-      'INSERT INTO recruitment_matches (id, organizerId, startTime, levelReq, notes, mode) VALUES ($1,$2,$3,$4,$5,$6)',
-      [id, req.userId, startTime, levelReq || '不限', notes || '', mode || 1]
+      'INSERT INTO recruitment_matches (id, organizerId, teamId, startTime, levelReq, notes, mode) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+      [id, req.userId, teamId || null, startTime, levelReq || '不限', notes || '', mode || 1]
     );
 
-    // 模式3：预占位置
-    if (mode === 3 && positions && positions.length > 0) {
+    // 预占位置（模式3或队伍招募）
+    if (positions && positions.length > 0) {
       for (const pos of positions) {
         if (pos.playerId) {
           const userRes = await client.query('SELECT teamName FROM users WHERE id = $1', [pos.playerId]);
@@ -451,7 +484,7 @@ app.post('/api/auth/register', async (req, res) => {
     await pool.query('INSERT INTO users (id, username, password, teamName, coachName, wechat, level, bio) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
       [id, username, hashed, teamName, coachName, wechat, level || '大众', bio || '']);
     const token = jwt.sign({ userId: id }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id, teamName, coachName, wechat, level: level || '大众', bio: bio || '', disabledDates: [] } });
+    res.json({ token, user: { id, teamName, coachName, wechat, level: level || '大众', bio: bio || '', disabledDates: [], gameId: '', gameServer: '手Q区', gameRank: '星耀', peakScore: 0, laneStats: '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}', heroPool: '' } });
   } catch (e) { res.status(500).json({ message: '注册失败' }); }
 });
 
@@ -462,7 +495,7 @@ app.post('/api/auth/login', async (req, res) => {
     if (result.rows.length === 0 || !bcrypt.compareSync(password, result.rows[0].password)) return res.status(400).json({ message: '用户名或密码错误' });
     const user = result.rows[0];
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id: user.id, teamName: user.teamname, coachName: user.coachname, wechat: user.wechat, level: user.level, bio: user.bio, disabledDates: user.disableddates || [] } });
+    res.json({ token, user: { id: user.id, teamName: user.teamname, coachName: user.coachname, wechat: user.wechat, level: user.level, bio: user.bio, disabledDates: user.disableddates || [], gameId: user.gameid || '', gameServer: user.gameserver || '手Q区', gameRank: user.gamerank || '星耀', peakScore: user.peakscore || 0, laneStats: user.lanestats || '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}', heroPool: user.heropool || '' } });
   } catch (e) { res.status(500).json({ message: '登录失败' }); }
 });
 
@@ -471,7 +504,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
     const result = await pool.query('SELECT * FROM users WHERE id = $1', [req.userId]);
     if (result.rows.length === 0) return res.status(404).json({ message: '用户不存在' });
     const u = result.rows[0];
-    res.json({ user: { id: u.id, teamName: u.teamname, coachName: u.coachname, wechat: u.wechat, level: u.level, bio: u.bio, disabledDates: u.disableddates || [] } });
+    res.json({ user: { id: u.id, teamName: u.teamname, coachName: u.coachname, wechat: u.wechat, level: u.level, bio: u.bio, disabledDates: u.disableddates || [], gameId: u.gameid || '', gameServer: u.gameserver || '手Q区', gameRank: u.gamerank || '星耀', peakScore: u.peakscore || 0, laneStats: u.lanestats || '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}', heroPool: u.heropool || '' } });
   } catch (e) { res.status(500).json({ message: '获取失败' }); }
 });
 
@@ -708,6 +741,7 @@ app.get('/api/admin/dashboard', authMiddleware, adminMiddleware, async (req, res
     const recruitmentsCount = await pool.query('SELECT COUNT(*) FROM recruitment_matches');
     const activeRecruitments = await pool.query("SELECT COUNT(*) FROM recruitment_matches WHERE status = 'recruiting'");
     const fullRecruitments = await pool.query("SELECT COUNT(*) FROM recruitment_matches WHERE status = 'full'");
+    const teamsCount = await pool.query('SELECT COUNT(*) FROM teams');
     const today = new Date().toISOString().split('T')[0];
     const todaySchedules = await pool.query("SELECT COUNT(*) FROM schedules WHERE date = $1", [today]);
     res.json({
@@ -717,6 +751,7 @@ app.get('/api/admin/dashboard', authMiddleware, adminMiddleware, async (req, res
         totalRecruitments: parseInt(recruitmentsCount.rows[0].count),
         activeRecruitments: parseInt(activeRecruitments.rows[0].count),
         fullRecruitments: parseInt(fullRecruitments.rows[0].count),
+        totalTeams: parseInt(teamsCount.rows[0].count),
         todaySchedules: parseInt(todaySchedules.rows[0].count)
       }
     });
@@ -763,10 +798,11 @@ app.delete('/api/admin/recruitments/:id', authMiddleware, adminMiddleware, async
 // 管理员获取所有用户
 app.get('/api/admin/users', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, username, teamName, coachName, wechat, level, bio, created_at FROM users ORDER BY created_at DESC');
+    const result = await pool.query('SELECT id, username, teamName, coachName, wechat, level, bio, gameId, gameServer, gameRank, peakScore, heroPool, created_at FROM users ORDER BY created_at DESC');
     res.json({ users: result.rows.map(u => ({
       id: u.id, username: u.username, teamName: u.teamname, coachName: u.coachname,
-      wechat: u.wechat, level: u.level, bio: u.bio, createdAt: u.created_at
+      wechat: u.wechat, level: u.level, bio: u.bio, createdAt: u.created_at,
+      gameId: u.gameid || '', gameServer: u.gameserver || '', gameRank: u.gamerank || '', peakScore: u.peakscore || 0, heroPool: u.heropool || ''
     })) });
   } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
 });
@@ -807,6 +843,319 @@ app.get('/api/admin/security', authMiddleware, adminMiddleware, async (req, res)
       ]
     });
   } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
+});
+
+// ====================== 个人游戏资料 ======================
+
+app.get('/api/users/me/profile', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT gameId, gameServer, gameRank, peakScore, laneStats, heroPool FROM users WHERE id = $1', [req.userId]);
+    if (result.rows.length === 0) return res.status(404).json({ message: '用户不存在' });
+    const u = result.rows[0];
+    res.json({
+      profile: {
+        gameId: u.gameid || '',
+        gameServer: u.gameserver || '手Q区',
+        gameRank: u.gamerank || '星耀',
+        peakScore: u.peakscore || 0,
+        laneStats: u.lanestats ? JSON.parse(u.lanestats) : { '对抗路': '0', '打野': '0', '中路': '0', '发育路': '0', '游走': '0' },
+        heroPool: u.heropool || ''
+      }
+    });
+  } catch (e) { console.error(e); res.status(500).json({ message: '获取失败' }); }
+});
+
+app.put('/api/users/me/profile', authMiddleware, async (req, res) => {
+  const { gameId, gameServer, gameRank, peakScore, laneStats, heroPool } = req.body;
+  try {
+    const laneStatsJson = typeof laneStats === 'string' ? laneStats : JSON.stringify(laneStats || {});
+    await pool.query(
+      'UPDATE users SET gameId = COALESCE($1, gameId), gameServer = COALESCE($2, gameServer), gameRank = COALESCE($3, gameRank), peakScore = COALESCE($4, peakScore), laneStats = COALESCE($5, laneStats), heroPool = COALESCE($6, heroPool) WHERE id = $7',
+      [gameId || null, gameServer || null, gameRank || null, peakScore || null, laneStatsJson || null, heroPool || null, req.userId]
+    );
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ message: '更新失败' }); }
+});
+
+// ====================== 队伍系统 ======================
+
+// 获取所有队伍（公开列表）
+app.get('/api/teams', async (req, res) => {
+  try {
+    const teams = await pool.query("SELECT * FROM teams WHERE status = 'open' ORDER BY createdAt DESC");
+    if (teams.rows.length === 0) return res.json({ teams: [] });
+
+    const teamIds = teams.rows.map(t => t.id);
+    const members = await pool.query('SELECT * FROM team_members WHERE teamId = ANY($1)', [teamIds]);
+    const userIds = [...new Set(members.rows.map(m => m.userid))];
+    const usersRes = await pool.query('SELECT id, username, teamName, coachName, level FROM users WHERE id = ANY($1)', [userIds]);
+    const userMap = {};
+    usersRes.rows.forEach(u => { userMap[u.id] = u; });
+
+    const result = teams.rows.map(t => {
+      const tm = members.rows.filter(m => m.teamid === t.id);
+      const memberList = tm.map(m => {
+        const u = userMap[m.userid] || {};
+        return { userId: m.userid, role: m.role, joinedAt: m.joinedat, username: u.username, teamName: u.teamname, coachName: u.coachname, level: u.level };
+      });
+      return { id: t.id, name: t.name, bio: t.bio, captainId: t.captainid, status: t.status, memberCount: tm.length, maxMembers: t.maxmembers, members: memberList, createdAt: t.createdat };
+    });
+    res.json({ teams: result });
+  } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
+});
+
+// 获取我的队伍
+app.get('/api/teams/mine', authMiddleware, async (req, res) => {
+  try {
+    const memberRes = await pool.query('SELECT * FROM team_members WHERE userId = $1', [req.userId]);
+    if (memberRes.rows.length === 0) return res.json({ team: null });
+
+    const teamId = memberRes.rows[0].teamid;
+    const tRes = await pool.query('SELECT * FROM teams WHERE id = $1', [teamId]);
+    if (tRes.rows.length === 0) return res.json({ team: null });
+    const t = tRes.rows[0];
+
+    const members = await pool.query('SELECT * FROM team_members WHERE teamId = $1', [teamId]);
+    const userIds = members.rows.map(m => m.userid);
+    const usersRes = await pool.query('SELECT id, username, teamName, coachName, level, gameRank, peakScore, heroPool FROM users WHERE id = ANY($1)', [userIds]);
+    const userMap = {};
+    usersRes.rows.forEach(u => { userMap[u.id] = u; });
+
+    const memberList = members.rows.map(m => {
+      const u = userMap[m.userid] || {};
+      return {
+        userId: m.userid, role: m.role, joinedAt: m.joinedat,
+        username: u.username, coachName: u.coachname, level: u.level,
+        gameRank: u.gamerank, peakScore: u.peakscore, heroPool: u.heropool
+      };
+    });
+
+    const myRole = members.rows.find(m => m.userid === req.userId)?.role || 'member';
+    res.json({ team: { id: t.id, name: t.name, bio: t.bio, captainId: t.captainid, status: t.status, memberCount: members.rows.length, maxMembers: t.maxmembers, members: memberList, createdAt: t.createdat, myRole } });
+  } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
+});
+
+// 获取单个队伍详情
+app.get('/api/teams/:id', async (req, res) => {
+  try {
+    const tRes = await pool.query('SELECT * FROM teams WHERE id = $1', [req.params.id]);
+    if (tRes.rows.length === 0) return res.status(404).json({ message: '队伍不存在' });
+    const t = tRes.rows[0];
+
+    const members = await pool.query('SELECT * FROM team_members WHERE teamId = $1', [req.params.id]);
+    const userIds = members.rows.map(m => m.userid);
+    const usersRes = await pool.query('SELECT id, username, teamName, coachName, level, gameRank, peakScore, heroPool FROM users WHERE id = ANY($1)', [userIds]);
+    const userMap = {};
+    usersRes.rows.forEach(u => { userMap[u.id] = u; });
+
+    const memberList = members.rows.map(m => {
+      const u = userMap[m.userid] || {};
+      return { userId: m.userid, role: m.role, joinedAt: m.joinedat, username: u.username, coachName: u.coachname, level: u.level, gameRank: u.gamerank, peakScore: u.peakscore, heroPool: u.heropool };
+    });
+    res.json({ team: { id: t.id, name: t.name, bio: t.bio, captainId: t.captainid, status: t.status, memberCount: members.rows.length, maxMembers: t.maxmembers, members: memberList, createdAt: t.createdat } });
+  } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
+});
+
+// 创建队伍
+app.post('/api/teams', authMiddleware, async (req, res) => {
+  const { name, bio } = req.body;
+  if (!name) return res.status(400).json({ message: '请填写队伍名称' });
+  try {
+    // 检查是否已在队伍中
+    const existing = await pool.query('SELECT * FROM team_members WHERE userId = $1', [req.userId]);
+    if (existing.rows.length > 0) return res.status(400).json({ message: '你已在其他队伍中，请先退出' });
+
+    const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
+    await pool.query('INSERT INTO teams (id, name, bio, captainId) VALUES ($1,$2,$3,$4)', [id, name, bio || '', req.userId]);
+    await pool.query('INSERT INTO team_members (teamId, userId, role) VALUES ($1,$2,$3)', [id, req.userId, 'captain']);
+
+    const userRes = await pool.query('SELECT username, teamName, coachName, level FROM users WHERE id = $1', [req.userId]);
+    const u = userRes.rows[0] || {};
+    res.json({ team: { id, name, bio: bio || '', captainId: req.userId, status: 'open', memberCount: 1, maxMembers: 7, members: [{ userId: req.userId, role: 'captain', username: u.username, coachName: u.coachname, level: u.level }] } });
+  } catch (e) { console.error(e); res.status(500).json({ message: '创建失败' }); }
+});
+
+// 更新队伍信息（仅队长）
+app.put('/api/teams/:id', authMiddleware, async (req, res) => {
+  const { name, bio, status } = req.body;
+  try {
+    const tRes = await pool.query('SELECT * FROM teams WHERE id = $1', [req.params.id]);
+    if (tRes.rows.length === 0) return res.status(404).json({ message: '队伍不存在' });
+    if (tRes.rows[0].captainid !== req.userId) return res.status(403).json({ message: '仅队长可修改队伍信息' });
+    await pool.query('UPDATE teams SET name = COALESCE($1, name), bio = COALESCE($2, bio), status = COALESCE($3, status) WHERE id = $4', [name || null, bio || null, status || null, req.params.id]);
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ message: '修改失败' }); }
+});
+
+// 解散队伍（仅队长）
+app.delete('/api/teams/:id', authMiddleware, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const tRes = await client.query('SELECT * FROM teams WHERE id = $1', [req.params.id]);
+    if (tRes.rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ message: '队伍不存在' }); }
+    if (tRes.rows[0].captainid !== req.userId) { await client.query('ROLLBACK'); return res.status(403).json({ message: '仅队长可解散队伍' }); }
+    await client.query('DELETE FROM team_members WHERE teamId = $1', [req.params.id]);
+    await client.query('DELETE FROM teams WHERE id = $1', [req.params.id]);
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ message: '解散失败' }); } finally { client.release(); }
+});
+
+// 加入队伍
+app.post('/api/teams/:id/join', authMiddleware, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const tRes = await client.query('SELECT * FROM teams WHERE id = $1', [req.params.id]);
+    if (tRes.rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ message: '队伍不存在' }); }
+    const t = tRes.rows[0];
+    if (t.status !== 'open') { await client.query('ROLLBACK'); return res.status(400).json({ message: '该队伍已关闭入队通道' }); }
+
+    const existing = await client.query('SELECT * FROM team_members WHERE userId = $1', [req.userId]);
+    if (existing.rows.length > 0) { await client.query('ROLLBACK'); return res.status(400).json({ message: '你已在其他队伍中' }); }
+
+    const countRes = await client.query('SELECT COUNT(*) FROM team_members WHERE teamId = $1', [req.params.id]);
+    if (parseInt(countRes.rows[0].count) >= 7) {
+      await client.query("UPDATE teams SET status = 'closed' WHERE id = $1", [req.params.id]);
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: '队伍已满（7人）' });
+    }
+
+    await client.query('INSERT INTO team_members (teamId, userId, role) VALUES ($1,$2,$3)', [req.params.id, req.userId, 'member']);
+
+    // 如果满了自动关闭
+    const newCount = await client.query('SELECT COUNT(*) FROM team_members WHERE teamId = $1', [req.params.id]);
+    if (parseInt(newCount.rows[0].count) >= 7) {
+      await client.query("UPDATE teams SET status = 'closed' WHERE id = $1", [req.params.id]);
+    }
+
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    if (e.code === '23505') return res.status(400).json({ message: '你已在该队伍中' });
+    console.error(e); res.status(500).json({ message: '加入失败' });
+  } finally { client.release(); }
+});
+
+// 退出队伍
+app.post('/api/teams/:id/leave', authMiddleware, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const tRes = await client.query('SELECT * FROM teams WHERE id = $1', [req.params.id]);
+    if (tRes.rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ message: '队伍不存在' }); }
+    const t = tRes.rows[0];
+
+    const memberRes = await client.query('SELECT * FROM team_members WHERE teamId = $1 AND userId = $2', [req.params.id, req.userId]);
+    if (memberRes.rows.length === 0) { await client.query('ROLLBACK'); return res.status(400).json({ message: '你不是该队伍成员' }); }
+
+    await client.query('DELETE FROM team_members WHERE teamId = $1 AND userId = $2', [req.params.id, req.userId]);
+
+    // 如果是队长退出且队伍还有人，转让给最早加入的成员
+    if (t.captainid === req.userId) {
+      const remaining = await client.query('SELECT * FROM team_members WHERE teamId = $1 ORDER BY joinedAt ASC LIMIT 1', [req.params.id]);
+      if (remaining.rows.length > 0) {
+        await client.query('UPDATE teams SET captainId = $1 WHERE id = $2', [remaining.rows[0].userid, req.params.id]);
+        await client.query('UPDATE team_members SET role = $1 WHERE teamId = $2 AND userId = $3', ['captain', req.params.id, remaining.rows[0].userid]);
+      } else {
+        // 没人了，直接删除队伍
+        await client.query('DELETE FROM teams WHERE id = $1', [req.params.id]);
+      }
+    }
+
+    // 如果之前关闭了，重新开放
+    if (t.status === 'closed') {
+      await client.query("UPDATE teams SET status = 'open' WHERE id = $1", [req.params.id]);
+    }
+
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ message: '退出失败' }); } finally { client.release(); }
+});
+
+// 踢出队员（仅队长）
+app.delete('/api/teams/:id/members/:userId', authMiddleware, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const tRes = await client.query('SELECT * FROM teams WHERE id = $1', [req.params.id]);
+    if (tRes.rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ message: '队伍不存在' }); }
+    if (tRes.rows[0].captainid !== req.userId) { await client.query('ROLLBACK'); return res.status(403).json({ message: '仅队长可操作' }); }
+    if (req.params.userId === req.userId) { await client.query('ROLLBACK'); return res.status(400).json({ message: '请使用退出队伍功能' }); }
+
+    await client.query('DELETE FROM team_members WHERE teamId = $1 AND userId = $2', [req.params.id, req.params.userId]);
+
+    // 如果之前关闭了，重新开放
+    if (tRes.rows[0].status === 'closed') {
+      await client.query("UPDATE teams SET status = 'open' WHERE id = $1", [req.params.id]);
+    }
+
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ message: '操作失败' }); } finally { client.release(); }
+});
+
+// 转让队长
+app.post('/api/teams/:id/transfer', authMiddleware, async (req, res) => {
+  const { newCaptainId } = req.body;
+  if (!newCaptainId) return res.status(400).json({ message: '请指定新队长' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const tRes = await client.query('SELECT * FROM teams WHERE id = $1', [req.params.id]);
+    if (tRes.rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ message: '队伍不存在' }); }
+    if (tRes.rows[0].captainid !== req.userId) { await client.query('ROLLBACK'); return res.status(403).json({ message: '仅队长可操作' }); }
+    if (newCaptainId === req.userId) { await client.query('ROLLBACK'); return res.status(400).json({ message: '你已经是队长' }); }
+
+    const memberRes = await client.query('SELECT * FROM team_members WHERE teamId = $1 AND userId = $2', [req.params.id, newCaptainId]);
+    if (memberRes.rows.length === 0) { await client.query('ROLLBACK'); return res.status(400).json({ message: '该成员不在队伍中' }); }
+
+    await client.query('UPDATE teams SET captainId = $1 WHERE id = $2', [newCaptainId, req.params.id]);
+    await client.query('UPDATE team_members SET role = $1 WHERE teamId = $2 AND userId = $3', ['captain', req.params.id, newCaptainId]);
+    await client.query('UPDATE team_members SET role = $1 WHERE teamId = $2 AND userId = $3', ['member', req.params.id, req.userId]);
+
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ message: '转让失败' }); } finally { client.release(); }
+});
+
+// ====================== 管理员队伍接口 ======================
+
+app.get('/api/admin/teams', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const teams = await pool.query('SELECT * FROM teams ORDER BY createdAt DESC');
+    if (teams.rows.length === 0) return res.json({ teams: [] });
+
+    const teamIds = teams.rows.map(t => t.id);
+    const members = await pool.query('SELECT * FROM team_members WHERE teamId = ANY($1)', [teamIds]);
+    const userIds = [...new Set(members.rows.map(m => m.userid))];
+    const usersRes = await pool.query('SELECT id, username, teamName, coachName, level FROM users WHERE id = ANY($1)', [userIds]);
+    const userMap = {};
+    usersRes.rows.forEach(u => { userMap[u.id] = u; });
+
+    const result = teams.rows.map(t => {
+      const tm = members.rows.filter(m => m.teamid === t.id);
+      const memberList = tm.map(m => {
+        const u = userMap[m.userid] || {};
+        return { userId: m.userid, role: m.role, username: u.username, teamName: u.teamname, coachName: u.coachname, level: u.level };
+      });
+      return { id: t.id, name: t.name, bio: t.bio, captainId: t.captainid, status: t.status, memberCount: tm.length, maxMembers: t.maxmembers, members: memberList, createdAt: t.createdat };
+    });
+    res.json({ teams: result });
+  } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
+});
+
+app.delete('/api/admin/teams/:id', authMiddleware, adminMiddleware, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM team_members WHERE teamId = $1', [req.params.id]);
+    await client.query('DELETE FROM teams WHERE id = $1', [req.params.id]);
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ message: '删除失败' }); } finally { client.release(); }
 });
 
 async function startServer() {
