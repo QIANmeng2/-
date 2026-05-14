@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>浅梦·王者荣耀训练赛约队平台</title>
+  <style>
+    :root {
+      --bg: #f0f2f5; --card: #ffffff; --primary: #3b5998; --accent: #f0a030;
+      --available: #27ae60; --booked: #e74c3c; --text: #2c3e50;
+      --text-light: #6b7b8d; --border: #e0e4e8; --shadow: 0 4px 16px rgba(0,0,0,0.06);
+      --radius: 14px;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: linear-gradient(160deg, #f0f4f8 0%, #e2e8f0 100%); min-height: 100vh; color: var(--text); }
+    .header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 0 16px; position: sticky; top:0; z-index:100; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+    .header-inner { max-width: 900px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 60px; }
+    .logo { color: #fff; font-weight: 700; font-size: 1.2rem; display: flex; align-items: center; gap: 6px; letter-spacing: 0.5px; }
+    .user-area { display: flex; align-items: center; gap: 12px; color: #fff; }
+    .btn { padding: 8px 20px; border-radius: 24px; border: none; cursor: pointer; font-weight: 600; transition: all 0.2s ease; white-space: normal; font-size: 0.9rem; }
+    .btn-primary { background: var(--accent); color: #1a1a2e; box-shadow: 0 4px 12px rgba(240,160,48,0.3); }
+    .btn-primary:hover { background: #f5b840; transform: translateY(-1px); }
+    .btn-outline { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.4); }
+    .btn-outline:hover { border-color: #fff; background: rgba(255,255,255,0.08); }
+    .btn-sm { padding: 6px 16px; font-size: 0.8rem; border-radius: 20px; }
+    .btn-xs { padding: 4px 12px; font-size: 0.72rem; border-radius: 16px; }
+    .btn-danger { background: #e74c3c; color: #fff; }
+    .btn-ghost { background: transparent; color: #555; border: 1px solid #ddd; }
+    .main-container { max-width: 900px; margin: 0 auto; padding: 20px; }
+    .tab-nav { display: flex; gap:6px; background: var(--card); border-radius: var(--radius); padding: 6px; margin-bottom: 20px; box-shadow: var(--shadow); overflow-x: auto; }
+    .tab-btn { flex:1; padding: 10px 16px; border:none; background: transparent; border-radius: 12px; cursor: pointer; font-weight: 600; color: var(--text-light); white-space: nowrap; transition: all 0.2s; }
+    .tab-btn.active { background: var(--primary); color: #fff; box-shadow: 0 4px 12px rgba(59,89,152,0.3); }
+    .card { background: var(--card); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow); transition: transform 0.1s; }
+    .card:hover { transform: translateY(-1px); }
+    .badge { padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+    .badge-available { background: #eafaf1; color: var(--available); }
+    .badge-confirmed { background: #fdedec; color: var(--booked); }
+    .badge-level { background: #eef2ff; color: var(--primary); }
+    .form-input, .form-select { width: 100%; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 0.9rem; transition: border 0.2s; }
+    .form-input:focus, .form-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59,89,152,0.1); }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-weight: 600; font-size: 0.85rem; color: var(--text-light); margin-bottom: 6px; }
+    .form-group label input[type="checkbox"] { width: auto; margin-right: 6px; vertical-align: middle; }
+    .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); z-index:200; display: flex; align-items: center; justify-content: center; }
+    .modal { background: #fff; border-radius: var(--radius); padding: 28px; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 48px rgba(0,0,0,0.2); }
+    .toast { position: fixed; top:20px; left:50%; transform: translateX(-50%); z-index:300; padding: 12px 28px; border-radius: 30px; font-weight: 600; color: #fff; animation: slideDown 0.3s; }
+    .toast-success { background: #27ae60; } .toast-error { background: #e74c3c; } .toast-info { background: var(--primary); }
+    @keyframes slideDown { from { opacity:0; transform: translateX(-50%) translateY(-30px); } to { opacity:1; transform: translateX(-50%) translateY(0); } }
+    .notification-bell { position: relative; cursor: pointer; font-size: 1.4rem; }
+    .notification-badge { position: absolute; top: -6px; right: -8px; background: #e74c3c; color: #fff; border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
+    .loading-spinner { text-align: center; padding: 60px 20px; }
+    .loading-spinner::after { content: ""; display: inline-block; width: 32px; height: 32px; border: 3px solid #ddd; border-top-color: var(--primary); border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .card .btn-outline { color: #333 !important; border-color: #ccc !important; }
+
+    /* 自定义确认/提示弹窗 */
+    .dialog-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); z-index:400; display: flex; align-items: center; justify-content: center; }
+    .dialog { background: #fff; border-radius: 16px; padding: 24px; width: calc(100% - 48px); max-width: 360px; box-shadow: 0 24px 48px rgba(0,0,0,0.2); animation: slideDown 0.25s ease; }
+    .dialog-title { font-size: 1rem; font-weight: 700; margin-bottom: 10px; color: var(--text); }
+    .dialog-body { font-size: 0.9rem; color: var(--text-light); margin-bottom: 20px; line-height: 1.6; }
+    .dialog-actions { display: flex; gap: 10px; justify-content: flex-end; }
+    .dialog-actions .btn { flex: 1; text-align: center; padding: 10px; border-radius: 10px; font-size: 0.9rem; }
+    .dialog-input { width: 100%; padding: 10px 14px; border: 1.5px solid var(--border); border-radius: 10px; font-size: 0.9rem; box-sizing: border-box; }
+    .dialog-input:focus { outline: none; border-color: var(--primary); }
+  </style>
+</head>
+<body>
+<div class="header">
+  <div class="header-inner">
+    <div class="logo"><span>⚔️</span>浅梦·训练赛<span style="color:var(--accent)">约队</span></div>
+    <div class="user-area">
+      <div class="notification-bell" id="notificationBell" onclick="openNotifications()" style="display:none;">
+        🔔<span class="notification-badge" id="notifBadge" style="display:none;">0</span>
+      </div>
+      <div id="userInfoDisplay" style="display:none; font-size:0.9rem;"><span id="displayName"></span> | <span id="displayTeam"></span></div>
+      <button class="btn btn-outline btn-sm" id="btnLoginTop" onclick="openAuthModal('login')">登录</button>
+      <button class="btn btn-outline btn-sm" id="btnLogoutTop" onclick="logout()" style="display:none;">退出</button>
+    </div>
+  </div>
+</div>
+
+<div class="main-container">
+  <div class="tab-nav" id="tabNav">
+    <button class="tab-btn active" data-tab="square">📋 档期广场</button>
+    <button class="tab-btn" data-tab="public">📢 公示榜</button>
+    <button class="tab-btn" data-tab="publish" style="display:none;">➕ 发布档期</button>
+    <button class="tab-btn" data-tab="mine" style="display:none;">📅 我的日程</button>
+    <button class="tab-btn" data-tab="profile" style="display:none;">👤 个人信息</button>
+    <button class="tab-btn" data-tab="admin" id="tabAdmin" style="display:none;">⚙️ 管理</button>
+  </div>
+  <div id="tabContent"></div>
+</div>
+
+<!-- 登录/注册弹窗 -->
+<div id="authModalOverlay" style="display:none;" class="modal-overlay">
+  <div class="modal">
+    <h3 id="authModalTitle">登录</h3>
+    <form id="authForm" onsubmit="handleAuth(event)">
+      <div class="form-group"><label>用户名</label><input class="form-input" type="text" id="authUsername" required></div>
+      <div class="form-group"><label>密码</label><input class="form-input" type="password" id="authPassword" required></div>
+      <div id="registerFields" style="display:none;">
+        <div class="form-group"><label>队伍名称</label><input class="form-input" type="text" id="regTeamName" placeholder="如：星河战队"></div>
+        <div class="form-group"><label>教练/队长名称</label><input class="form-input" type="text" id="regCoachName"></div>
+        <div class="form-group"><label>微信号</label><input class="form-input" type="text" id="regWechat" placeholder="用于联系"></div>
+        <div class="form-group"><label>队伍等级</label><select class="form-select" id="regLevel"><option value="大众">大众</option><option value="KPL">KPL</option><option value="K甲">K甲</option><option value="KPL青训">KPL青训</option><option value="K甲青训">K甲青训</option><option value="全国大赛">全国大赛</option><option value="主播">主播</option></select></div>
+        <div class="form-group"><label>队伍备注</label><textarea class="form-input" id="regBio" rows="2" placeholder="介绍队伍实力，例如：巅峰2200，主玩打野"></textarea></div>
+      </div>
+      <button class="btn btn-primary" type="submit" style="width:100%; margin-top:8px;">登录</button>
+    </form>
+    <div style="text-align:center; margin-top:12px; cursor:pointer;" onclick="switchAuthMode()">还没有账号？点击注册</div>
+    <button class="btn btn-ghost" style="width:100%; margin-top:8px;" onclick="closeAuthModal()">取消</button>
+  </div>
+</div>
+
+<div id="toastContainer"></div>
+
+<script>
+const API_BASE = 'https://perpetual-enchantment-production-b163.up.railway.app';
+let currentUser = null;
+let authToken = localStorage.getItem('local_current_user') || null;
+let currentTab = 'square';
+let authMode = 'login';
+let calendarYear, calendarMonth;
+let unreadNotifs = 0;
+
+const cacheStore = new Map();
+async function api(path, options = {}, retries = 2) {
+  const isGet = !options.method || options.method === 'GET';
+  const cacheKey = path + JSON.stringify(options.body || '');
+  if (isGet && !options.skipCache && cacheStore.has(cacheKey)) {
+    const cached = cacheStore.get(cacheKey);
+    if (Date.now() - cached.time < 20000) return cached.data;
+  }
+  const url = API_BASE + path;
+  const headers = { 'Content-Type': 'application/json' };
+  if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
+    const res = await fetch(url, { ...options, headers, signal: controller.signal });
+    clearTimeout(timeout);
+    const data = await res.json();
+    if (res.status === 401) { logout(); return null; }
+    if (!res.ok) throw new Error(data.message || '请求失败');
+    if (isGet) cacheStore.set(cacheKey, { data, time: Date.now() });
+    return data;
+  } catch (err) {
+    if (retries > 0) {
+      if (retries === 2) showToast('正在唤醒服务器...', 'info');
+      await new Promise(r => setTimeout(r, 1500));
+      return api(path, options, retries - 1);
+    }
+    throw err;
+  }
+}
+
+// ---------- 认证 ----------
+async function fetchUserInfo() {
+  try { const data = await api('/api/auth/me'); if (data && data.user) currentUser = data.user; } catch { logout(); }
+  updateUI();
+  checkNotifications();
+}
+function openAuthModal(mode) {
+  authMode = mode;
+  document.getElementById('authModalOverlay').style.display = 'flex';
+  document.getElementById('authModalTitle').textContent = mode === 'login' ? '登录' : '注册';
+  document.getElementById('registerFields').style.display = mode === 'register' ? 'block' : 'none';
+  document.getElementById('authForm').reset();
+}
+function closeAuthModal() { document.getElementById('authModalOverlay').style.display = 'none'; }
+function switchAuthMode() { openAuthModal(authMode === 'login' ? 'register' : 'login'); }
+async function handleAuth(e) {
+  e.preventDefault();
+  const username = document.getElementById('authUsername').value.trim();
+  const password = document.getElementById('authPassword').value.trim();
+  if (!username || !password) { showToast('请填写用户名和密码','error'); return; }
+  if (authMode === 'register') {
+    const team = document.getElementById('regTeamName').value.trim();
+    const coach = document.getElementById('regCoachName').value.trim();
+    const wechat = document.getElementById('regWechat').value.trim();
+    const level = document.getElementById('regLevel').value;
+    const bio = document.getElementById('regBio').value.trim();
+    if (!team || !coach || !wechat) { showToast('请填写完整注册信息','error'); return; }
+    try {
+      const data = await api('/api/auth/register', { method:'POST', body: JSON.stringify({ username, password, teamName: team, coachName: coach, wechat, level, bio }) });
+      if (data && data.token) { authToken = data.token; localStorage.setItem('local_current_user', authToken); currentUser = data.user; closeAuthModal(); updateUI(); switchTab('square'); showToast('注册成功！','success'); }
+    } catch (e) { showToast(e.message,'error'); }
+  } else {
+    try {
+      const data = await api('/api/auth/login', { method:'POST', body: JSON.stringify({ username, password }) });
+      if (data && data.token) { authToken = data.token; localStorage.setItem('local_current_user', authToken); currentUser = data.user; closeAuthModal(); updateUI(); switchTab('square'); showToast('登录成功！','success'); }
+    } catch (e) { showToast(e.message,'error'); }
+  }
+}
+function logout() {
+  authToken = null; localStorage.removeItem('local_current_user'); currentUser = null;
+  updateUI(); switchTab('square'); showToast('已退出','info');
+}
+
+// ---------- UI 更新 ----------
+function updateUI() {
+  const ui = id => document.getElementById(id);
+  if (currentUser) {
+    ui('userInfoDisplay').style.display = 'block';
+    ui('btnLoginTop').style.display = 'none';
+    ui('btnLogoutTop').style.display = 'inline-block';
+    ui('displayName').textContent = currentUser.coachName;
+    ui('displayTeam').textContent = currentUser.teamName;
+    document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="mine"], #tabNav .tab-btn[data-tab="profile"]').forEach(b => b.style.display = '');
+    ui('notificationBell').style.display = 'inline-block';
+    // 检查是否为管理员
+    if (currentUser.id === 'mp4hmya7ad15v6') { // ⚠️ 请替换为实际管理员ID，或通过环境变量设置
+      ui('tabAdmin').style.display = '';
+    }
+  } else {
+    ui('userInfoDisplay').style.display = 'none';
+    ui('btnLoginTop').style.display = 'inline-block';
+    ui('btnLogoutTop').style.display = 'none';
+    document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="mine"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="admin"]').forEach(b => b.style.display = 'none');
+    ui('notificationBell').style.display = 'none';
+  }
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === currentTab));
+}
+
+// ---------- 通知 ----------
+async function checkNotifications() {
+  if (!currentUser) return;
+  try {
+    const data = await api('/api/notifications', { skipCache: true });
+    unreadNotifs = data.notifications.filter(n => !n.read).length;
+    const badge = document.getElementById('notifBadge');
+    if (unreadNotifs > 0) { badge.style.display = 'flex'; badge.textContent = unreadNotifs; }
+    else badge.style.display = 'none';
+  } catch {}
+}
+async function openNotifications() {
+  if (!currentUser) return;
+  const existing = document.getElementById('notifPanel');
+  if (existing) { existing.remove(); return; }
+  const data = await api('/api/notifications', { skipCache: true });
+  let html = '<div style="padding:14px 0;">';
+  if (data.notifications.length === 0) html += '<p style="text-align:center;color:var(--text-light);padding:20px 0;">暂无通知</p>';
+  else {
+    data.notifications.forEach(n => {
+      html += `<div style="padding:10px;background:${n.read ? '#fff' : '#f9f9ff'};border-radius:8px;margin-bottom:8px;font-size:0.88rem;">${n.content}<br><small style="color:var(--text-light);">${new Date(n.created_at).toLocaleString()}</small></div>`;
+    });
+    html += '<button class="btn btn-sm btn-primary" onclick="markAllRead()" style="width:100%;">全部已读</button>';
+  }
+  html += '</div>';
+  const panel = document.createElement('div');
+  panel.id = 'notifPanel';
+  panel.style.cssText = 'position:fixed;top:70px;right:16px;width:300px;max-height:400px;background:#fff;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.15);z-index:150;padding:16px;overflow-y:auto;';
+  panel.innerHTML = `<div style="font-weight:700;font-size:0.95rem;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">🔔 消息通知 <span onclick="document.getElementById('notifPanel').remove()" style="cursor:pointer;font-size:1.2rem;color:#999;">&times;</span></div>${html}`;
+  document.body.appendChild(panel);
+  // 点击外部关闭
+  const closeOnOutside = (e) => { if (!panel.contains(e.target) && e.target.id !== 'notificationBell') { panel.remove(); document.removeEventListener('click', closeOnOutside); } };
+  setTimeout(() => document.addEventListener('click', closeOnOutside), 0);
+}
+async function markAllRead() {
+  await api('/api/notifications/read-all', { method:'PUT' });
+  showToast('已全部标为已读','success');
+  checkNotifications();
+  document.getElementById('notifPanel')?.remove();
+}
+
+// ---------- Tab 切换 ----------
+async function switchTab(tab) {
+  currentTab = tab; updateUI();
+  if (tab === 'square') cacheStore.delete('/api/schedules');
+  else if (tab === 'mine') cacheStore.delete('/api/schedules/mine');
+  else if (tab === 'public') cacheStore.delete('/api/public-schedules');
+  const content = document.getElementById('tabContent');
+  content.innerHTML = '<div class="loading-spinner"></div>';
+  try {
+    if (tab === 'square') await loadSchedules();
+    else if (tab === 'public') await loadPublicSchedules();
+    else if (tab === 'publish') renderPublishForm();
+    else if (tab === 'mine') await loadCalendar();
+    else if (tab === 'profile') renderProfileForm();
+    else if (tab === 'admin') renderAdminPanel();
+  } catch {
+    content.innerHTML = '<div class="card"><p>加载失败</p><button class="btn btn-sm btn-primary" onclick="switchTab(\''+tab+'\')">重试</button></div>';
+  }
+}
+
+document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => {
+  const tab = b.dataset.tab;
+  if (['publish','mine','profile','admin'].includes(tab) && !currentUser) { showToast('请先登录','info'); openAuthModal('login'); return; }
+  switchTab(tab);
+}));
+
+// ---------- 公示榜 ----------
+async function loadPublicSchedules() {
+  const data = await api('/api/public-schedules');
+  renderPublicSchedules(data.schedules || []);
+}
+function renderPublicSchedules(schedules) {
+  const content = document.getElementById('tabContent');
+  if (!schedules.length) { content.innerHTML = '<div class="card">暂无公示的档期</div>'; return; }
+  const grouped = {};
+  schedules.forEach(s => { const d = s.date; if (!grouped[d]) grouped[d] = []; grouped[d].push(s); });
+  let html = '';
+  Object.keys(grouped).sort().forEach(date => {
+    html += `<div class="card"><h3>📅 ${date}</h3>`;
+    grouped[date].forEach(s => {
+      const teamA = s.publisher || {};
+      const teamB = s.opponent || {};
+      html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:12px; background:#fff9f0; border-left:4px solid var(--accent); margin-bottom:10px; border-radius:8px;">
+        <div>
+          <strong>${teamA.teamName || '未知'}</strong> vs <strong>${teamB.teamName || '未知'}</strong>
+          <br><span class="badge badge-level">${teamA.level || ''}</span> vs <span class="badge badge-level">${teamB.level || ''}</span>
+          <br>⏰ ${s.startTime} | ${s.mode.toUpperCase()} ${s.globalBp ? '全局BP' : ''}
+        </div>
+        <button class="btn btn-ghost btn-xs" onclick="viewProfile('${teamA.id}')">查看详情</button>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  content.innerHTML = html;
+}
+
+// ---------- 档期广场 ----------
+async function loadSchedules() {
+  const data = await api('/api/schedules');
+  renderSchedules(data.schedules || []);
+}
+function renderSchedules(schedules) {
+  const content = document.getElementById('tabContent');
+  if (!schedules.length) { content.innerHTML = '<div class="card">暂无档期</div>'; return; }
+  const grouped = {};
+  schedules.forEach(s => { const d = s.date; if (!grouped[d]) grouped[d] = []; grouped[d].push(s); });
+  let html = '';
+  Object.keys(grouped).sort().forEach(date => {
+    html += `<div class="card"><h3>📅 ${date}</h3>`;
+    grouped[date].forEach(s => {
+      html += `<div class="schedule-item available-item" style="display:flex; justify-content:space-between; padding:12px; background:#f9fafb; border-left:4px solid var(--available); margin-bottom:10px; border-radius:8px;">
+        <div><strong>${s.team.teamName}</strong> <span class="badge badge-level">${s.team.level}</span><br>⏰ ${s.startTime} | ${s.mode.toUpperCase()} ${s.globalBp ? '全局BP' : ''}</div>
+        <div style="display:flex; align-items:center; gap:12px;">
+          ${currentUser && s.team.id !== currentUser.id ? `<span class="badge badge-available">${s.applicantCount}人申请</span><button class="btn btn-primary btn-sm" onclick="applySchedule('${s.id}')">申请约队</button>` : ''}
+          <button class="btn btn-ghost btn-xs" onclick="viewProfile('${s.team.id}')">查看名片</button>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  content.innerHTML = html;
+}
+async function viewProfile(userId) {
+  const data = await api(`/api/users/${userId}`);
+  const u = data.user;
+  document.getElementById('tabContent').innerHTML = `
+    <div class="card">
+      <h3>📇 ${u.teamName}</h3>
+      <p>教练：${u.coachName} | 等级：${u.level}</p>
+      <p>备注：${u.bio || '暂无'}</p>
+      <button class="btn btn-sm btn-primary" onclick="switchTab('square')">返回广场</button>
+    </div>`;
+}
+async function applySchedule(id) {
+  if (!await dialog({ title: '申请约队', body: '确定申请这个档期吗？', confirmText: '确认申请', cancelText: '再想想' })) return;
+  try { await api(`/api/schedules/${id}/apply`, { method:'POST' }); showToast('申请成功！','success'); checkNotifications(); await loadSchedules(); } catch(e) { showToast(e.message,'error'); }
+}
+
+// ---------- 发布档期 ----------
+function renderPublishForm() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('tabContent').innerHTML = `
+    <div class="card"><h3>📢 发布可约档期</h3>
+      <form onsubmit="handlePublish(event)">
+        <div class="form-group"><label>日期</label><input class="form-input" type="date" id="publishDate" required value="${today}"></div>
+        <div class="form-group"><label>开始时间</label><input class="form-input" type="time" id="startTime" required></div>
+        <div class="form-group"><label>模式</label><select class="form-select" id="modeSelect"><option value="bo1">BO1</option><option value="bo2">BO2</option><option value="bo3">BO3</option><option value="bo4">BO4</option><option value="bo5">BO5</option></select></div>
+        <div class="form-group"><label><input type="checkbox" id="globalBp"> 全局BP</label></div>
+        <button class="btn btn-primary" type="submit" style="width:100%;">发布档期</button>
+      </form>
+    </div>`;
+}
+async function handlePublish(e) {
+  e.preventDefault();
+  const date = document.getElementById('publishDate').value;
+  const start = document.getElementById('startTime').value;
+  const mode = document.getElementById('modeSelect').value;
+  const globalBp = document.getElementById('globalBp').checked;
+  if (!start) { showToast('请选择时间','error'); return; }
+  try { await api('/api/schedules', { method:'POST', body: JSON.stringify({ date, startTime: start, mode, globalBp }) }); showToast('发布成功！','success'); switchTab('mine'); } catch(e) { showToast(e.message,'error'); }
+}
+
+// ---------- 我的日程 (日历 + 详情) ----------
+async function loadCalendar(year, month) {
+  if (!year || !month) { const now = new Date(); year = now.getFullYear(); month = now.getMonth() + 1; }
+  // 边界保护：月份不能超出 1-12
+  if (month > 12) { month = 1; year++; }
+  if (month < 1) { month = 12; year--; }
+  calendarYear = year; calendarMonth = month;
+  const data = await api('/api/schedules/mine');
+  renderCalendar(data.schedules || [], data.disabledDates || []);
+}
+function renderCalendar(schedules, disabledDates) {
+  const year = calendarYear, month = calendarMonth;
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const firstDay = new Date(year, month-1, 1).getDay();
+  const today = new Date().toISOString().split('T')[0];
+  const map = {};
+  schedules.forEach(s => { if (!map[s.date]) map[s.date] = []; map[s.date].push(s); });
+
+  let html = `<div class="card"><div style="display:flex; justify-content:space-between; align-items:center;"><button class="btn btn-sm btn-outline" onclick="loadCalendar(${year}, ${month-1})">◀ 上月</button><h3>${year}年${month}月</h3><button class="btn btn-sm btn-outline" onclick="loadCalendar(${year}, ${month+1})">下月 ▶</button></div><div class="calendar-grid" style="display:grid; grid-template-columns: repeat(7, 1fr); gap:4px; text-align:center;">`;
+  ['日','一','二','三','四','五','六'].forEach(d => html += `<div style="font-weight:600; padding:4px;">${d}</div>`);
+  for (let i = 0; i < firstDay; i++) html += '<div></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isDisabled = disabledDates.includes(dateStr);
+    const daySchedules = map[dateStr] || [];
+    html += `<div style="min-height:60px; padding:4px; background:${isDisabled ? '#eee' : '#f9f9f9'}; border-radius:6px; cursor:pointer;" onclick="toggleDisableDate('${dateStr}')"><strong>${d}</strong>`;
+    daySchedules.forEach(s => html += `<div style="font-size:0.65rem; background:var(--accent); color:#fff; padding:1px 4px; border-radius:4px; margin-top:2px;">${s.startTime} ${s.status==='confirmed' ? '已约' : ''}</div>`);
+    html += '</div>';
+  }
+  html += '</div></div>';
+
+  html += '<h3 style="margin-top:20px;">📋 日程详情</h3>';
+  schedules.forEach(s => {
+    let actions = '';
+    if (s.status === 'available' && s.isPublisher) {
+      actions += '<div><strong>申请者：</strong>';
+      if (s.applicants.length > 0) {
+        s.applicants.forEach(app => actions += `<div>${app.teamName} (${app.coachName}) <button class="btn btn-xs btn-primary" onclick="confirmApplicant('${s.id}', '${app.id}')">✅ 选择</button></div>`);
+      } else actions += '暂无';
+      actions += '</div>';
+      actions += `<button class="btn btn-sm btn-danger" onclick="cancelPublishedSchedule('${s.id}')" style="margin-top:6px;">取消发布</button>`;
+    }
+    if (s.status === 'confirmed') {
+      const partner = s.isPublisher ? s.opponent : s.publisher;
+      actions += `<p>对手：${partner.teamName} (${partner.coachName}) <span class="badge badge-confirmed">${partner.level}</span></p>`;
+      if (s.isPublisher) {
+        actions += `<button class="btn btn-sm btn-outline" onclick="unconfirmSchedule('${s.id}')">撤回选择</button>`;
+        actions += `<button class="btn btn-sm btn-outline" onclick="togglePublic('${s.id}')">${s.isPublic ? '取消公示' : '设为公示'}</button>`;
+      }
+      actions += `<button class="btn btn-sm btn-outline" onclick="requestModify('${s.id}')">修改时间</button>`;
+      actions += `<button class="btn btn-sm btn-outline" onclick="requestCancel('${s.id}')" style="color:#e74c3c;">取消训练</button>`;
+    }
+    if (s.status === 'cancelled' && s.isPublisher) {
+      actions += `<button class="btn btn-sm btn-primary" onclick="republishSchedule('${s.id}')">重新发布</button>`;
+    }
+    html += `<div class="card"><strong>${s.date} ${s.startTime}</strong> | ${s.mode.toUpperCase()} ${s.globalBp ? '全局BP' : ''} <span class="badge badge-available">${s.status}</span><div>${actions}</div></div>`;
+  });
+  document.getElementById('tabContent').innerHTML = html;
+}
+
+async function cancelPublishedSchedule(id) {
+  if (!await dialog({ title: '取消发布', body: '取消发布将删除该档期，如果已有申请者会收到通知，确定吗？', confirmText: '确定取消', cancelText: '保留', confirmBtnClass: 'btn-danger' })) return;
+  try { await api(`/api/schedules/${id}/cancel-post`, { method:'DELETE' }); showToast('已取消发布','info'); await loadCalendar(); } catch(e) { showToast(e.message,'error'); }
+}
+async function confirmApplicant(scheduleId, applicantId) {
+  const choice = await dialogChoices({ title: '选择确认方式', body: '是否公开这场训练赛？', choices: ['公开', '不公开'], confirmText: '取消' });
+  if (choice === null) return;
+  const isPublic = choice === '公开';
+  try { await api(`/api/schedules/${scheduleId}/confirm-applicant`, { method:'PUT', body: JSON.stringify({ applicantId, isPublic }) }); showToast('已确认约队！','success'); checkNotifications(); await loadCalendar(); } catch(e) { showToast(e.message,'error'); }
+}
+async function unconfirmSchedule(id) {
+  if (!await dialog({ title: '撤回选择', body: '撤回选择后档期将恢复可约状态，确定吗？', confirmText: '确定撤回', cancelText: '保留' })) return;
+  try { await api(`/api/schedules/${id}/unconfirm`, { method:'PUT' }); showToast('已撤回','info'); await loadCalendar(); } catch(e) { showToast(e.message,'error'); }
+}
+async function togglePublic(id) {
+  const data = await api(`/api/schedules/${id}/toggle-public`, { method:'PUT' });
+  showToast(data.isPublic ? '已设为公示' : '已取消公示','info');
+  await loadCalendar();
+}
+async function requestModify(id) {
+  const times = ['14:00', '15:00', '16:00', '19:00', '20:00', '21:00'];
+  const choice = await dialogChoices({ title: '修改时间', body: '请选择新的时间', choices: times });
+  if (!choice) return;
+  try { await api(`/api/schedules/${id}/modify-time`, { method:'PUT', body: JSON.stringify({ newTime: choice }) }); showToast('时间已修改','success'); await loadCalendar(); } catch(e) { showToast(e.message,'error'); }
+}
+async function requestCancel(id) {
+  if (!await dialog({ title: '取消训练赛', body: '确定取消这场训练赛吗？', confirmText: '确定取消', cancelText: '保留', confirmBtnClass: 'btn-danger' })) return;
+  try { await api(`/api/schedules/${id}/cancel`, { method:'POST' }); showToast('已取消','info'); checkNotifications(); await loadCalendar(); } catch(e) { showToast(e.message,'error'); }
+}
+async function republishSchedule(id) {
+  if (!await dialog({ title: '重新发布', body: '重新发布到档期广场？', confirmText: '发布', cancelText: '取消' })) return;
+  try { await api(`/api/schedules/${id}/republish`, { method:'POST' }); showToast('已重新发布','success'); await loadCalendar(); } catch(e) { showToast(e.message,'error'); }
+}
+async function toggleDisableDate(date) {
+  if (!currentUser) return;
+  const data = await api('/api/users/me/disabled-dates', { method:'PUT', body: JSON.stringify({ date }) });
+  currentUser.disabledDates = data.disabledDates;
+  loadCalendar(calendarYear, calendarMonth);
+}
+
+// ---------- 个人信息 ----------
+function renderProfileForm() {
+  document.getElementById('tabContent').innerHTML = `
+    <div class="card"><h3>👤 编辑个人信息</h3>
+      <form onsubmit="handleUpdateProfile(event)">
+        <div class="form-group"><label>教练名称</label><input class="form-input" id="profileCoach" value="${currentUser.coachName||''}"></div>
+        <div class="form-group"><label>微信号</label><input class="form-input" id="profileWechat" value="${currentUser.wechat||''}"></div>
+        <div class="form-group"><label>等级</label><select class="form-select" id="profileLevel"><option value="大众" ${currentUser.level==='大众'?'selected':''}>大众</option><option value="KPL" ${currentUser.level==='KPL'?'selected':''}>KPL</option><option value="K甲" ${currentUser.level==='K甲'?'selected':''}>K甲</option><option value="KPL青训" ${currentUser.level==='KPL青训'?'selected':''}>KPL青训</option><option value="K甲青训" ${currentUser.level==='K甲青训'?'selected':''}>K甲青训</option><option value="全国大赛" ${currentUser.level==='全国大赛'?'selected':''}>全国大赛</option><option value="主播" ${currentUser.level==='主播'?'selected':''}>主播</option></select></div>
+        <div class="form-group"><label>队伍备注</label><textarea class="form-input" id="profileBio" rows="3">${currentUser.bio||''}</textarea></div>
+        <button class="btn btn-primary" type="submit" style="width:100%;">保存修改</button>
+      </form>
+    </div>`;
+}
+async function handleUpdateProfile(e) {
+  e.preventDefault();
+  const coach = document.getElementById('profileCoach').value.trim();
+  const wechat = document.getElementById('profileWechat').value.trim();
+  const level = document.getElementById('profileLevel').value;
+  const bio = document.getElementById('profileBio').value.trim();
+  await api('/api/users/me', { method:'PUT', body: JSON.stringify({ coachName: coach, wechat, level, bio }) });
+  currentUser.coachName = coach; currentUser.wechat = wechat; currentUser.level = level; currentUser.bio = bio;
+  updateUI();
+  showToast('已更新','success');
+}
+
+// ---------- 管理员 ----------
+async function renderAdminPanel() {
+  const data = await api('/api/admin/schedules');
+  let html = '<div class="card"><h3>⚙️ 管理员面板</h3><p>所有档期（可删除）</p>';
+  data.schedules.forEach(s => {
+    html += `<div style="background:#f9f9f9; padding:8px; border-radius:6px; margin:6px 0;">${s.date} ${s.starttime} | ${s.mode} | 状态：${s.status} | <button class="btn btn-xs btn-danger" onclick="adminDeleteSchedule('${s.id}')">删除</button></div>`;
+  });
+  html += '</div>';
+  document.getElementById('tabContent').innerHTML = html;
+}
+async function adminDeleteSchedule(id) {
+  if (!await dialog({ title: '管理员操作', body: '确定强制删除此档期？', confirmText: '删除', cancelText: '取消', confirmBtnClass: 'btn-danger' })) return;
+  await api(`/api/admin/schedules/${id}`, { method:'DELETE' });
+  showToast('已删除','info');
+  renderAdminPanel();
+}
+
+// ---------- 工具函数 ----------
+function showToast(msg, type='info') {
+  const t = document.createElement('div');
+  t.className = `toast toast-${type}`; t.textContent = msg;
+  document.getElementById('toastContainer').appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
+// 自定义确认弹窗（替代 confirm）
+function dialog(options) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'dialog-overlay';
+    overlay.innerHTML = `
+      <div class="dialog">
+        ${options.title ? `<div class="dialog-title">${options.title}</div>` : ''}
+        ${options.body ? `<div class="dialog-body">${options.body}</div>` : ''}
+        <div class="dialog-actions">
+          ${options.cancelText ? `<button class="btn btn-ghost" id="dialogCancel">${options.cancelText}</button>` : ''}
+          ${options.confirmText ? `<button class="btn btn-primary" id="dialogConfirm">${options.confirmText}</button>` : ''}
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const close = (result) => { document.body.removeChild(overlay); resolve(result); };
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(false); });
+    document.getElementById('dialogCancel')?.addEventListener('click', () => close(false));
+    document.getElementById('dialogConfirm')?.addEventListener('click', () => close(true));
+  });
+}
+
+// 自定义输入弹窗（替代 prompt）
+function dialogPrompt(options) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'dialog-overlay';
+    overlay.innerHTML = `
+      <div class="dialog">
+        ${options.title ? `<div class="dialog-title">${options.title}</div>` : ''}
+        ${options.body ? `<div class="dialog-body">${options.body}</div>` : ''}
+        <input class="dialog-input" id="dialogInput" value="${options.defaultValue || ''}" placeholder="${options.placeholder || ''}" style="margin-bottom:16px;">
+        <div class="dialog-actions">
+          <button class="btn btn-ghost" id="dialogCancel">${options.cancelText || '取消'}</button>
+          <button class="btn btn-primary" id="dialogConfirm">${options.confirmText || '确定'}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const input = document.getElementById('dialogInput');
+    input?.focus();
+    const close = (result) => { document.body.removeChild(overlay); resolve(result); };
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(null); });
+    document.getElementById('dialogCancel')?.addEventListener('click', () => close(null));
+    document.getElementById('dialogConfirm')?.addEventListener('click', () => close(input?.value || null));
+    input?.addEventListener('keydown', e => { if (e.key === 'Enter') close(input?.value || null); });
+  });
+}
+
+// 带选项的确认弹窗
+function dialogChoices(options) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'dialog-overlay';
+    const choicesHtml = options.choices.map((c, i) => `<button class="btn btn-ghost" data-idx="${i}" style="margin-bottom:8px;width:100%;justify-content:center;">${c}</button>`).join('');
+    overlay.innerHTML = `
+      <div class="dialog">
+        ${options.title ? `<div class="dialog-title">${options.title}</div>` : ''}
+        ${options.body ? `<div class="dialog-body">${options.body}</div>` : ''}
+        <div id="dialogChoices">${choicesHtml}</div>
+        <div class="dialog-actions" style="margin-top:12px;">
+          <button class="btn btn-ghost" id="dialogCancel">${options.cancelText || '取消'}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const close = (result) => { document.body.removeChild(overlay); resolve(result); };
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(null); });
+    options.choices.forEach((_, i) => {
+      document.querySelector(`[data-idx="${i}"]`)?.addEventListener('click', () => close(options.choices[i]));
+    });
+    document.getElementById('dialogCancel')?.addEventListener('click', () => close(null));
+  });
+}
+
+function closeModal() { switchTab(currentTab); }
+
+// 启动
+(async () => {
+  if (authToken) await fetchUserInfo();
+  updateUI();
+  switchTab('square');
+})();
+</script>
+</body>
+</html>
