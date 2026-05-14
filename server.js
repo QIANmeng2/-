@@ -5,7 +5,6 @@ const cors = require('cors');
 const { Pool } = require('pg');
 
 const app = express();
-// 强制使用Railway注入的PORT，默认8080
 const PORT = process.env.PORT || 8080;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-me';
 const ADMIN_USER_ID = process.env.ADMIN_USER_ID || '';
@@ -54,7 +53,6 @@ async function initDB() {
       );
     `);
 
-    // 自动修复数据库缺失列
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT \'\'');
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS disabledDates TEXT[] DEFAULT \'{}\'');
     await client.query('ALTER TABLE schedules ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT false');
@@ -62,13 +60,17 @@ async function initDB() {
   } finally { client.release(); }
 }
 
-// 全局中间件
 app.use(cors());
 app.use(express.json());
 
-// ✅ 优化健康检查接口：增加日志，确保Railway能正确识别
+// ✅ 双路径健康检查，确保Railway能通过
 app.get('/', (req, res) => {
-  console.log("✅ 收到健康检查请求，返回200 OK");
+  console.log("✅ 收到根路径健康检查请求");
+  res.status(200).send('OK');
+});
+
+app.get('/health', (req, res) => {
+  console.log("✅ 收到/health路径健康检查请求");
   res.status(200).send('OK');
 });
 
@@ -347,10 +349,10 @@ app.delete('/api/admin/users/:id', authMiddleware, adminMiddleware, async (req, 
 async function startServer() {
   await initDB();
   console.log("✅ 数据库表创建成功");
-  // 绑定所有网络接口，确保Railway能访问
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 服务已启动，监听端口: ${PORT}`);
-    console.log(`🔍 健康检查地址: http://0.0.0.0:${PORT}/`);
+    console.log(`🔍 根路径健康检查地址: http://0.0.0.0:${PORT}/`);
+    console.log(`🔍 /health路径健康检查地址: http://0.0.0.0:${PORT}/health`);
   });
 }
 
