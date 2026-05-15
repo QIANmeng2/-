@@ -1503,7 +1503,7 @@
       <div class="form-group"><label>密码</label><input class="form-input" type="password" id="authPassword" required placeholder="请输入密码"></div>
       <div id="registerFields" style="display:none;">
         <div class="form-group"><label>队伍名称</label><input class="form-input" type="text" id="regTeamName" placeholder="如：星河战队"></div>
-        <div class="form-group"><label>教练/队长名称</label><input class="form-input" type="text" id="regCoachName" placeholder="请输入"></div>
+        <div class="form-group"><label>名称/游戏ID</label><input class="form-input" type="text" id="regCoachName" placeholder="请输入"></div>
         <div class="form-group"><label>微信号</label><input class="form-input" type="text" id="regWechat" placeholder="用于联系"></div>
         <div class="form-group"><label>队伍等级</label><select class="form-select" id="regLevel"><option value="大众">大众</option><option value="KPL">KPL</option><option value="K甲">K甲</option><option value="KPL青训">KPL青训</option><option value="K甲青训">K甲青训</option><option value="全国大赛">全国大赛</option><option value="主播">主播</option></select></div>
         <div class="form-group"><label>队伍备注</label><textarea class="form-input" id="regBio" rows="2" placeholder="介绍队伍实力，例如：巅峰2200，主玩打野"></textarea></div>
@@ -2524,7 +2524,7 @@ async function viewProfile(userId) {
       </div>
       <div style="display:grid;gap:12px;">
         <div style="padding:12px;background:var(--bg-glass);border-radius:var(--radius-md);">
-          <span style="color:var(--text-muted);">教练：</span><strong>${u.coachName}</strong>
+          <span style="color:var(--text-muted);">名称/游戏ID：</span><strong>${u.coachName}</strong>
         </div>
         <div style="padding:12px;background:var(--bg-glass);border-radius:var(--radius-md);">
           <span style="color:var(--text-muted);">等级：</span><span class="badge badge-level">${u.level}</span>
@@ -2687,7 +2687,7 @@ function renderProfileForm() {
         <div><div class="section-title">👤 基本信息</div><div class="section-desc">管理你的账号和个人资料</div></div>
       </div>
       <form onsubmit="handleUpdateProfile(event)">
-        <div class="form-group"><label>教练名称</label><input class="form-input" id="profileCoach" value="${currentUser.coachName||''}" placeholder="请输入教练名称"></div>
+        <div class="form-group"><label>名称/游戏ID</label><input class="form-input" id="profileCoach" value="${currentUser.coachName||''}" placeholder="请输入"></div>
         <div class="form-group"><label>微信号</label><input class="form-input" id="profileWechat" value="${currentUser.wechat||''}" placeholder="请输入微信号"></div>
         <div class="form-group"><label>等级</label><select class="form-select" id="profileLevel"><option value="大众" ${currentUser.level==='大众'?'selected':''}>大众</option><option value="KPL" ${currentUser.level==='KPL'?'selected':''}>KPL</option><option value="K甲" ${currentUser.level==='K甲'?'selected':''}>K甲</option><option value="KPL青训" ${currentUser.level==='KPL青训'?'selected':''}>KPL青训</option><option value="K甲青训" ${currentUser.level==='K甲青训'?'selected':''}>K甲青训</option><option value="全国大赛" ${currentUser.level==='全国大赛'?'selected':''}>全国大赛</option><option value="主播" ${currentUser.level==='主播'?'selected':''}>主播</option></select></div>
         <div class="form-group"><label>队伍备注</label><textarea class="form-input" id="profileBio" rows="2" placeholder="介绍队伍实力">${currentUser.bio||''}</textarea></div>
@@ -2877,7 +2877,7 @@ async function renderTeamList() {
               <div>
                 <strong>${t.name}</strong> ${t.bio ? `<span style="font-size:0.82rem;color:var(--text-light);"> · ${t.bio}</span>` : ''}
                 <div style="font-size:0.78rem;color:var(--text-light);margin-top:4px;">
-                  队长：${captain?.coachName || captain?.username || '未知'} | ${t.memberCount}/${t.maxMembers}人 | ${t.status==='open'?'🟢招人中':'🔴已满'}
+                  名称：${captain?.coachName || captain?.username || '未知'} | ${t.memberCount}/${t.maxMembers}人 | ${t.status==='open'?'🟢招人中':'🔴已满'}
                 </div>
               </div>
               ${t.status === 'open' ? `<button class="btn btn-primary btn-sm" onclick="joinTeam('${t.id}')">申请加入</button>` : `<span class="badge badge-closed">已满</span>`}
@@ -3049,7 +3049,7 @@ function buildAdminTeamCard(t, users, unassignedUsers) {
           <span style="font-size:0.8rem;color:var(--text-secondary);">${t.memberCount}/${t.maxMembers}人</span>
         </div>
         <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:4px;">
-          队长：<span style="color:var(--primary);">${captain?.coachName || captain?.username || '未设置'}</span>
+          名称：<span style="color:var(--primary);">${captain?.coachName || captain?.username || '未设置'}</span>
           ${t.bio ? ` · ${t.bio}` : ''}
         </div>
       </div>
@@ -3276,7 +3276,7 @@ async function loadAdminUsers(container) {
         </div>
         <div>
           <label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">搜索</label>
-          <input type="text" id="af_search" placeholder="姓名/游戏ID/教练名" style="width:100%;padding:6px 8px;font-size:0.78rem;" oninput="afSet('search',this.value)" onkeydown="if(event.key==='Enter'){afSet('search',this.value);loadAdminUsers(document.getElementById('adminSubContent'))}">
+          <input type="text" id="af_search" placeholder="姓名/游戏ID" style="width:100%;padding:6px 8px;font-size:0.78rem;" oninput="afSet('search',this.value)" onkeydown="if(event.key==='Enter'){afSet('search',this.value);loadAdminUsers(document.getElementById('adminSubContent'))}">
         </div>
         <div>
           <label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">擅长英雄</label>
@@ -3355,7 +3355,7 @@ async function loadAdminUsers(container) {
     <div style="overflow-x:auto;">
       <table style="width:100%;border-collapse:collapse;font-size:0.82rem;min-width:700px;">
         <tr style="background:rgba(22,93,255,0.10);">
-          <th style="padding:10px 8px;text-align:left;color:var(--text-primary);">用户/教练</th>
+          <th style="padding:10px 8px;text-align:left;color:var(--text-primary);">用户/名称</th>
           <th style="padding:10px 8px;text-align:left;color:var(--text-primary);">队伍</th>
           <th style="padding:10px 8px;text-align:left;color:var(--text-primary);">等级</th>
           <th style="padding:10px 8px;text-align:left;color:var(--text-primary);">游戏ID</th>
