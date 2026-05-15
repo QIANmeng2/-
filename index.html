@@ -2577,10 +2577,13 @@ async function loadCalendar(year, month) {
   if (month > 12) { month = 1; year++; }
   if (month < 1) { month = 12; year--; }
   calendarYear = year; calendarMonth = month;
-  const data = await api('/api/schedules/mine');
-  renderCalendar(data.schedules || [], data.disabledDates || []);
+  const [data, historyData] = await Promise.all([
+    api('/api/schedules/mine'),
+    api('/api/users/me/history').catch(() => ({ history: [] }))
+  ]);
+  renderCalendar(data.schedules || [], data.disabledDates || [], historyData.history || []);
 }
-function renderCalendar(schedules, disabledDates) {
+function renderCalendar(schedules, disabledDates, history) {
   const year = calendarYear, month = calendarMonth;
   const daysInMonth = new Date(year, month, 0).getDate();
   const firstDay = new Date(year, month-1, 1).getDay();
@@ -2627,6 +2630,29 @@ function renderCalendar(schedules, disabledDates) {
     }
     html += `<div class="card"><strong style="color:#fff;">${s.date} ${s.startTime}</strong> <span style="color:var(--text-secondary);">| ${s.mode.toUpperCase()} ${s.globalBp ? '全局BP' : ''}</span> <span class="badge badge-available">${s.status}</span><div style="margin-top:8px;">${actions}</div></div>`;
   });
+
+  // 参赛历史
+  html += '<h3 style="margin-top:24px;">🏆 参赛历史</h3>';
+  if (history.length === 0) {
+    html += '<p style="color:var(--text-muted);padding:16px;background:var(--bg-glass);border-radius:var(--radius-md);">暂无参赛记录</p>';
+  } else {
+    history.forEach(h => {
+      const modeText = h.mode === 2 ? '模式2' : '模式1';
+      const statusBadge = h.status === 'closed' ? '<span class="badge badge-closed">已结束</span>' : (h.locked ? '<span class="badge badge-confirmed">进行中</span>' : '<span class="badge badge-recruiting">招募中</span>');
+      html += `<div class="card" style="border-left:3px solid var(--primary);">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <div>
+            <strong style="color:#fff;">${h.startTime}</strong>
+            <span style="color:var(--text-secondary);margin-left:8px;">${modeText} · ${h.team}队 · ${h.lane}</span>
+            ${statusBadge}
+          </div>
+          <span style="font-size:0.78rem;color:var(--text-muted);">组织者：${h.organizerName}</span>
+        </div>
+        ${h.notes ? `<div style="font-size:0.78rem;color:var(--text-secondary);margin-top:6px;">备注：${h.notes}</div>` : ''}
+      </div>`;
+    });
+  }
+
   document.getElementById('tabContent').innerHTML = html;
 }
 
@@ -3019,22 +3045,26 @@ async function loadAdminSubTab() {
 }
 
 async function loadAdminTeams(container) {
-  const [teamsData, usersData] = await Promise.all([
-    api('/api/admin/teams'),
-    api('/api/admin/users')
-  ]);
-  const teams = teamsData.teams || [];
-  const users = usersData.users || [];
-  const unassignedUsers = users.filter(u => !u.team);
+  try {
+    const [teamsData, usersData] = await Promise.all([
+      api('/api/admin/teams'),
+      api('/api/admin/users')
+    ]);
+    const teams = teamsData.teams || [];
+    const users = usersData.users || [];
+    const unassignedUsers = users.filter(u => !u.team);
 
-  container.innerHTML = `
-    <div style="margin-bottom:16px;">
-      <button class="btn btn-primary" onclick="adminCreateTeam()" style="padding:10px 20px;">🏆 新建队伍</button>
-      <span style="float:right;font-size:0.82rem;color:var(--text-secondary);">共 ${teams.length} 支队伍 | ${unassignedUsers.length} 名用户暂无队伍</span>
-    </div>
-    ${teams.length === 0 ? '<p style="color:var(--text-light);text-align:center;padding:40px;">暂无队伍数据</p>' : ''}
-    ${teams.map(t => buildAdminTeamCard(t, users, unassignedUsers)).join('')}
-  `;
+    container.innerHTML = `
+      <div style="margin-bottom:16px;">
+        <button class="btn btn-primary" onclick="adminCreateTeam()" style="padding:10px 20px;">🏆 新建队伍</button>
+        <span style="float:right;font-size:0.82rem;color:var(--text-secondary);">共 ${teams.length} 支队伍 | ${unassignedUsers.length} 名用户暂无队伍</span>
+      </div>
+      ${teams.length === 0 ? '<p style="color:var(--text-light);text-align:center;padding:40px;">暂无队伍数据</p>' : ''}
+      ${teams.map(t => buildAdminTeamCard(t, users, unassignedUsers)).join('')}
+    `;
+  } catch (err) {
+    container.innerHTML = `<p style="color:var(--danger);">加载失败：${err.message || '未知错误'}</p><button class="btn btn-sm btn-primary" onclick="loadAdminSubTab()">重试</button>`;
+  }
 }
 
 function buildAdminTeamCard(t, users, unassignedUsers) {

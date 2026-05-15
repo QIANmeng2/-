@@ -33,7 +33,8 @@ async function initDB() {
         gameRank TEXT DEFAULT '星耀',
         peakScore INTEGER DEFAULT 0,
         laneStats TEXT DEFAULT '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}',
-        heroPool TEXT DEFAULT ''
+        heroPool TEXT DEFAULT '',
+        created_at TIMESTAMP DEFAULT NOW()
       );
       CREATE TABLE IF NOT EXISTS schedules (
         id TEXT PRIMARY KEY,
@@ -106,6 +107,7 @@ async function initDB() {
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS peakScore INTEGER DEFAULT 0');
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS laneStats TEXT DEFAULT \'{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}\'');
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS heroPool TEXT DEFAULT \'\'');
+    await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()');
     await client.query('ALTER TABLE schedules ADD COLUMN IF NOT EXISTS teamId TEXT');
     await client.query('ALTER TABLE recruitment_matches ADD COLUMN IF NOT EXISTS teamId TEXT');
   } finally { client.release(); }
@@ -866,6 +868,37 @@ app.get('/api/admin/security', authMiddleware, adminMiddleware, async (req, res)
         '数据库连接使用SSL加密',
         '所有管理员操作已记录'
       ]
+    });
+  } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
+});
+
+// ====================== 个人参赛历史 ======================
+
+app.get('/api/users/me/history', authMiddleware, async (req, res) => {
+  try {
+    // 获取用户参与过的所有招募位置
+    const posRes = await pool.query(
+      'SELECT p.*, m.startTime, m.levelReq, m.notes, m.mode, m.status, m.locked, m.createdAt, m.organizerId, u.teamName as organizerName ' +
+      'FROM recruitment_positions p ' +
+      'JOIN recruitment_matches m ON p.matchId = m.id ' +
+      'LEFT JOIN users u ON m.organizerId = u.id ' +
+      'WHERE p.playerId = $1 ORDER BY m.startTime DESC',
+      [req.userId]
+    );
+    res.json({
+      history: posRes.rows.map(r => ({
+        matchId: r.matchid,
+        team: r.team,
+        lane: r.lane,
+        startTime: r.starttime,
+        levelReq: r.levelreq,
+        notes: r.notes,
+        mode: r.mode,
+        status: r.status,
+        locked: r.locked,
+        organizerName: r.organizername || '未知',
+        createdAt: r.createdat
+      }))
     });
   } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
 });
