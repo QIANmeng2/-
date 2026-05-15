@@ -10,72 +10,77 @@
   <title>浅梦·王者荣耀训练赛约队平台</title>
   <style>
     :root {
-      /* 核心色彩系统 - 电竞科技暗黑风 */
-      /* 底色：深灰 #121212 / 纯黑 #0A0A0A */
-      --bg-dark: #0A0A0A;
-      --bg-primary: #121212;
-      --bg-secondary: #1a1a24;
-      --bg-card: rgba(30, 30, 42, 0.95);
-      --bg-glass: rgba(255, 255, 255, 0.04);
-      --bg-glass-hover: rgba(255, 255, 255, 0.08);
-      
-      /* 电竞蓝 #165DFF + 霓虹紫 #722ED1 渐变 */
-      --gradient-primary: linear-gradient(135deg, #165DFF 0%, #722ED1 100%);
-      --gradient-secondary: linear-gradient(135deg, #722ED1 0%, #165DFF 100%);
-      --gradient-glow: linear-gradient(135deg, rgba(22, 93, 255, 0.25) 0%, rgba(114, 46, 209, 0.25) 100%);
-      --gradient-card: linear-gradient(145deg, rgba(35, 35, 50, 0.95) 0%, rgba(18, 18, 28, 0.98) 100%);
-      
+      /* 深空玻璃霓虹 - 电竞暗黑风 */
+      --bg-dark: #0a0a12;
+      --bg-primary: #12121f;
+      --bg-secondary: #1a1a2e;
+      --bg-card: rgba(18, 18, 31, 0.6);
+      --bg-glass: rgba(255, 255, 255, 0.03);
+      --bg-glass-hover: rgba(255, 255, 255, 0.06);
+
+      /* 霓虹蓝紫渐变 #4f46e5 → #7c3aed */
+      --gradient-primary: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      --gradient-secondary: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+      --gradient-glow: linear-gradient(135deg, rgba(79, 70, 229, 0.25) 0%, rgba(124, 58, 237, 0.25) 100%);
+      --gradient-card: linear-gradient(145deg, rgba(25, 25, 45, 0.7) 0%, rgba(12, 12, 25, 0.85) 100%);
+      --gradient-gold: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+      --gradient-danger: linear-gradient(135deg, #ef4444 0%, #f87171 100%);
+
       /* 主色调 */
-      --primary: #165DFF;
-      --primary-dark: #0050d9;
-      --primary-glow: rgba(22, 93, 255, 0.4);
-      --secondary: #722ED1;
-      --secondary-dark: #5a1fb0;
-      
+      --primary: #4f46e5;
+      --primary-dark: #4338ca;
+      --primary-glow: rgba(79, 70, 229, 0.5);
+      --secondary: #7c3aed;
+      --secondary-dark: #6d28d9;
+
       /* 状态色 */
       --success: #10b981;
       --warning: #f59e0b;
       --danger: #ef4444;
-      --info: #165DFF;
-      
-      /* 文字色：浅灰 #E5E7EB、中灰 #9CA3AF、深灰 #374151 */
+      --info: #4f46e5;
+
+      /* 文字色 */
       --text-primary: #E5E7EB;
       --text-secondary: #9CA3AF;
       --text-muted: #6B7280;
-      
-      /* 边框色：深灰 #374151 */
-      --border-color: rgba(55, 65, 81, 0.4);
-      
-      /* 阴影 */
-      --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.5);
-      --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.6);
-      --shadow-lg: 0 16px 64px rgba(0, 0, 0, 0.7);
-      --shadow-glow: 0 0 30px rgba(22, 93, 255, 0.15);
-      
-      /* 圆角：8-12px */
+      --text-tab-inactive: #8888aa;
+
+      /* 边框 - 渐变紫蓝 */
+      --border-color: rgba(79, 70, 229, 0.15);
+      --border-glow: rgba(79, 70, 229, 0.3);
+
+      /* 阴影 - 多层软阴影 */
+      --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(0, 0, 0, 0.15);
+      --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0, 0, 0, 0.15);
+      --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.2);
+      --shadow-glow: 0 0 20px rgba(79, 70, 229, 0.2), 0 0 40px rgba(124, 58, 237, 0.1);
+      --shadow-gold: 0 0 12px rgba(245, 158, 11, 0.3);
+      --shadow-danger: 0 0 12px rgba(239, 68, 68, 0.3);
+
+      /* 圆角 - 统一8px */
       --radius-sm: 8px;
-      --radius-md: 10px;
-      --radius-lg: 12px;
-      --radius-xl: 16px;
+      --radius-md: 8px;
+      --radius-lg: 8px;
+      --radius-xl: 8px;
       --radius-full: 9999px;
-      
+
       /* 字体 */
       --font-display: 'Orbitron', 'Noto Sans SC', sans-serif;
       --font-body: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
-      
+
       /* 兼容变量 */
       --available: #10b981;
       --booked: #ef4444;
       --text: #E5E7EB;
       --text-light: #9CA3AF;
-      --border: rgba(55, 65, 81, 0.4);
-      --shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-      --card: #1a1a24;
-      --accent: #165DFF;
-      --blue-color: #165DFF;
-      --red-color: #722ED1;
-      --blue-bg: rgba(22, 93, 255, 0.12);
-      --red-bg: rgba(114, 46, 209, 0.12);
+      --border: rgba(79, 70, 229, 0.15);
+      --shadow: 0 4px 16px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0, 0, 0, 0.15);
+      --card: rgba(18, 18, 31, 0.6);
+      --accent: #4f46e5;
+      --blue-color: #4f46e5;
+      --red-color: #7c3aed;
+      --blue-bg: rgba(79, 70, 229, 0.12);
+      --red-bg: rgba(124, 58, 237, 0.12);
     }
 
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -91,15 +96,15 @@
       overflow-x: hidden;
     }
 
-    /* 背景装饰 - 电竞蓝紫渐变光效 */
+    /* 背景装饰 - 深空霓虹光效 */
     body::before {
       content: '';
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: 
-        radial-gradient(ellipse 80% 50% at 20% 0%, rgba(22, 93, 255, 0.15) 0%, transparent 50%),
-        radial-gradient(ellipse 60% 40% at 80% 20%, rgba(114, 46, 209, 0.12) 0%, transparent 50%),
-        radial-gradient(ellipse 50% 30% at 50% 100%, rgba(22, 93, 255, 0.08) 0%, transparent 50%);
+      background:
+        radial-gradient(ellipse 80% 50% at 20% 0%, rgba(79, 70, 229, 0.12) 0%, transparent 50%),
+        radial-gradient(ellipse 60% 40% at 80% 20%, rgba(124, 58, 237, 0.1) 0%, transparent 50%),
+        radial-gradient(ellipse 50% 30% at 50% 100%, rgba(79, 70, 229, 0.06) 0%, transparent 50%);
       pointer-events: none;
       z-index: -1;
     }
@@ -109,8 +114,8 @@
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
       background-image: 
-        linear-gradient(rgba(22, 93, 255, 0.02) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(22, 93, 255, 0.02) 1px, transparent 1px);
+        linear-gradient(rgba(79, 70, 229, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(79, 70, 229, 0.02) 1px, transparent 1px);
       background-size: 60px 60px;
       pointer-events: none;
       z-index: -1;
@@ -197,39 +202,39 @@
     .btn-primary {
       background: var(--gradient-primary);
       color: #fff;
-      box-shadow: 0 4px 20px rgba(22, 93, 255, 0.3);
+      box-shadow: 0 4px 20px rgba(79, 70, 229, 0.3);
     }
 
     .btn-primary:hover {
       transform: translateY(-2px) scale(1.03);
-      box-shadow: 0 8px 30px rgba(22, 93, 255, 0.4), 0 0 20px rgba(22, 93, 255, 0.2);
+      box-shadow: 0 8px 30px rgba(79, 70, 229, 0.4), 0 0 20px rgba(124, 58, 237, 0.2);
     }
 
     .btn-secondary {
       background: var(--bg-glass);
       color: var(--text-primary);
-      border: 1px solid rgba(22, 93, 255, 0.3);
+      border: 1px solid rgba(79, 70, 229, 0.3);
       backdrop-filter: blur(10px);
     }
 
     .btn-secondary:hover {
-      background: rgba(22, 93, 255, 0.1);
+      background: rgba(79, 70, 229, 0.1);
       border-color: var(--primary);
-      box-shadow: 0 0 20px rgba(22, 93, 255, 0.15);
+      box-shadow: 0 0 20px rgba(79, 70, 229, 0.15);
       transform: translateY(-1px);
     }
 
     .btn-outline {
-      background: rgba(22, 93, 255, 0.08);
-      color: #6BA3FF;
-      border: 1.5px solid rgba(22, 93, 255, 0.5);
+      background: rgba(79, 70, 229, 0.08);
+      color: #818cf8;
+      border: 1.5px solid rgba(79, 70, 229, 0.5);
     }
 
     .btn-outline:hover {
-      background: rgba(22, 93, 255, 0.18);
-      color: #8BB8FF;
-      border-color: rgba(22, 93, 255, 0.7);
-      box-shadow: 0 0 20px rgba(22, 93, 255, 0.25);
+      background: rgba(79, 70, 229, 0.18);
+      color: #a5b4fc;
+      border-color: rgba(79, 70, 229, 0.7);
+      box-shadow: 0 0 20px rgba(79, 70, 229, 0.25);
       transform: translateY(-1px) scale(1.02);
     }
 
@@ -242,7 +247,7 @@
     .btn-ghost:hover {
       background: var(--bg-glass-hover);
       color: var(--text-primary);
-      border-color: rgba(22, 93, 255, 0.3);
+      border-color: rgba(79, 70, 229, 0.3);
     }
 
     .btn-danger {
@@ -257,9 +262,9 @@
     }
 
     .btn-blue { background: var(--gradient-primary); color: #fff; }
-    .btn-blue:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 8px 25px rgba(22, 93, 255, 0.4); }
+    .btn-blue:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 8px 25px rgba(79, 70, 229, 0.4); }
     .btn-red { background: var(--gradient-secondary); color: #fff; }
-    .btn-red:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 8px 25px rgba(114, 46, 209, 0.4); }
+    .btn-red:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 8px 25px rgba(124, 58, 237, 0.4); }
 
     .btn-sm { padding: 8px 16px; font-size: 0.82rem; min-height: 36px; }
     .btn-xs { padding: 6px 12px; font-size: 0.78rem; min-height: 32px; }
@@ -271,44 +276,45 @@
       padding: 24px 16px 48px;
     }
 
-    /* ===== 标签导航 ===== */
+    /* ===== 标签导航 - 深空霓虹风格 ===== */
     .tab-nav {
       display: flex;
-      gap: 6px;
-      background: var(--bg-card);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(22, 93, 255, 0.15);
-      border-radius: var(--radius-lg);
-      padding: 6px;
+      gap: 8px;
+      background: transparent;
+      backdrop-filter: none;
+      border: none;
+      border-bottom: 1px solid rgba(79, 70, 229, 0.1);
+      border-radius: 0;
+      padding: 0 0 1px;
       margin-bottom: 24px;
       overflow-x: auto;
       flex-wrap: wrap;
-      box-shadow: var(--shadow-md);
+      box-shadow: none;
     }
 
     .tab-nav::-webkit-scrollbar { height: 4px; }
     .tab-nav::-webkit-scrollbar-track { background: transparent; }
-    .tab-nav::-webkit-scrollbar-thumb { background: rgba(22, 93, 255, 0.3); border-radius: 2px; }
+    .tab-nav::-webkit-scrollbar-thumb { background: rgba(79, 70, 229, 0.2); border-radius: 2px; }
 
     .tab-btn {
       padding: 12px 20px;
       border: none;
       background: transparent;
-      border-radius: var(--radius-sm);
+      border-radius: 0;
       cursor: pointer;
-      font-weight: 600;
-      font-size: 0.88rem;
-      color: var(--text-secondary);
+      font-weight: 500;
+      font-size: 0.9rem;
+      color: var(--text-tab-inactive);
       white-space: nowrap;
       transition: all 0.3s ease;
       position: relative;
+      letter-spacing: 0.02em;
     }
 
     .tab-btn::after {
       content: '';
       position: absolute;
-      bottom: 4px; left: 50%;
+      bottom: -1px; left: 50%;
       transform: translateX(-50%);
       width: 0; height: 2px;
       background: var(--gradient-primary);
@@ -318,29 +324,42 @@
 
     .tab-btn:hover {
       color: var(--text-primary);
-      background: rgba(22, 93, 255, 0.08);
+      background: transparent;
+    }
+
+    .tab-btn:hover::after {
+      width: 60%;
+      opacity: 0.5;
     }
 
     .tab-btn.active {
-      background: var(--gradient-primary);
-      color: #fff;
-      box-shadow: 0 4px 20px rgba(22, 93, 255, 0.25);
+      background: transparent;
+      color: var(--text-primary);
+      font-weight: 700;
+      text-shadow: 0 0 12px rgba(79, 70, 229, 0.4);
+      box-shadow: none;
     }
 
-    .tab-btn.active::after { display: none; }
+    .tab-btn.active::after {
+      display: block;
+      width: 100%;
+      opacity: 1;
+      box-shadow: 0 0 8px rgba(79, 70, 229, 0.5);
+    }
 
-    /* ===== 卡片系统 ===== */
+    /* ===== 卡片系统 - 深空玻璃 ===== */
     .card {
       background: var(--gradient-card);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(22, 93, 255, 0.15);
-      border-radius: var(--radius-lg);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(79, 70, 229, 0.15);
+      border-radius: var(--radius-md);
       padding: 24px;
       margin-bottom: 20px;
-      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       position: relative;
       overflow: hidden;
+      box-shadow: var(--shadow-md);
     }
 
     .card::before {
@@ -348,14 +367,14 @@
       position: absolute;
       top: 0; left: 0; right: 0;
       height: 1px;
-      background: linear-gradient(90deg, transparent, var(--primary), transparent);
-      opacity: 0.4;
+      background: linear-gradient(90deg, transparent, rgba(79, 70, 229, 0.6), rgba(124, 58, 237, 0.4), transparent);
+      opacity: 0.5;
     }
 
     .card:hover {
       transform: translateY(-2px);
-      border-color: rgba(22, 93, 255, 0.35);
-      box-shadow: var(--shadow-glow), var(--shadow-md);
+      border-color: rgba(79, 70, 229, 0.3);
+      box-shadow: var(--shadow-glow), var(--shadow-lg);
     }
 
     /* ===== 徽章系统 ===== */
@@ -389,21 +408,21 @@
     }
 
     .badge-level {
-      background: rgba(114, 46, 209, 0.15);
+      background: rgba(124, 58, 237, 0.15);
       color: #a78bfa;
-      border: 1px solid rgba(114, 46, 209, 0.25);
+      border: 1px solid rgba(124, 58, 237, 0.25);
     }
 
     .badge-blue {
-      background: rgba(22, 93, 255, 0.12);
-      color: #60a5fa;
-      border: 1px solid rgba(22, 93, 255, 0.25);
+      background: rgba(79, 70, 229, 0.12);
+      color: #818cf8;
+      border: 1px solid rgba(79, 70, 229, 0.25);
     }
 
     .badge-red {
-      background: rgba(114, 46, 209, 0.12);
-      color: #a78bfa;
-      border: 1px solid rgba(114, 46, 209, 0.25);
+      background: rgba(239, 68, 68, 0.12);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.25);
     }
 
     .badge-closed {
@@ -428,7 +447,7 @@
     .form-input:focus, .form-select:focus {
       outline: none;
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(22, 93, 255, 0.15), 0 0 20px rgba(22, 93, 255, 0.1);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15), 0 0 20px rgba(79, 70, 229, 0.1);
     }
 
     .form-input::placeholder { color: var(--text-muted); }
@@ -481,14 +500,14 @@
 
     .modal {
       background: var(--bg-secondary);
-      border: 1px solid rgba(22, 93, 255, 0.2);
+      border: 1px solid rgba(79, 70, 229, 0.2);
       border-radius: var(--radius-xl);
       padding: 32px;
       width: 100%;
       max-width: 560px;
       max-height: 90vh;
       overflow-y: auto;
-      box-shadow: var(--shadow-lg), 0 0 60px rgba(22, 93, 255, 0.1);
+      box-shadow: var(--shadow-lg), 0 0 60px rgba(79, 70, 229, 0.1);
       position: relative;
     }
 
@@ -541,8 +560,8 @@
     }
 
     .toast-info {
-      background: linear-gradient(135deg, rgba(22, 93, 255, 0.95) 0%, rgba(114, 46, 209, 0.95) 100%);
-      border: 1px solid rgba(22, 93, 255, 0.4);
+      background: linear-gradient(135deg, rgba(79, 70, 229, 0.95) 0%, rgba(114, 46, 209, 0.95) 100%);
+      border: 1px solid rgba(79, 70, 229, 0.4);
     }
 
     @keyframes toastIn {
@@ -586,12 +605,12 @@
 
     .dialog {
       background: var(--bg-secondary);
-      border: 1px solid rgba(22, 93, 255, 0.2);
+      border: 1px solid rgba(79, 70, 229, 0.2);
       border-radius: var(--radius-xl);
       padding: 28px;
       width: calc(100% - 48px);
       max-width: 400px;
-      box-shadow: var(--shadow-lg), 0 0 40px rgba(22, 93, 255, 0.08);
+      box-shadow: var(--shadow-lg), 0 0 40px rgba(79, 70, 229, 0.08);
       animation: dialogIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
@@ -636,7 +655,7 @@
     .dialog-input:focus {
       outline: none;
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(22, 93, 255, 0.15);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
     }
 
     /* ===== 通知铃铛 ===== */
@@ -649,16 +668,16 @@
       align-items: center;
       justify-content: center;
       background: var(--bg-glass);
-      border: 1px solid rgba(22, 93, 255, 0.2);
+      border: 1px solid rgba(79, 70, 229, 0.2);
       border-radius: var(--radius-sm);
       transition: all 0.3s;
       font-size: 1.2rem;
     }
 
     .notification-bell:hover {
-      background: rgba(22, 93, 255, 0.1);
+      background: rgba(79, 70, 229, 0.1);
       border-color: var(--primary);
-      box-shadow: 0 0 20px rgba(22, 93, 255, 0.2);
+      box-shadow: 0 0 20px rgba(79, 70, 229, 0.2);
     }
 
     .notification-badge {
@@ -687,7 +706,7 @@
     .recruit-tab {
       padding: 10px 20px;
       border-radius: var(--radius-sm);
-      border: 1px solid rgba(22, 93, 255, 0.2);
+      border: 1px solid rgba(79, 70, 229, 0.2);
       background: var(--bg-glass);
       cursor: pointer;
       font-size: 0.88rem;
@@ -697,16 +716,16 @@
     }
 
     .recruit-tab:hover {
-      background: rgba(22, 93, 255, 0.08);
+      background: rgba(79, 70, 229, 0.08);
       color: var(--text-primary);
-      border-color: rgba(22, 93, 255, 0.3);
+      border-color: rgba(79, 70, 229, 0.3);
     }
 
     .recruit-tab.active {
       background: var(--gradient-primary);
       color: #fff;
       border-color: transparent;
-      box-shadow: 0 4px 20px rgba(22, 93, 255, 0.25);
+      box-shadow: 0 4px 20px rgba(79, 70, 229, 0.25);
     }
 
     .recruit-header {
@@ -721,21 +740,22 @@
     /* 招募卡片 */
     .match-card {
       background: var(--gradient-card);
-      border: 1px solid rgba(22, 93, 255, 0.15);
-      border-radius: var(--radius-lg);
+      border: 1px solid rgba(79, 70, 229, 0.15);
+      border-radius: var(--radius-md);
       padding: 20px;
       margin-bottom: 16px;
-      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       position: relative;
       overflow: hidden;
       cursor: pointer;
+      backdrop-filter: blur(12px);
     }
 
     .match-card::before {
       content: '';
       position: absolute;
       left: 0; top: 0; bottom: 0;
-      width: 4px;
+      width: 3px;
       transition: all 0.3s;
     }
 
@@ -756,8 +776,8 @@
 
     .match-card:hover {
       transform: translateY(-2px);
-      border-color: rgba(22, 93, 255, 0.35);
-      box-shadow: var(--shadow-glow), var(--shadow-md);
+      border-color: rgba(79, 70, 229, 0.3);
+      box-shadow: var(--shadow-glow), var(--shadow-lg);
     }
 
     .match-card-header {
@@ -794,9 +814,9 @@
     }
 
     .slot-blue {
-      background: rgba(22, 93, 255, 0.12);
+      background: rgba(79, 70, 229, 0.12);
       color: #60a5fa;
-      border: 1px solid rgba(22, 93, 255, 0.25);
+      border: 1px solid rgba(79, 70, 229, 0.25);
     }
 
     .slot-red {
@@ -856,7 +876,7 @@
       background: var(--gradient-card);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(22, 93, 255, 0.2);
+      border: 1px solid rgba(79, 70, 229, 0.2);
       color: #fff;
       border-radius: var(--radius-xl);
       padding: 28px;
@@ -899,15 +919,15 @@
       font-weight: 600;
       transition: all 0.3s;
       padding: 8px 16px;
-      background: rgba(22, 93, 255, 0.1);
-      border: 1px solid rgba(22, 93, 255, 0.2);
+      background: rgba(79, 70, 229, 0.1);
+      border: 1px solid rgba(79, 70, 229, 0.2);
       border-radius: var(--radius-sm);
       min-height: 44px;
     }
 
     .back-btn:hover {
-      background: rgba(22, 93, 255, 0.2);
-      box-shadow: 0 0 20px rgba(22, 93, 255, 0.2);
+      background: rgba(79, 70, 229, 0.2);
+      box-shadow: 0 0 20px rgba(79, 70, 229, 0.2);
     }
 
     .teams-container {
@@ -921,7 +941,7 @@
     .team-panel {
       border-radius: var(--radius-lg);
       overflow: hidden;
-      border: 1px solid rgba(22, 93, 255, 0.15);
+      border: 1px solid rgba(79, 70, 229, 0.15);
       box-shadow: var(--shadow-md);
     }
 
@@ -935,7 +955,7 @@
     }
 
     .team-panel-header.blue {
-      background: linear-gradient(135deg, #165DFF 0%, #3b82f6 100%);
+      background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%);
       text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
     }
 
@@ -959,9 +979,9 @@
       transition: all 0.3s;
     }
 
-    .lane-row.blue { background: rgba(22, 93, 255, 0.08); }
+    .lane-row.blue { background: rgba(79, 70, 229, 0.08); }
     .lane-row.red { background: rgba(114, 46, 209, 0.08); }
-    .lane-row.filled.blue { background: rgba(22, 93, 255, 0.12); border: 1px solid rgba(22, 93, 255, 0.2); }
+    .lane-row.filled.blue { background: rgba(79, 70, 229, 0.12); border: 1px solid rgba(79, 70, 229, 0.2); }
     .lane-row.filled.red { background: rgba(114, 46, 209, 0.12); border: 1px solid rgba(114, 46, 209, 0.2); }
     .lane-row:hover { transform: translateY(-1px); }
 
@@ -1014,14 +1034,14 @@
     }
 
     .mode-option:hover {
-      border-color: rgba(22, 93, 255, 0.4);
-      background: rgba(22, 93, 255, 0.05);
+      border-color: rgba(79, 70, 229, 0.4);
+      background: rgba(79, 70, 229, 0.05);
     }
 
     .mode-option.selected {
       border-color: var(--primary);
-      background: rgba(22, 93, 255, 0.08);
-      box-shadow: 0 0 20px rgba(22, 93, 255, 0.1);
+      background: rgba(79, 70, 229, 0.08);
+      box-shadow: 0 0 20px rgba(79, 70, 229, 0.1);
     }
 
     .mode-option-title {
@@ -1069,9 +1089,9 @@
     }
 
     .preset-team-section h5.blue {
-      background: rgba(22, 93, 255, 0.12);
+      background: rgba(79, 70, 229, 0.12);
       color: #60a5fa;
-      border: 1px solid rgba(22, 93, 255, 0.25);
+      border: 1px solid rgba(79, 70, 229, 0.25);
     }
 
     .preset-team-section h5.red {
@@ -1195,7 +1215,7 @@
       justify-content: center;
       background: var(--gradient-primary);
       border-radius: var(--radius-sm);
-      box-shadow: 0 4px 15px rgba(22, 93, 255, 0.3);
+      box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3);
     }
 
     .section-icon svg {
@@ -1227,7 +1247,7 @@
 
     .stat-card {
       background: var(--gradient-card);
-      border: 1px solid rgba(22, 93, 255, 0.12);
+      border: 1px solid rgba(79, 70, 229, 0.12);
       border-radius: var(--radius-lg);
       padding: 20px;
       text-align: center;
@@ -1245,11 +1265,11 @@
 
     .stat-card:hover {
       transform: translateY(-2px);
-      border-color: rgba(22, 93, 255, 0.3);
+      border-color: rgba(79, 70, 229, 0.3);
       box-shadow: var(--shadow-glow);
     }
 
-    .stat-card.blue::before { background: linear-gradient(90deg, #165DFF, #3b82f6); }
+    .stat-card.blue::before { background: linear-gradient(90deg, #4f46e5, #3b82f6); }
     .stat-card.purple::before { background: linear-gradient(90deg, #722ED1, #9333ea); }
     .stat-card.green::before { background: linear-gradient(90deg, #10b981, #059669); }
     .stat-card.orange::before { background: linear-gradient(90deg, #f59e0b, #d97706); }
@@ -1265,6 +1285,7 @@
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
+      animation: numberPop 0.3s ease;
     }
 
     .stat-label {
@@ -1275,8 +1296,8 @@
 
     /* ===== 提示信息框 ===== */
     .info-banner {
-      background: linear-gradient(135deg, rgba(22, 93, 255, 0.08) 0%, rgba(114, 46, 209, 0.08) 100%);
-      border: 1px solid rgba(22, 93, 255, 0.2);
+      background: linear-gradient(135deg, rgba(79, 70, 229, 0.08) 0%, rgba(114, 46, 209, 0.08) 100%);
+      border: 1px solid rgba(79, 70, 229, 0.2);
       border-radius: var(--radius-lg);
       padding: 16px 20px;
       font-size: 0.88rem;
@@ -1315,7 +1336,7 @@
       max-width: 600px;
       margin: 40px auto;
       background: var(--bg-secondary);
-      border: 1px solid rgba(22, 93, 255, 0.2);
+      border: 1px solid rgba(79, 70, 229, 0.2);
       border-radius: var(--radius-xl);
       padding: 32px;
       max-height: 90vh;
@@ -1510,40 +1531,77 @@
 
     /* ===== 动画 ===== */
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
+      from { opacity: 0; transform: translateY(5px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    .fade-in { animation: fadeIn 0.4s ease forwards; }
+    @keyframes flowGradient {
+      0% { background-position: 0% 50%; }
+      100% { background-position: 200% 50%; }
+    }
+
+    @keyframes shimmerFade {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+
+    @keyframes numberPop {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.15); }
+      100% { transform: scale(1); }
+    }
+
+    @keyframes glowPulse {
+      0%, 100% { box-shadow: 0 0 20px rgba(79, 70, 229, 0.2); }
+      50% { box-shadow: 0 0 30px rgba(79, 70, 229, 0.4), 0 0 60px rgba(124, 58, 237, 0.2); }
+    }
+
+    .fade-in { animation: fadeIn 0.3s ease forwards; }
+
+    .progress-bar-fill {
+      background: linear-gradient(90deg, #4f46e5, #7c3aed, #4f46e5);
+      background-size: 200% 100%;
+      animation: flowGradient 2s linear infinite;
+    }
+
+    .btn-primary {
+      animation: glowPulse 3s ease-in-out infinite;
+    }
 
     /* ===== 滚动条 ===== */
     ::-webkit-scrollbar { width: 8px; height: 8px; }
     ::-webkit-scrollbar-track { background: var(--bg-dark); }
-    ::-webkit-scrollbar-thumb { background: rgba(55, 65, 81, 0.5); border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: rgba(22, 93, 255, 0.4); }
+    ::-webkit-scrollbar-thumb { background: rgba(79, 70, 229, 0.3); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(124, 58, 237, 0.5); }
 
     /* ===== 选中样式 ===== */
-    ::selection { background: rgba(22, 93, 255, 0.3); color: #fff; }
+    ::selection { background: rgba(79, 70, 229, 0.3); color: #fff; }
   </style>
 </head>
 <body>
 <!-- 背景网格装饰 -->
-<div style="position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:-2;background:radial-gradient(ellipse 100% 60% at 20% -10%,rgba(22,93,255,0.1) 0%,transparent 50%),radial-gradient(ellipse 80% 50% at 80% 10%,rgba(114,46,209,0.08) 0%,transparent 50%);"></div>
+<div style="position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:-2;background:radial-gradient(ellipse 100% 60% at 20% -10%,rgba(79,70,229,0.08) 0%,transparent 50%),radial-gradient(ellipse 80% 50% at 80% 10%,rgba(124,58,237,0.06) 0%,transparent 50%);"></div>
 
 <div class="header">
   <div class="header-inner">
     <div class="logo">
       <div class="logo-icon">
-        <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 0 6px rgba(79,70,229,0.5));">
           <defs>
             <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" style="stop-color:#165DFF"/>
-              <stop offset="100%" style="stop-color:#722ED1"/>
+              <stop offset="0%" style="stop-color:#4f46e5"/>
+              <stop offset="100%" style="stop-color:#7c3aed"/>
             </linearGradient>
           </defs>
-          <path d="M20 4L6 14V26L20 36L34 26V14L20 4Z" stroke="url(#logoGrad)" stroke-width="2" fill="none"/>
-          <path d="M20 4V36M6 14L34 26M34 14L6 26" stroke="url(#logoGrad)" stroke-width="1.5" opacity="0.6"/>
-          <circle cx="20" cy="20" r="5" fill="url(#logoGrad)" opacity="0.9"/>
+          <!-- 六边形外框 -->
+          <path d="M20 2L35 11V29L20 38L5 29V11L20 2Z" stroke="url(#logoGrad)" stroke-width="1.5" fill="none" opacity="0.6"/>
+          <!-- 木字上部 -->
+          <path d="M12 14H28M20 10V18" stroke="url(#logoGrad)" stroke-width="2.5" stroke-linecap="round"/>
+          <!-- 木字下部 -->
+          <path d="M15 20L20 18L25 20" stroke="url(#logoGrad)" stroke-width="2" stroke-linecap="round" fill="none"/>
+          <path d="M20 18V28" stroke="url(#logoGrad)" stroke-width="2" stroke-linecap="round"/>
+          <!-- 夕字 - 闪电形状 -->
+          <path d="M14 24L20 22L18 28L24 26" stroke="url(#logoGrad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
         </svg>
       </div>
       <span>浅梦<span style="color:var(--secondary);">·</span>训练赛</span>
@@ -1554,10 +1612,10 @@
         <span class="guide-text">使用说明</span>
       </button>
       <div class="notification-bell" id="notificationBell" onclick="openNotifications()" style="display:none;">
-        <span style="font-size:1.2rem;">🔔</span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-secondary);"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
         <span class="notification-badge" id="notifBadge" style="display:none;">0</span>
       </div>
-      <div id="userInfoDisplay" style="display:none; font-size:0.85rem; padding: 8px 16px; background: var(--bg-glass); border-radius: var(--radius-sm); border: 1px solid rgba(22, 93, 255, 0.15); white-space: nowrap;">
+      <div id="userInfoDisplay" style="display:none; font-size:0.85rem; padding: 8px 16px; background: var(--bg-glass); border-radius: var(--radius-sm); border: 1px solid rgba(79, 70, 229, 0.15); white-space: nowrap;">
         <span id="displayName" style="font-weight:600;"></span>
         <span class="user-sep" style="color: var(--text-muted); margin: 0 8px;">|</span>
         <span id="displayTeam" style="color: var(--text-secondary);"></span>
@@ -1570,11 +1628,11 @@
 
 <div class="main-container">
   <div class="tab-nav" id="tabNav">
-    <button class="tab-btn" data-tab="recruit" id="tabRecruit">⚔️ 招募大厅</button>
-    <button class="tab-btn" data-tab="team" id="tabTeam" style="display:none;">👥 我的队伍</button>
-    <button class="tab-btn" data-tab="mine" style="display:none;">📅 我的日程</button>
-    <button class="tab-btn" data-tab="profile" style="display:none;">👤 个人信息</button>
-    <button class="tab-btn" data-tab="admin" id="tabAdmin" style="display:none;">⚙️ 管理</button>
+    <button class="tab-btn" data-tab="recruit" id="tabRecruit">招募大厅</button>
+    <button class="tab-btn" data-tab="team" id="tabTeam" style="display:none;">我的队伍</button>
+    <button class="tab-btn" data-tab="mine" style="display:none;">我的日程</button>
+    <button class="tab-btn" data-tab="profile" style="display:none;">个人信息</button>
+    <button class="tab-btn" data-tab="admin" id="tabAdmin" style="display:none;">管理</button>
   </div>
   <div id="tabContent"></div>
 </div>
@@ -1601,7 +1659,7 @@
 <!-- 创建招募弹窗 -->
 <div id="createRecruitModal" style="display:none;" class="modal-overlay">
   <div class="modal" style="max-width:580px;">
-    <h3 style="margin-bottom:16px;">⚔️ 新建5v5训练赛招募</h3>
+    <h3 style="margin-bottom:16px;">新建5v5训练赛招募</h3>
     <form id="createRecruitForm" onsubmit="handleCreateRecruit(event)">
       <!-- 开赛时间 -->
       <div class="form-group">
@@ -1628,7 +1686,7 @@
       </div>
       <!-- 联系群号（模式1/3显示，模式2由系统自动建腾讯会议） -->
       <div class="form-group" id="groupContactSection">
-        <label>💬 联系群号 <span style="font-size:0.75rem;color:var(--text-muted);font-weight:400;">（选填，方便队员加群沟通）</span></label>
+        <label>联系群号 <span style="font-size:0.75rem;color:var(--text-muted);font-weight:400;">（选填，方便队员加群沟通）</span></label>
         <input class="form-input" type="text" id="recruitGroupContact" placeholder="如：123456789" maxlength="20">
         <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">模式2（纯组织者）将自动在赛前10分钟创建腾讯会议，无需填写</p>
       </div>
@@ -1636,7 +1694,7 @@
       <div id="teamRecruitSection" class="mode-form-section" style="display:none;">
         <div style="display:flex;align-items:center;justify-content:space-between;">
           <div>
-            <h4 style="color: var(--primary); margin-bottom: 4px;">🏆 带上我的队伍</h4>
+            <h4 style="color: var(--primary); margin-bottom: 4px;">带上我的队伍</h4>
             <p style="font-size:0.82rem;color:var(--text-muted);">为队伍成员分配分路，自动锁位不对外招募</p>
           </div>
           <input type="checkbox" id="useTeamRecruit" onchange="toggleTeamRecruit()" style="width:22px;height:22px;cursor:pointer;accent-color: var(--primary);">
@@ -1669,8 +1727,8 @@
         <h4>① 选择你要加入的阵营和分路</h4>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
           <select class="form-select" id="mode1Team" style="flex:1;">
-            <option value="blue">🟦 蓝方</option>
-            <option value="red">🟥 红方</option>
+            <option value="blue">蓝方</option>
+            <option value="red">红方</option>
           </select>
           <select class="form-select" id="mode1Lane" style="flex:1;">
             <option value="对抗路">对抗路</option>
@@ -1687,11 +1745,11 @@
         <p style="font-size:0.78rem;color:var(--text-light);margin-bottom:10px;">填写已知队友的阵营+分路，占位后自动锁定不对外报名</p>
         <div class="preset-positions">
           <div class="preset-team-section">
-            <h5 class="blue">🟦 蓝方</h5>
+            <h5 class="blue">蓝方</h5>
             <div id="presetBlue"></div>
           </div>
           <div class="preset-team-section">
-            <h5 class="red">🟥 红方</h5>
+            <h5 class="red">红方</h5>
             <div id="presetRed"></div>
           </div>
         </div>
@@ -1705,7 +1763,7 @@
 <!-- 满员成功弹窗 -->
 <div id="fullSuccessModal" style="display:none;" class="modal-overlay">
   <div class="full-modal">
-    <div class="full-modal-icon">🎉</div>
+    <div class="full-modal-icon" style="font-size:2.5rem;color:var(--primary);text-shadow:0 0 20px rgba(79,70,229,0.5);">成局</div>
     <h3>训练赛组队成功！</h3>
     <p>本局红蓝10人已全部凑齐，训练赛组队成功<br><br>请所有参赛人员前往官方QQ群/微信会员群<br>统一确认开赛时间、BP规则、英雄禁用、队内沟通细节<br>按约定时间准时开局即可</p>
     <button class="btn btn-primary" onclick="closeFullModal()">知道了！</button>
@@ -1718,14 +1776,14 @@
 <div id="guideModal">
   <div class="guide-content">
     <div class="guide-header">
-      <h2>🎮 浅梦训练赛 - 使用说明</h2>
+      <h2>浅梦训练赛 - 使用说明</h2>
       <button class="close-btn" onclick="closeGuideModal()">&times;</button>
     </div>
     <div class="guide-body">
-      <h3>🔹 核心场景</h3>
+      <h3>核心场景</h3>
       <div class="guide-box">
         <div style="margin-bottom:16px;">
-          <div style="font-weight:700; margin-bottom:8px; color: var(--secondary);">⚔️ 招募大厅（散人专用）</div>
+          <div style="font-weight:700; margin-bottom:8px; color: var(--secondary);">招募大厅（散人专用）</div>
           <ul style="margin:0; padding-left:20px; color:var(--text-secondary);">
             <li>适合：<strong>单人/带1-4个朋友</strong>，凑齐10人打训练赛</li>
             <li>规则：红蓝双方各5人，满10人后全员确认 → 正式成局</li>
@@ -1734,7 +1792,7 @@
         </div>
       </div>
 
-      <h3>🔹 招募大厅玩法</h3>
+      <h3>招募大厅玩法</h3>
       <ol style="margin:0 0 16px; padding-left:24px; color:var(--text-secondary);">
         <li><strong>加入对局</strong>：选红蓝方+分路 → 报名</li>
         <li><strong>发起招募</strong>：设置时间、段位、模式 → 发布</li>
@@ -1742,7 +1800,7 @@
         <li><strong>正式成局</strong>：全员确认后锁定，自动创建腾讯会议</li>
       </ol>
 
-      <h3>🔹 确认阶段规则</h3>
+      <h3>确认阶段规则</h3>
       <div class="guide-box" style="border-color: rgba(245,158,11,0.3);">
         <ul style="margin:0; padding-left:20px; color:var(--text-secondary);">
           <li>满10人后进入<span style="color:var(--warning);">待确认</span>状态，所有人会收到确认通知</li>
@@ -1752,20 +1810,20 @@
         </ul>
       </div>
 
-      <h3>🔹 队伍系统</h3>
+      <h3>队伍系统</h3>
       <ul style="margin:0 0 16px; padding-left:20px; color:var(--text-secondary);">
         <li>可创建或加入队伍（最多7人）</li>
         <li>队长可邀请成员、踢人、转让、解散</li>
         <li>管理员也可代建队伍和调整成员</li>
       </ul>
 
-      <h3>🔹 腾讯会议</h3>
+      <h3>腾讯会议</h3>
       <ul style="margin:0 0 16px; padding-left:20px; color:var(--text-secondary);">
         <li>模式2（纯组织者）会自动创建会议</li>
         <li>其他模式下，发起人可手动创建会议</li>
       </ul>
 
-      <h3 style="color: var(--danger);">⚠️ 重要规则</h3>
+      <h3 style="color: var(--danger);">重要规则</h3>
       <div class="guide-box highlight">
         <ul style="margin:0; padding-left:20px; color:var(--text-secondary);">
           <li>每条分路只能1人，全场最多10人</li>
@@ -1792,7 +1850,7 @@ let currentMatchId = null;
 let recruitPollingTimer = null;
 
 const LANES = ['对抗路', '打野', '中路', '发育路', '游走'];
-const LANE_ICONS = { '对抗路': '⚔️', '打野': '🦁', '中路': '🔮', '发育路': '🏹', '游走': '🛡️' };
+const LANE_ICONS = { '对抗路': '对抗', '打野': '打野', '中路': '中路', '发育路': '发育', '游走': '游走' };
 
 const cacheStore = new Map();
 async function api(path, options = {}, retries = 2) {
@@ -1851,7 +1909,7 @@ async function handleAuth(e) {
     const level = document.getElementById('regLevel').value;
     if (!coach || !wechat) { showToast('请填写完整注册信息','error'); return; }
     try {
-      const data = await api('/api/auth/register', { method:'POST', body: JSON.stringify({ username, password, coachName: coach, wechat, level }) });
+      const data = await api('/api/auth/register', { method:'POST', body: JSON.stringify({ username, password, teamName: coach, coachName: coach, wechat, level }) });
       if (data && data.token) { authToken = data.token; localStorage.setItem('local_current_user', authToken); currentUser = data.user; closeAuthModal(); updateUI(); switchTab('recruit'); showToast('注册成功！','success'); }
     } catch (e) { showToast(e.message,'error'); }
   } else {
@@ -1912,12 +1970,12 @@ async function openNotifications() {
       let actions = '';
       if (n.type === 'confirm_result') {
         actions = `<div style="margin-top:8px;display:flex;gap:8px;">
-          <button class="btn btn-sm" style="background:rgba(0,200,83,0.15);color:#00C853;border:1px solid rgba(0,200,83,0.3);font-size:0.78rem;" onclick="confirmMatchResult('${n.relatedId}','win')">✅ 确认胜利</button>
-          <button class="btn btn-sm" style="background:rgba(255,45,85,0.15);color:#FF2D55;border:1px solid rgba(255,45,85,0.3);font-size:0.78rem;" onclick="confirmMatchResult('${n.relatedId}','loss')">❌ 确认失败</button>
+          <button class="btn btn-sm" style="background:rgba(0,200,83,0.15);color:#00C853;border:1px solid rgba(0,200,83,0.3);font-size:0.78rem;" onclick="confirmMatchResult('${n.relatedId}','win')">确认胜利</button>
+          <button class="btn btn-sm" style="background:rgba(255,45,85,0.15);color:#FF2D55;border:1px solid rgba(255,45,85,0.3);font-size:0.78rem;" onclick="confirmMatchResult('${n.relatedId}','loss')">确认失败</button>
         </div>`;
       } else if (n.type === 'team_invite') {
         actions = `<div style="margin-top:8px;">
-          <button class="btn btn-primary btn-sm" onclick="acceptTeamInvite('${n.relatedId}')" style="font-size:0.78rem;">✅ 接受邀请</button>
+          <button class="btn btn-primary btn-sm" onclick="acceptTeamInvite('${n.relatedId}')" style="font-size:0.78rem;">接受邀请</button>
         </div>`;
       }
       html += `<div style="padding:12px;background:${n.read ? 'var(--bg-glass)' : 'rgba(0, 212, 255, 0.08)'};border-radius:var(--radius-md);margin-bottom:10px;font-size:0.88rem;border:1px solid ${n.read ? 'var(--border-color)' : 'rgba(0, 212, 255, 0.2)'};">${n.content}<br><small style="color:var(--text-muted);">${new Date(n.created_at).toLocaleString()}</small>${actions}</div>`;
@@ -1928,7 +1986,7 @@ async function openNotifications() {
   const panel = document.createElement('div');
   panel.id = 'notifPanel';
   panel.style.cssText = 'position:fixed;top:80px;right:16px;width:340px;max-height:450px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:var(--radius-xl);box-shadow:var(--shadow-lg);z-index:150;padding:20px;overflow-y:auto;';
-  panel.innerHTML = `<div style="font-weight:700;font-size:1rem;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;color:var(--text-primary);">🔔 消息通知 <span onclick="document.getElementById('notifPanel').remove()" style="cursor:pointer;font-size:1.4rem;color:var(--text-muted);width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);transition:all 0.2s;">&times;</span></div>${html}`;
+  panel.innerHTML = `<div style="font-weight:700;font-size:1rem;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;color:var(--text-primary);">消息通知 <span onclick="document.getElementById('notifPanel').remove()" style="cursor:pointer;font-size:1.4rem;color:var(--text-muted);width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);transition:all 0.2s;">&times;</span></div>${html}`;
   document.body.appendChild(panel);
   const closeOnOutside = (e) => { if (!panel.contains(e.target) && e.target.id !== 'notificationBell') { panel.remove(); document.removeEventListener('click', closeOnOutside); } };
   setTimeout(() => document.addEventListener('click', closeOnOutside), 0);
@@ -1998,10 +2056,10 @@ async function loadRecruitHall() {
     </div>
     <div class="recruit-header">
       <div class="recruit-tabs">
-        <button class="recruit-tab ${currentRecruitSubTab==='active'?'active':''}" onclick="switchRecruitSubTab('active')">🔥 招募中</button>
-        <button class="recruit-tab ${currentRecruitSubTab==='full'?'active':''}" onclick="switchRecruitSubTab('full')">✅ 已满专区</button>
+         <button class="recruit-tab ${currentRecruitSubTab==='active'?'active':''}" onclick="switchRecruitSubTab('active')">招募中</button>
+         <button class="recruit-tab ${currentRecruitSubTab==='full'?'active':''}" onclick="switchRecruitSubTab('full')">已满专区</button>
       </div>
-      ${currentUser ? '<button class="btn btn-primary btn-sm" onclick="openCreateRecruitModal()">➕ 新建招募</button>' : ''}
+      ${currentUser ? '<button class="btn btn-primary btn-sm" onclick="openCreateRecruitModal()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" style="margin-right:4px;vertical-align:middle;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>新建招募</button>' : ''}
     </div>
     <div id="recruitListContainer"><div class="loading-spinner"></div></div>
   `;
@@ -2027,9 +2085,9 @@ function renderRecruitList(matches) {
   const container = document.getElementById('recruitListContainer');
   if (!matches.length) {
     container.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-state-icon">${currentRecruitSubTab==='active'?'🔍':'✅'}</div>
-        <p>${currentRecruitSubTab==='active'?'暂无招募中的对局，快来发起第一场吧！':'暂无已满的对局'}</p>
+       <div class="empty-state">
+         <div class="empty-state-icon" style="font-size:2.5rem;color:var(--text-muted);opacity:0.5;">${currentRecruitSubTab==='active'?'空':'无'}</div>
+         <p>${currentRecruitSubTab==='active'?'暂无招募中的对局，快来发起第一场吧！':'暂无已满的对局'}</p>
         ${currentRecruitSubTab==='active'&&currentUser?'<br><button class="btn btn-primary" onclick="openCreateRecruitModal()">发起招募</button>':''}
       </div>`;
     return;
@@ -2051,17 +2109,17 @@ function renderRecruitList(matches) {
           <div>
             <span class="badge ${statusClass}">${statusLabel}</span>
             <span class="badge badge-level" style="margin-left:4px;">${m.levelReq}</span>
-            <span class="badge" style="background:rgba(22, 93, 255, 0.12);color:#60a5fa;border:1px solid rgba(22, 93, 255, 0.2);margin-left:4px;">${modeLabels[m.mode]||'模式'+m.mode}</span>
+            <span class="badge" style="background:rgba(79, 70, 229, 0.12);color:#60a5fa;border:1px solid rgba(79, 70, 229, 0.2);margin-left:4px;">${modeLabels[m.mode]||'模式'+m.mode}</span>
           </div>
-          <span style="font-size:0.82rem;color:var(--text-light);">⏰ ${m.startTime}</span>
+          <span style="font-size:0.82rem;color:var(--text-light);">${m.startTime}</span>
         </div>
         <div class="match-card-org">发起人：<strong>${m.organizer.teamName}</strong> <span class="badge badge-level">${m.organizer.level}</span></div>
-        ${m.notes ? `<p style="font-size:0.82rem;color:var(--text-light);margin-bottom:8px;">📝 ${m.notes}</p>` : ''}
+        ${m.notes ? `<p style="font-size:0.82rem;color:var(--text-light);margin-bottom:8px;">${m.notes}</p>` : ''}
         <div class="progress-text">${m.totalCount} / 10 人已就位</div>
         <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:${progress}%;"></div></div>
         <div class="match-card-slots">
-          <span class="slot-badge slot-blue">🟦 蓝方 ${blueCount}/5</span>
-          <span class="slot-badge slot-red">🟥 红方 ${redCount}/5</span>
+          <span class="slot-badge slot-blue"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#4f46e5;margin-right:4px;box-shadow:0 0 4px rgba(79,70,229,0.5);"></span>蓝方 ${blueCount}/5</span>
+          <span class="slot-badge slot-red"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#ef4444;margin-right:4px;box-shadow:0 0 4px rgba(239,68,68,0.5);"></span>红方 ${redCount}/5</span>
         </div>
         ${isOrg ? `<div style="margin-top:10px;display:flex;gap:8px;" onclick="event.stopPropagation();">
           <button class="btn btn-xs btn-ghost" onclick="cancelMatch('${m.id}', event)">撤销招募</button>
@@ -2113,7 +2171,7 @@ function renderMatchDetail(match) {
         ? `<button class="btn btn-xs btn-danger" onclick="leaveMatch('${match.id}')">撤销</button>`
         : '';
       const removeBtn = isOrg && filled
-        ? `<button class="btn btn-xs btn-ghost" onclick="removePlayer('${match.id}','${pos.playerId}')" title="清理">✕</button>`
+        ? `<button class="btn btn-xs btn-ghost" onclick="removePlayer('${match.id}','${pos.playerId}')" title="清理">移除</button>`
         : '';
       // confirming 状态下显示确认状态
       const confirmBadge = filled && isConfirming && pos.confirmed
@@ -2123,7 +2181,7 @@ function renderMatchDetail(match) {
         <div class="lane-row ${team} ${filled?'filled':''}">
           <div class="lane-info">
             <div class="lane-name">${LANE_ICONS[lane]||''} ${lane}</div>
-            <div class="player-name ${filled?'':'empty'}">${filled ? pos.playerName : '🔲 空位'}</div>
+            <div class="player-name ${filled?'':'empty'}">${filled ? pos.playerName : '空位'}</div>
           </div>
           <div class="lane-action">
             ${filled && !isMine && !isOrg ? `<span style="font-size:0.72rem;color:var(--text-light);">已占</span>` : ''}
@@ -2143,33 +2201,32 @@ function renderMatchDetail(match) {
     headerActions = `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-sm btn-danger" onclick="cancelMatch('${match.id}')" style="padding:5px 14px;">撤销招募</button>
       ${(!isFull&&!isConfirming&&!isClosed)?'<button class="btn btn-sm btn-ghost" onclick="closeMatch(\''+match.id+'\')" style="padding:5px 14px;">关闭报名</button>':''}
-      ${!match.meetingCode&&isFull?'<button class="btn btn-sm btn-primary" onclick="editMatchMeeting(\''+match.id+'\',\''+match.meetingCode+'\',\''+match.meetingLink+'\')" style="padding:5px 14px;">📹 填入会议信息</button>':''}
-      ${match.meetingCode&&isOrg?'<button class="btn btn-sm btn-ghost" onclick="editMatchMeeting(\''+match.id+'\',\''+match.meetingCode+'\',\''+match.meetingLink+'\')" style="padding:5px 14px;">✏️ 编辑会议</button>':''}
+      ${!match.meetingCode&&isFull?'<button class="btn btn-sm btn-primary" onclick="editMatchMeeting(\''+match.id+'\',\''+match.meetingCode+'\',\''+match.meetingLink+'\')" style="padding:5px 14px;">填入会议信息</button>':''}
+      ${match.meetingCode&&isOrg?'<button class="btn btn-sm btn-ghost" onclick="editMatchMeeting(\''+match.id+'\',\''+match.meetingCode+'\',\''+match.meetingLink+'\')" style="padding:5px 14px;">编辑会议</button>':''}
     </div>`;
   }
   // 确认阶段的确认弹窗
   if (myPos && isConfirming) {
     if (myPos.confirmed) {
-      headerActions = `<div style="margin-top:10px;"><span class="badge badge-success">✅ 已确认能参加，请准时参赛</span></div>`;
+      headerActions = `<div style="margin-top:10px;"><span class="badge badge-success">已确认能参加，请准时参赛</span></div>`;
     } else {
       headerActions = `<div class="card" style="border:1px solid rgba(245,158,11,0.4);margin-top:10px;background:rgba(245,158,11,0.05);">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-          <span style="font-size:1rem;">⏳</span>
           <h4 style="margin:0;color:var(--warning);">请确认能否参加</h4>
         </div>
         <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:12px;">训练赛 ${match.startTime} 已凑齐10人，请确认你的参赛意向：</p>
         <div style="display:flex;gap:10px;">
-          <button class="btn btn-success btn-sm" onclick="confirmRecruitment('${match.id}', true)" style="padding:8px 20px;">✅ 能参加</button>
-          <button class="btn btn-danger btn-sm" onclick="confirmRecruitment('${match.id}', false)" style="padding:8px 20px;">❌ 没时间</button>
+          <button class="btn btn-success btn-sm" onclick="confirmRecruitment('${match.id}', true)" style="padding:8px 20px;">能参加</button>
+          <button class="btn btn-danger btn-sm" onclick="confirmRecruitment('${match.id}', false)" style="padding:8px 20px;">没时间</button>
         </div>
       </div>`;
     }
   }
   if (myPos && !isFull && !isConfirming && !isClosed) {
-    headerActions = `<div style="margin-top:10px;"><button class="btn btn-sm btn-danger" onclick="leaveMatch('${match.id}')">撤销报名（${myPos.team==='blue'?'🟦':'🟥'} ${myPos.lane}）</button></div>`;
+    headerActions = `<div style="margin-top:10px;"><button class="btn btn-sm btn-danger" onclick="leaveMatch('${match.id}')">撤销报名（${myPos.team==='blue'?'蓝方':'红方'} ${myPos.lane}）</button></div>`;
   }
   if (isFull) {
-    headerActions = `<div style="margin-top:10px;"><span class="badge badge-full">🎉 10人已满，训练赛已成局！</span></div>`;
+    headerActions = `<div style="margin-top:10px;"><span class="badge badge-full">10人已满，训练赛已成局！</span></div>`;
   }
   if (!currentUser) {
     headerActions = `<div style="margin-top:10px;font-size:0.82rem;color:rgba(255,255,255,0.8);">请登录后报名参赛</div>`;
@@ -2182,33 +2239,30 @@ function renderMatchDetail(match) {
       if (match.meetingCode) {
         return `<div class="card" style="border:1px solid rgba(22,93,255,0.35);margin-bottom:20px;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-            <span style="font-size:1.2rem;">📹</span>
             <h3 style="margin:0;color:var(--primary);">腾讯会议已创建</h3>
           </div>
           <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:12px;">赛前10分钟自动开启，点击下方链接入会</p>
           <div style="background:#1A1A2E;border:1px solid rgba(22,93,255,0.2);border-radius:var(--radius-sm);padding:16px;margin-bottom:10px;">
             <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:8px;">会议号</div>
             <div style="font-weight:700;color:#fff;font-size:1.1rem;letter-spacing:2px;margin-bottom:12px;">${match.meetingCode}</div>
-            <a href="${match.meetingLink}" target="_blank" class="btn btn-sm" style="background:rgba(22,93,255,0.15);color:#6BA3FF;border:1px solid rgba(22,93,255,0.4);font-size:0.82rem;padding:6px 16px;border-radius:var(--radius-sm);text-decoration:none;display:inline-block;">🏠 入会</a>
+            <a href="${match.meetingLink}" target="_blank" class="btn btn-sm" style="background:rgba(79,70,229,0.15);color:#818cf8;border:1px solid rgba(79,70,229,0.4);font-size:0.82rem;padding:6px 16px;border-radius:var(--radius-sm);text-decoration:none;display:inline-block;">入会</a>
           </div>
-          <p style="font-size:0.75rem;color:var(--text-muted);">💡 入会后可使用腾讯会议「分组讨论」功能手动分配A队/B队房间</p>
+          <p style="font-size:0.75rem;color:var(--text-muted);">提示：入会后可使用腾讯会议「分组讨论」功能手动分配A队/B队房间</p>
         </div>`;
       } else if (isOrg) {
         // 组织者未创建会议：显示建会按钮
         return `<div class="card" style="border:1px solid rgba(22,93,255,0.35);margin-bottom:20px;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-            <span style="font-size:1.2rem;">📹</span>
             <h3 style="margin:0;color:var(--primary);">腾讯会议</h3>
           </div>
           <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:12px;">点击按钮提前创建腾讯会议（赛前10分钟系统也会自动建会）</p>
-          <button class="btn btn-primary btn-sm" onclick="createMatchMeeting('${match.id}')" id="createMeetingBtn" style="padding:8px 16px;">📹 创建腾讯会议</button>
+          <button class="btn btn-primary btn-sm" onclick="createMatchMeeting('${match.id}')" id="createMeetingBtn" style="padding:8px 16px;">创建腾讯会议</button>
           <p id="createMeetingMsg" style="font-size:0.78rem;color:var(--text-muted);margin-top:8px;display:none;"></p>
         </div>`;
       } else {
         // 非组织者，且会议未创建
         return `<div class="card" style="border:1px solid rgba(245,158,11,0.3);margin-bottom:20px;background:rgba(245,158,11,0.05);">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-            <span style="font-size:1.2rem;">⏳</span>
             <h3 style="margin:0;color:var(--warning);">腾讯会议创建中</h3>
           </div>
           <p style="font-size:0.82rem;color:var(--text-secondary);">组织者将在开赛前10分钟自动创建腾讯会议，请耐心等待...</p>
@@ -2218,21 +2272,20 @@ function renderMatchDetail(match) {
       // mode 1/3：QQ群号
       if (match.groupContact) {
         const copied = isFull ? `<div style="margin-top:8px;padding:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:var(--radius-sm);">
-          <div style="font-size:0.85rem;color:var(--success);margin-bottom:8px;">🎉 训练赛已成局，点击下方按钮加群沟通！</div>
-          <button class="btn btn-primary btn-sm" onclick="copyGroupContact('${match.groupContact}')" style="padding:8px 16px;">📋 复制群号：<strong>${match.groupContact}</strong></button>
+          <div style="font-size:0.85rem;color:var(--success);margin-bottom:8px;">训练赛已成局，点击下方按钮加群沟通！</div>
+          <button class="btn btn-primary btn-sm" onclick="copyGroupContact('${match.groupContact}')" style="padding:8px 16px;">复制群号：<strong>${match.groupContact}</strong></button>
         </div>` : '';
         return `<div class="card" style="border:1px solid rgba(16,185,129,0.25);margin-bottom:20px;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
-            <span style="font-size:1.2rem;">💬</span>
             <h3 style="margin:0;color:var(--success);">队伍联系群</h3>
           </div>
           <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:10px;">QQ群号：<strong style="font-size:1rem;color:#fff;letter-spacing:1px;">${match.groupContact}</strong></p>
-          <button class="btn btn-sm" onclick="copyGroupContact('${match.groupContact}')" style="background:rgba(16,185,129,0.12);color:var(--success);border:1px solid rgba(16,185,129,0.3);font-size:0.82rem;padding:6px 14px;border-radius:var(--radius-sm);">📋 一键复制群号</button>
+          <button class="btn btn-sm" onclick="copyGroupContact('${match.groupContact}')" style="background:rgba(16,185,129,0.12);color:var(--success);border:1px solid rgba(16,185,129,0.3);font-size:0.82rem;padding:6px 14px;border-radius:var(--radius-sm);">一键复制群号</button>
           ${copied}
         </div>`;
       } else {
         return `<div class="card" style="border:1px dashed rgba(255,255,255,0.15);margin-bottom:20px;background:transparent;">
-          <p style="font-size:0.82rem;color:var(--text-muted);text-align:center;">🏳 房主未填写联系群号，请通过备注或其他方式联系</p>
+          <p style="font-size:0.82rem;color:var(--text-muted);text-align:center;">房主未填写联系群号，请通过备注或其他方式联系</p>
         </div>`;
       }
     }
@@ -2243,22 +2296,22 @@ function renderMatchDetail(match) {
   content.innerHTML = `
     <div class="match-detail-header">
       <div class="back-btn" onclick="backToRecruitHall()">← 返回招募大厅</div>
-      <h2>⚔️ 5v5 训练赛详情</h2>
+      <h2>5v5 训练赛详情</h2>
       <div class="match-detail-meta">
-        <span>⏰ ${match.startTime}</span>
-        <span>📊 ${match.levelReq}</span>
+        <span>${match.startTime}</span>
+        <span>${match.levelReq}</span>
         <span>${modeLabels[match.mode]||'模式'+match.mode}</span>
-        <span>👤 ${match.organizer.teamName}</span>
+        <span>${match.organizer.teamName}</span>
       </div>
-      ${match.notes ? `<p style="font-size:0.85rem;margin-top:8px;opacity:0.9;">📝 ${match.notes}</p>` : ''}
+      ${match.notes ? `<p style="font-size:0.85rem;margin-top:8px;opacity:0.9;">${match.notes}</p>` : ''}
       ${headerActions}
     </div>
     ${contactCard}
     <div class="progress-text">${match.positions.length} / 10 人已就位</div>
     <div class="progress-bar-wrap" style="margin-bottom:20px;"><div class="progress-bar-fill" style="width:${(match.positions.length/10)*100}%;"></div></div>
     <div class="teams-container">
-      ${buildLanePanel('blue', '蓝方', '🟦', '#e8f2fc')}
-      ${buildLanePanel('red', '红方', '🟥', '#fdeaec')}
+      ${buildLanePanel('blue', '蓝方', '', '#e8f2fc')}
+      ${buildLanePanel('red', '红方', '', '#fdeaec')}
     </div>`;
 }
 
@@ -2302,8 +2355,8 @@ async function loadMyTeamForRecruit() {
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px;background:#1A1A2E;border:1px solid rgba(22,93,255,0.15);border-radius:var(--radius-sm);">
             <span style="font-size:0.85rem;flex:1;color:var(--text-primary);">${m.coachName || m.username}${isSelf ? ' <span style="color:var(--primary);font-weight:600;">（我）</span>' : ''}</span>
             <select class="form-select" id="teamLaneTeam_${m.userId}" style="width:80px;padding:5px 8px;font-size:0.8rem;">
-              <option value="blue">🟦</option>
-              <option value="red">🟥</option>
+              <option value="blue">蓝</option>
+              <option value="red">红</option>
             </select>
             <select class="form-select" id="teamLane_${m.userId}" style="flex:1;padding:5px 8px;font-size:0.8rem;">
               <option value="">空位</option>
@@ -2362,12 +2415,12 @@ function buildPresetPositions() {
     blueHtml += `<div class="preset-lane">
       <label>${LANE_ICONS[lane]}${lane}</label>
       <input type="text" id="preset-blue-${lane}" placeholder="选填" disabled>
-      <span class="lock-icon">🔒</span>
+      <span class="lock-icon">锁</span>
     </div>`;
     redHtml += `<div class="preset-lane">
       <label>${LANE_ICONS[lane]}${lane}</label>
       <input type="text" id="preset-red-${lane}" placeholder="选填" disabled>
-      <span class="lock-icon">🔒</span>
+      <span class="lock-icon">锁</span>
     </div>`;
   });
   document.getElementById('presetBlue').innerHTML = blueHtml;
@@ -2511,7 +2564,7 @@ async function removePlayer(matchId, playerId) {
 async function createMatchMeeting(matchId) {
   const btn = document.getElementById('createMeetingBtn');
   const msg = document.getElementById('createMeetingMsg');
-  if (btn) { btn.disabled = true; btn.textContent = '⚙️ 创建中...'; }
+  if (btn) { btn.disabled = true; btn.textContent = '创建中...'; }
   if (msg) { msg.style.display = 'block'; msg.textContent = '正在创建腾讯会议，请稍候...'; }
   try {
     const data = await api(`/api/recruitment/${matchId}/meeting`, { method: 'POST', skipCache: true });
@@ -2519,16 +2572,16 @@ async function createMatchMeeting(matchId) {
     await openMatchDetail(matchId); // 刷新显示
   } catch(err) {
     showToast(err.message || '建会失败','error');
-    if (btn) { btn.disabled = false; btn.textContent = '📹 重新创建腾讯会议'; }
+    if (btn) { btn.disabled = false; btn.textContent = '重新创建腾讯会议'; }
     if (msg) { msg.textContent = '建会失败，请检查 tmeet 登录状态（运行 tmeet auth login）'; }
   }
 }
 
 // 编辑/填入腾讯会议信息
 async function editMatchMeeting(matchId, currentCode, currentLink) {
-  const code = await dialogPrompt({ title:'📹 会议号', body:'请输入腾讯会议号', placeholder:'如：123456789', defaultValue: currentCode || '', confirmText:'下一步', cancelText:'取消' });
+  const code = await dialogPrompt({ title:'会议号', body:'请输入腾讯会议号', placeholder:'如：123456789', defaultValue: currentCode || '', confirmText:'下一步', cancelText:'取消' });
   if (code === null) return;
-  const link = await dialogPrompt({ title:'🔗 入会链接', body:'请输入入会链接', placeholder:'https://meeting.tencent.com/dm/xxx', defaultValue: currentLink || '', confirmText:'保存', cancelText:'取消' });
+  const link = await dialogPrompt({ title:'入会链接', body:'请输入入会链接', placeholder:'https://meeting.tencent.com/dm/xxx', defaultValue: currentLink || '', confirmText:'保存', cancelText:'取消' });
   if (link === null) return;
   try {
     await api(`/api/recruitment/${matchId}/meeting`, { method:'PUT', body: JSON.stringify({ meetingCode: code, meetingLink: link }) });
@@ -2541,7 +2594,7 @@ async function editMatchMeeting(matchId, currentCode, currentLink) {
 function copyGroupContact(text) {
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(() => {
-      showToast('群号 ' + text + ' 已复制！去QQ加群吧 👌','success');
+      showToast('群号 ' + text + ' 已复制！去QQ加群吧','success');
     }).catch(() => fallbackCopy(text));
   } else {
     fallbackCopy(text);
@@ -2555,7 +2608,7 @@ function fallbackCopy(text) {
   document.body.appendChild(ta);
   ta.focus();
   ta.select();
-  try { document.execCommand('copy'); showToast('群号已复制！去QQ加群吧 👌','success'); } catch { showToast('请手动复制群号：' + text,'info'); }
+  try { document.execCommand('copy'); showToast('群号已复制！去QQ加群吧','success'); } catch { showToast('请手动复制群号：' + text,'info'); }
   document.body.removeChild(ta);
 }
 
@@ -2625,7 +2678,7 @@ async function loadPublicSchedules() {
 function renderPublicSchedules(matches) {
   const content = document.getElementById('tabContent');
   if (!matches.length) {
-    content.innerHTML = '<div class="card"><div class="empty-state"><div class="empty-state-icon">🏆</div><p>暂无已结束的对局</p></div></div>';
+    content.innerHTML = '<div class="card"><div class="empty-state"><div class="empty-state-icon" style="font-size:2.5rem;color:var(--text-muted);opacity:0.5;">无</div><p>暂无已结束的对局</p></div></div>';
     return;
   }
   const grouped = {};
@@ -2641,7 +2694,7 @@ function renderPublicSchedules(matches) {
         <div class="section-icon">
           <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>
         </div>
-        <div><div class="section-title">📅 ${date}</div></div>
+        <div><div class="section-title">${date}</div></div>
       </div>`;
     grouped[date].forEach(m => {
       const resultBadge = m.result === 'win'
@@ -2651,7 +2704,7 @@ function renderPublicSchedules(matches) {
         <div>
           <strong style="font-size:1rem;">${m.organizerName || '未知'}</strong>
           <br><span class="badge badge-level" style="margin-top:6px;">${m.levelReq || ''}</span>
-          <br><span style="font-size:0.82rem;color:var(--text-muted);margin-top:6px;display:inline-block;">⏰ ${m.startTime ? m.startTime.replace('T',' ') : ''} | 模式${m.mode || 1}</span>
+          <br><span style="font-size:0.82rem;color:var(--text-muted);margin-top:6px;display:inline-block;">${m.startTime ? m.startTime.replace('T',' ') : ''} | 模式${m.mode || 1}</span>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">${resultBadge}</div>
       </div>`;
@@ -2676,7 +2729,7 @@ async function viewProfile(userId) {
         <div class="section-icon">
           <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
         </div>
-        <div><div class="section-title">📇 ${u.teamName}</div></div>
+        <div><div class="section-title">${u.teamName}</div></div>
       </div>
       <div style="display:grid;gap:10px;">
         <div style="padding:12px;background:var(--bg-glass);border-radius:var(--radius-md);">
@@ -2724,7 +2777,7 @@ function renderPublishForm() {
         <div class="section-icon">
           <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
         </div>
-        <div><div class="section-title">📢 发布可约档期</div><div class="section-desc">发布你的训练赛档期，等待对手队伍申请</div></div>
+        <div><div class="section-title">发布可约档期</div><div class="section-desc">发布你的训练赛档期，等待对手队伍申请</div></div>
       </div>
       <form onsubmit="handlePublish(event)">
         <div class="form-group"><label>日期</label><input class="form-input" type="date" id="publishDate" required value="${today}"></div>
@@ -2765,7 +2818,7 @@ function renderCalendar(schedules, disabledDates, history) {
   const map = {};
   schedules.forEach(s => { if (!map[s.date]) map[s.date] = []; map[s.date].push(s); });
 
-  let html = `<div class="card"><div style="display:flex; justify-content:space-between; align-items:center;"><button class="btn btn-sm btn-outline" onclick="loadCalendar(${year}, ${month-1})">◀ 上月</button><h3>${year}年${month}月</h3><button class="btn btn-sm btn-outline" onclick="loadCalendar(${year}, ${month+1})">下月 ▶</button></div><div style="display:grid; grid-template-columns: repeat(7, 1fr); gap:4px; text-align:center;">`;
+  let html = `<div class="card"><div style="display:flex; justify-content:space-between; align-items:center;"><button class="btn btn-sm btn-outline" onclick="loadCalendar(${year}, ${month-1})">上月</button><h3>${year}年${month}月</h3><button class="btn btn-sm btn-outline" onclick="loadCalendar(${year}, ${month+1})">下月</button></div><div style="display:grid; grid-template-columns: repeat(7, 1fr); gap:4px; text-align:center;">`;
   ['日','一','二','三','四','五','六'].forEach(d => html += `<div style="font-weight:600; padding:4px; color:var(--text-secondary);">${d}</div>`);
   for (let i = 0; i < firstDay; i++) html += '<div></div>';
   for (let d = 1; d <= daysInMonth; d++) {
@@ -2778,13 +2831,13 @@ function renderCalendar(schedules, disabledDates, history) {
   }
   html += '</div></div>';
 
-  html += '<h3 style="margin-top:20px;">📋 日程详情</h3>';
+  html += '<h3 style="margin-top:20px;">日程详情</h3>';
   schedules.forEach(s => {
     let actions = '';
     if (s.status === 'available' && s.isPublisher) {
       actions += '<div style="color:var(--text-secondary);margin-bottom:8px;"><strong style="color:var(--text-primary);">申请者：</strong>';
       if (s.applicants.length > 0) {
-        s.applicants.forEach(app => actions += `<div style="color:var(--text-secondary);margin-top:4px;">${app.teamName} (${app.coachName}) <button class="btn btn-xs btn-primary" onclick="confirmApplicant('${s.id}', '${app.id}')">✅ 选择</button></div>`);
+        s.applicants.forEach(app => actions += `<div style="color:var(--text-secondary);margin-top:4px;">${app.teamName} (${app.coachName}) <button class="btn btn-xs btn-primary" onclick="confirmApplicant('${s.id}', '${app.id}')">选择</button></div>`);
       } else actions += '<span style="color:var(--text-muted);">暂无</span>';
       actions += '</div>';
       actions += `<button class="btn btn-sm btn-danger" onclick="cancelPublishedSchedule('${s.id}')" style="margin-top:6px;">取消发布</button>`;
@@ -2806,7 +2859,7 @@ function renderCalendar(schedules, disabledDates, history) {
   });
 
   // 参赛历史
-  html += '<h3 style="margin-top:24px;">🏆 参赛历史</h3>';
+  html += '<h3 style="margin-top:24px;">参赛历史</h3>';
   if (history.length === 0) {
     html += '<p style="color:var(--text-muted);padding:16px;background:var(--bg-glass);border-radius:var(--radius-md);">暂无参赛记录</p>';
   } else {
@@ -2884,7 +2937,7 @@ function renderProfileForm() {
         <div class="section-icon">
           <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
         </div>
-        <div><div class="section-title">👤 基本信息</div><div class="section-desc">管理你的账号和个人资料</div></div>
+        <div><div class="section-title">基本信息</div><div class="section-desc">管理你的账号和个人资料</div></div>
       </div>
       <form onsubmit="handleUpdateProfile(event)">
         <div class="form-group"><label>名称/游戏ID</label><input class="form-input" id="profileCoach" value="${currentUser.coachName||''}" placeholder="请输入"></div>
@@ -2899,7 +2952,7 @@ function renderProfileForm() {
         <div class="section-icon" style="background:var(--gradient-secondary);">
           <svg viewBox="0 0 24 24"><path d="M21 6h-2V4c0-1.1-.9-2-2-2H7C5.9 2 5 2.9 5 4v2H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zM7 4h10v2H7V4zm13 16H4V8h18v12z"/></svg>
         </div>
-        <div><div class="section-title">🎮 游戏实力档案</div><div class="section-desc">展示你的游戏实力，方便队友了解你的水平</div></div>
+        <div><div class="section-title">游戏实力档案</div><div class="section-desc">展示你的游戏实力，方便队友了解你的水平</div></div>
       </div>
       <form onsubmit="handleUpdateGameProfile(event)">
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
@@ -2989,12 +3042,12 @@ function renderMyTeam(team) {
     // 无队伍：显示创建/加入
     content.innerHTML = `
       <div class="card" style="text-align:center; padding:40px 20px;">
-        <div style="font-size:3rem;margin-bottom:16px;">👥</div>
+        <div style="font-size:1.5rem;margin-bottom:16px;color:var(--text-muted);opacity:0.6;">队伍</div>
         <h3 style="margin-bottom:12px;">你还没有加入任何队伍</h3>
         <p style="color:var(--text-light);margin-bottom:24px;">队伍最多7人，凑齐后可代表整队参赛</p>
         <div style="display:flex;flex-direction:column;gap:12px;max-width:320px;margin:0 auto;">
-          <button class="btn btn-primary" onclick="openCreateTeamModal()" style="padding:12px;font-size:1rem;">🏆 创建新队伍</button>
-          <button class="btn btn-ghost" onclick="renderTeamList()" style="padding:12px;">🔍 浏览已有队伍</button>
+          <button class="btn btn-primary" onclick="openCreateTeamModal()" style="padding:12px;font-size:1rem;">创建新队伍</button>
+          <button class="btn btn-ghost" onclick="renderTeamList()" style="padding:12px;">浏览已有队伍</button>
         </div>
       </div>
       <div id="teamListContainer"></div>`;
@@ -3002,7 +3055,7 @@ function renderMyTeam(team) {
   }
 
   const LANES = ['对抗路','打野','中路','发育路','游走'];
-  const LANE_ICONS = { '对抗路':'⚔️','打野':'🦁','中路':'🔮','发育路':'🏹','游走':'🛡️' };
+  const LANE_ICONS = { '对抗路':'对抗','打野':'打野','中路':'中路','发育路':'发育','游走':'游走' };
   const isCaptain = team.captainId === currentUser.id;
 
   let memberRows = '';
@@ -3020,7 +3073,7 @@ function renderMyTeam(team) {
               ${m.gameRank ? `<span style="font-size:0.78rem;color:var(--text-muted);margin-left:4px;">段位：${m.gameRank}</span>` : ''}
               ${m.peakScore ? `<span style="font-size:0.78rem;color:var(--text-muted);margin-left:4px;">巅峰：${m.peakScore}</span>` : ''}
             </div>
-            ${m.heroPool ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">🎯 ${m.heroPool}</div>` : ''}
+            ${m.heroPool ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">擅长：${m.heroPool}</div>` : ''}
           </div>
         </div>
         ${isCaptain && !isSelf ? `<div style="display:flex;gap:6px;">
@@ -3031,36 +3084,36 @@ function renderMyTeam(team) {
   });
 
   const recruitBtn = isCaptain
-    ? `<button class="btn btn-primary btn-sm" onclick="openCreateRecruitModal()">⚔️ 发布招募（带队伍）</button>`
+    ? `<button class="btn btn-primary btn-sm" onclick="openCreateRecruitModal()">发布招募（带队伍）</button>`
     : '';
   const inviteBtn = isCaptain && team.memberCount < team.maxMembers
-    ? `<button class="btn btn-sm btn-ghost" onclick="openInviteTeamModal('${team.id}')">👤 邀请成员</button>`
+    ? `<button class="btn btn-sm btn-ghost" onclick="openInviteTeamModal('${team.id}')">邀请成员</button>`
     : '';
 
   content.innerHTML = `
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
         <div>
-          <h2 style="font-size:1.2rem;margin-bottom:6px;">🏆 ${team.name}</h2>
+          <h2 style="font-size:1.2rem;margin-bottom:6px;">${team.name}</h2>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
             <span class="badge ${team.status==='open'?'badge-recruiting':'badge-closed'}">${team.status==='open'?'招人中':'已满'}</span>
             <span style="font-size:0.85rem;color:var(--text-light);">${team.memberCount} / ${team.maxMembers} 人</span>
             ${isCaptain ? '<span class="badge" style="background:rgba(22,93,255,0.18);color:var(--primary);border:1px solid rgba(22,93,255,0.35);">你是队长</span>' : ''}
           </div>
-          ${team.bio ? `<p style="font-size:0.85rem;color:var(--text-light);margin-top:8px;">📝 ${team.bio}</p>` : ''}
+          ${team.bio ? `<p style="font-size:0.85rem;color:var(--text-light);margin-top:8px;">${team.bio}</p>` : ''}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           ${recruitBtn}
           ${inviteBtn}
-          ${isCaptain ? `<button class="btn btn-sm btn-ghost" onclick="openEditTeamModal()">✏️ 编辑队伍</button>` : ''}
-          <button class="btn btn-sm btn-danger" onclick="leaveTeam('${team.id}')">${isCaptain ? '⚠️ 解散队伍' : '退出队伍'}</button>
+          ${isCaptain ? `<button class="btn btn-sm btn-ghost" onclick="openEditTeamModal()">编辑队伍</button>` : ''}
+          <button class="btn btn-sm btn-danger" onclick="leaveTeam('${team.id}')">${isCaptain ? '解散队伍' : '退出队伍'}</button>
         </div>
       </div>
-      <h4 style="margin-bottom:12px;">👥 队员列表</h4>
+      <h4 style="margin-bottom:12px;">队员列表</h4>
       ${memberRows}
     </div>
     <div class="card">
-      <h4 style="margin-bottom:12px;">🔍 浏览全部队伍</h4>
+      <h4 style="margin-bottom:12px;">浏览全部队伍</h4>
       <div id="allTeamsContainer"><button class="btn btn-ghost btn-sm" onclick="renderTeamList()" style="width:100%;">查看所有招募中的队伍</button></div>
     </div>`;
 }
@@ -3081,7 +3134,7 @@ async function renderTeamList() {
               <div>
                 <strong>${t.name}</strong> ${t.bio ? `<span style="font-size:0.82rem;color:var(--text-light);"> · ${t.bio}</span>` : ''}
                 <div style="font-size:0.78rem;color:var(--text-light);margin-top:4px;">
-                  名称：${captain?.coachName || captain?.username || '未知'} | ${t.memberCount}/${t.maxMembers}人 | ${t.status==='open'?'🟢招人中':'🔴已满'}
+                  名称：${captain?.coachName || captain?.username || '未知'} | ${t.memberCount}/${t.maxMembers}人 | ${t.status==='open'?'招人中':'已满'}
                 </div>
               </div>
               ${t.status === 'open' ? `<button class="btn btn-primary btn-sm" onclick="joinTeam('${t.id}')">申请加入</button>` : `<span class="badge badge-closed">已满</span>`}
@@ -3095,7 +3148,7 @@ async function renderTeamList() {
 
 // 创建队伍弹窗
 async function openCreateTeamModal() {
-  const result = await dialogPrompt({ title: '🏆 创建新队伍', body: '请输入队伍名称', placeholder: '如：星河战队', defaultValue: '', confirmText: '创建', cancelText: '取消' });
+  const result = await dialogPrompt({ title: '创建新队伍', body: '请输入队伍名称', placeholder: '如：星河战队', defaultValue: '', confirmText: '创建', cancelText: '取消' });
   if (!result) return;
   const name = result.trim();
   if (!name) { showToast('请输入队伍名称','error'); return; }
@@ -3112,7 +3165,7 @@ async function openCreateTeamModal() {
 
 // 邀请成员（仅队长）
 async function openInviteTeamModal(teamId) {
-  const result = await dialogPrompt({ title: '👤 邀请成员', body: '请输入对方的用户名或名称', placeholder: '用户名/名称', defaultValue: '', confirmText: '发送邀请', cancelText: '取消' });
+  const result = await dialogPrompt({ title: '邀请成员', body: '请输入对方的用户名或名称', placeholder: '用户名/名称', defaultValue: '', confirmText: '发送邀请', cancelText: '取消' });
   if (!result || !result.trim()) return;
   try {
     await api(`/api/teams/${teamId}/invite`, { method:'POST', body: JSON.stringify({ username: result.trim() }) });
@@ -3123,7 +3176,7 @@ async function openInviteTeamModal(teamId) {
 
 // 编辑队伍弹窗（仅队长）
 async function openEditTeamModal() {
-  const nameResult = await dialogPrompt({ title: '✏️ 编辑队伍', body: '修改队伍名称', placeholder: '队伍名称', defaultValue: '', confirmText: '保存', cancelText: '取消' });
+  const nameResult = await dialogPrompt({ title: '编辑队伍', body: '修改队伍名称', placeholder: '队伍名称', defaultValue: '', confirmText: '保存', cancelText: '取消' });
   if (nameResult === null) return;
   const name = nameResult.trim();
   const bioResult = await dialogPrompt({ title: '修改队伍简介', body: '修改队伍简介（选填）', placeholder: '队伍简介', defaultValue: '', confirmText: '保存', cancelText: '取消' });
@@ -3188,15 +3241,15 @@ async function renderAdminPanel() {
   const content = document.getElementById('tabContent');
   content.innerHTML = `
     <div class="card">
-      <h3 style="margin-bottom:16px;">⚙️ 管理员面板</h3>
+      <h3 style="margin-bottom:16px;">管理员面板</h3>
       <div class="recruit-tabs" style="margin-bottom:16px;">
-        <button class="recruit-tab ${currentAdminSubTab==='dashboard'?'active':''}" onclick="switchAdminSubTab('dashboard')">📊 仪表盘</button>
-        <button class="recruit-tab ${currentAdminSubTab==='recruitments'?'active':''}" onclick="switchAdminSubTab('recruitments')">⚔️ 招募管理</button>
-        <button class="recruit-tab ${currentAdminSubTab==='schedules'?'active':''}" onclick="switchAdminSubTab('schedules')">📅 档期管理</button>
-        <button class="recruit-tab ${currentAdminSubTab==='users'?'active':''}" onclick="switchAdminSubTab('users')">👥 用户管理</button>
-        <button class="recruit-tab ${currentAdminSubTab==='teams'?'active':''}" onclick="switchAdminSubTab('teams')">🏆 队伍管理</button>
-        <button class="recruit-tab ${currentAdminSubTab==='logs'?'active':''}" onclick="switchAdminSubTab('logs')">📝 操作日志</button>
-        <button class="recruit-tab ${currentAdminSubTab==='security'?'active':''}" onclick="switchAdminSubTab('security')">🔒 权限安全</button>
+        <button class="recruit-tab ${currentAdminSubTab==='dashboard'?'active':''}" onclick="switchAdminSubTab('dashboard')">仪表盘</button>
+        <button class="recruit-tab ${currentAdminSubTab==='recruitments'?'active':''}" onclick="switchAdminSubTab('recruitments')">招募管理</button>
+        <button class="recruit-tab ${currentAdminSubTab==='schedules'?'active':''}" onclick="switchAdminSubTab('schedules')">档期管理</button>
+        <button class="recruit-tab ${currentAdminSubTab==='users'?'active':''}" onclick="switchAdminSubTab('users')">用户管理</button>
+        <button class="recruit-tab ${currentAdminSubTab==='teams'?'active':''}" onclick="switchAdminSubTab('teams')">队伍管理</button>
+        <button class="recruit-tab ${currentAdminSubTab==='logs'?'active':''}" onclick="switchAdminSubTab('logs')">操作日志</button>
+        <button class="recruit-tab ${currentAdminSubTab==='security'?'active':''}" onclick="switchAdminSubTab('security')">权限安全</button>
       </div>
       <div id="adminSubContent"><div class="loading-spinner"></div></div>
     </div>
@@ -3245,7 +3298,7 @@ async function loadAdminTeams(container) {
 
     container.innerHTML = `
       <div style="margin-bottom:16px;">
-        <button class="btn btn-primary" onclick="adminCreateTeam()" style="padding:10px 20px;">🏆 新建队伍</button>
+        <button class="btn btn-primary" onclick="adminCreateTeam()" style="padding:10px 20px;">新建队伍</button>
         <span style="float:right;font-size:0.82rem;color:var(--text-secondary);">共 ${teams.length} 支队伍 | ${unassignedUsers.length} 名用户暂无队伍</span>
       </div>
       ${teams.length === 0 ? '<p style="color:var(--text-light);text-align:center;padding:40px;">暂无队伍数据</p>' : ''}
@@ -3263,7 +3316,7 @@ function buildAdminTeamCard(t, users, unassignedUsers) {
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
       <div style="flex:1;min-width:200px;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
-          <strong style="font-size:1.05rem;color:#fff;">🏆 ${t.name}</strong>
+          <strong style="font-size:1.05rem;color:#fff;">${t.name}</strong>
           <span class="badge ${t.status==='open'?'badge-recruiting':'badge-closed'}">${t.status==='open'?'招人中':'已满'}</span>
           <span style="font-size:0.8rem;color:var(--text-secondary);">${t.memberCount}/${t.maxMembers}人</span>
         </div>
@@ -3273,27 +3326,27 @@ function buildAdminTeamCard(t, users, unassignedUsers) {
         </div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        <button class="btn btn-xs btn-ghost" onclick="adminRenameTeam('${t.id}','${t.name.replace(/'/g,"\\'")}')">✏️ 改名</button>
-        <button class="btn btn-xs btn-ghost" onclick="adminSetCaptain('${t.id}','${t.name.replace(/'/g,"\\'")}', '${captain?.userId||''}', ${JSON.stringify(t.members).replace(/"/g,'&quot;')})">👑 换队长</button>
-        <button class="btn btn-xs btn-ghost" onclick="adminAddMember('${t.id}','${t.name.replace(/'/g,"\\'")}')">➕ 加人</button>
-        <button class="btn btn-xs btn-danger" onclick="adminDeleteTeam('${t.id}')">🗑️ 解散</button>
+        <button class="btn btn-xs btn-ghost" onclick="adminRenameTeam('${t.id}','${t.name.replace(/'/g,"\\'")}')">改名</button>
+        <button class="btn btn-xs btn-ghost" onclick="adminSetCaptain('${t.id}','${t.name.replace(/'/g,"\\'")}', '${captain?.userId||''}', ${JSON.stringify(t.members).replace(/"/g,'&quot;')})">换队长</button>
+        <button class="btn btn-xs btn-ghost" onclick="adminAddMember('${t.id}','${t.name.replace(/'/g,"\\'")}')">加人</button>
+        <button class="btn btn-xs btn-danger" onclick="adminDeleteTeam('${t.id}')">解散</button>
       </div>
     </div>
     ${t.members.length > 0 ? `
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
       ${t.members.map(m => `
         <span style="font-size:0.78rem;background:rgba(22,93,255,0.12);color:${m.role==='captain'?'var(--primary)':'var(--text-primary)'};padding:4px 10px;border-radius:12px;border:1px solid rgba(22,93,255,${m.role==='captain'?'0.4':'0.2'});">
-          ${m.coachName || m.username}${m.role==='captain'?' 👑':' '}
+          ${m.coachName || m.username}${m.role==='captain'?' [队长]':''}
           <button onclick="adminRemoveMember('${t.id}','${m.userId}','${(m.coachName||m.username).replace(/'/g,"\\'")}')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.7rem;padding:0 0 0 4px;" title="移出队伍">×</button>
         </span>`).join('')}
     </div>` : '<p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px;">暂无成员</p>'}
     ${t.status === 'open' && unassignedUsers.length > 0 ? `
-    <div style="font-size:0.72rem;color:var(--text-muted);">💡 还可以<a href="javascript:void(0)" onclick="adminAddMember('${t.id}','${t.name.replace(/'/g,"\\'")}')" style="color:var(--primary);">添加成员</a> · 当前有 ${unassignedUsers.length} 名用户暂无队伍</div>` : ''}
+    <div style="font-size:0.72rem;color:var(--text-muted);">还可以<a href="javascript:void(0)" onclick="adminAddMember('${t.id}','${t.name.replace(/'/g,"\\'")}')" style="color:var(--primary);">添加成员</a> · 当前有 ${unassignedUsers.length} 名用户暂无队伍</div>` : ''}
   </div>`;
 }
 
 async function adminCreateTeam() {
-  const name = await dialogPrompt({ title:'🏆 新建队伍', body:'请输入队伍名称', placeholder:'如：星河战队', defaultValue:'', confirmText:'创建', cancelText:'取消' });
+  const name = await dialogPrompt({ title:'新建队伍', body:'请输入队伍名称', placeholder:'如：星河战队', defaultValue:'', confirmText:'创建', cancelText:'取消' });
   if (!name || !name.trim()) return;
   const bio = await dialogPrompt({ title:'队伍简介（选填）', body:'请输入队伍简介', placeholder:'如：巅峰2200，稳定训练赛', defaultValue:'', confirmText:'下一步', cancelText:'跳过' });
   const maxMembers = await dialogPrompt({ title:'最大人数（默认7）', body:'请输入队伍最大人数', placeholder:'7', defaultValue:'7', confirmText:'创建', cancelText:'取消' });
@@ -3306,7 +3359,7 @@ async function adminCreateTeam() {
 }
 
 async function adminRenameTeam(teamId, currentName) {
-  const name = await dialogPrompt({ title:'✏️ 修改队名', body:'请输入新队名', placeholder:'队伍名称', defaultValue:currentName, confirmText:'保存', cancelText:'取消' });
+  const name = await dialogPrompt({ title:'修改队名', body:'请输入新队名', placeholder:'队伍名称', defaultValue:currentName, confirmText:'保存', cancelText:'取消' });
   if (!name || !name.trim() || name.trim() === currentName) return;
   try {
     await api(`/api/admin/teams/${teamId}`, { method:'PUT', body: JSON.stringify({ name: name.trim() }) });
@@ -3318,7 +3371,7 @@ async function adminRenameTeam(teamId, currentName) {
 async function adminSetCaptain(teamId, teamName, currentCaptainId, members) {
   if (!members || members.length === 0) { showToast('该队伍暂无成员，无法设置队长','error'); return; }
   const options = members.map(m => `${m.userId}:${m.coachName||m.username}`).join('\n');
-  const selected = await dialogPrompt({ title:`👑 换队长（${teamName}）`, body:`当前队长ID: ${currentCaptainId}\n可选成员：\n${options}\n\n请输入新队长用户ID：`, placeholder:'输入用户ID', defaultValue:currentCaptainId||'', confirmText:'确认', cancelText:'取消' });
+  const selected = await dialogPrompt({ title:`换队长（${teamName}）`, body:`当前队长ID: ${currentCaptainId}\n可选成员：\n${options}\n\n请输入新队长用户ID：`, placeholder:'输入用户ID', defaultValue:currentCaptainId||'', confirmText:'确认', cancelText:'取消' });
   if (!selected || selected === currentCaptainId) return;
   try {
     await api(`/api/admin/teams/${teamId}`, { method:'PUT', body: JSON.stringify({ captainId: selected }) });
@@ -3332,7 +3385,7 @@ async function adminAddMember(teamId, teamName) {
   const unassigned = users.filter(u => !u.team || u.team.teamId !== teamId);
   if (unassigned.length === 0) { showToast('所有用户都已在某支队伍中','info'); return; }
   const options = unassigned.slice(0,20).map(u => `${u.id}:${u.coachName||u.username}(${u.gameRank||'未填'})`).join(',');
-  const selected = await dialogPrompt({ title:`➕ 添加成员（${teamName}）`, body:`共 ${unassigned.length} 名可选用户\n请输入用户ID：`, placeholder:'输入用户ID', defaultValue:'', confirmText:'添加', cancelText:'取消' });
+  const selected = await dialogPrompt({ title:`添加成员（${teamName}）`, body:`共 ${unassigned.length} 名可选用户\n请输入用户ID：`, placeholder:'输入用户ID', defaultValue:'', confirmText:'添加', cancelText:'取消' });
   if (!selected) return;
   try {
     await api(`/api/admin/teams/${teamId}/members`, { method:'POST', body: JSON.stringify({ userId: selected }) });
@@ -3451,7 +3504,7 @@ async function loadAdminUsers(container) {
 
   const filterBar = `
     <div style="background:#1A1A2E;border:1px solid rgba(22,93,255,0.15);border-radius:var(--radius-md);padding:14px;margin-bottom:16px;">
-      <div style="font-size:0.82rem;font-weight:600;color:var(--primary);margin-bottom:10px;">🔍 筛选名片</div>
+      <div style="font-size:0.82rem;font-weight:600;color:var(--primary);margin-bottom:10px;">筛选名片</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;">
         <div>
           <label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">等级</label>
@@ -3506,7 +3559,7 @@ async function loadAdminUsers(container) {
       </div>
       <div style="margin-top:8px;display:flex;gap:6px;">
         <button class="btn btn-xs btn-ghost" onclick="adminClearFilters()" style="font-size:0.75rem;">重置筛选</button>
-        <button class="btn btn-xs btn-ghost" onclick="afSet('heroPool',document.getElementById('af_hero').value);loadAdminUsers(document.getElementById('adminSubContent'))" style="font-size:0.75rem;">🔍 搜索英雄</button>
+        <button class="btn btn-xs btn-ghost" onclick="afSet('heroPool',document.getElementById('af_hero').value);loadAdminUsers(document.getElementById('adminSubContent'))" style="font-size:0.75rem;">搜索英雄</button>
       </div>
     </div>`;
 
@@ -3543,13 +3596,13 @@ async function loadAdminUsers(container) {
   filtered.forEach(u => {
     const levelColor = levelColors[u.level] || 'var(--text-secondary)';
     const teamBadge = u.team
-      ? `<span style="font-size:0.72rem;background:rgba(22,93,255,0.12);color:var(--primary);padding:2px 6px;border-radius:8px;">${u.team.role==='captain'?'👑 ':''}${u.team.teamName}</span>`
+      ? `<span style="font-size:0.72rem;background:rgba(22,93,255,0.12);color:var(--primary);padding:2px 6px;border-radius:8px;">${u.team.role==='captain'?'[队长] ':''}${u.team.teamName}</span>`
       : `<span style="font-size:0.72rem;background:rgba(245,158,11,0.12);color:var(--warning);padding:2px 6px;border-radius:8px;">未入队</span>`;
     tableRows += `<tr style="border-bottom:1px solid var(--border-color);">
       <td style="padding:10px 8px;color:var(--text-primary);vertical-align:top;">
         <div style="font-weight:600;">${u.coachName || u.username}</div>
         <div style="font-size:0.72rem;color:var(--text-muted);">@${u.username}</div>
-        ${u.wechat ? `<div style="font-size:0.72rem;color:var(--text-secondary);margin-top:2px;">📱 ${u.wechat}</div>` : ''}
+        ${u.wechat ? `<div style="font-size:0.72rem;color:var(--text-secondary);margin-top:2px;">微信：${u.wechat}</div>` : ''}
       </td>
       <td style="padding:10px 8px;vertical-align:top;">${teamBadge}</td>
       <td style="padding:10px 8px;vertical-align:top;"><span style="font-size:0.82rem;color:${levelColor};font-weight:600;">${u.level || '未填'}</span></td>
@@ -3559,14 +3612,14 @@ async function loadAdminUsers(container) {
       </td>
       <td style="padding:10px 8px;font-size:0.78rem;color:var(--text-secondary);vertical-align:top;">
         <div>${u.gameRank || '未填'}</div>
-        ${u.peakScore ? `<div style="font-size:0.72rem;color:var(--primary);">🏆 ${u.peakScore}</div>` : ''}
+        ${u.peakScore ? `<div style="font-size:0.72rem;color:var(--primary);">巅峰：${u.peakScore}</div>` : ''}
       </td>
       <td style="padding:10px 8px;font-size:0.78rem;color:var(--text-secondary);vertical-align:top;max-width:120px;">
         ${u.heroPool ? `<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${u.heroPool}">${u.heroPool}</div>` : '<span style="color:var(--text-muted);">—</span>'}
       </td>
       <td style="padding:10px 8px;vertical-align:top;">
         <div style="display:flex;flex-direction:column;gap:4px;">
-          <button class="btn btn-xs btn-ghost" onclick="adminAssignUserTeam('${u.id}','${(u.coachName||u.username).replace(/'/g,"\\'")}')" style="font-size:0.72rem;padding:4px 8px;">🏆 分配队伍</button>
+          <button class="btn btn-xs btn-ghost" onclick="adminAssignUserTeam('${u.id}','${(u.coachName||u.username).replace(/'/g,"\\'")}')" style="font-size:0.72rem;padding:4px 8px;">分配队伍</button>
           <button class="btn btn-xs btn-danger" onclick="adminDeleteUser('${u.id}')" style="font-size:0.72rem;padding:4px 8px;">删除</button>
         </div>
       </td>
@@ -3644,13 +3697,13 @@ async function loadAdminSecurity(container) {
   const data = await api('/api/admin/security');
   container.innerHTML = `
     <div style="background:#1A1A2E;padding:16px;border-radius:var(--radius-lg);margin-bottom:16px;border:1px solid rgba(22,93,255,0.18);">
-      <h4 style="margin-bottom:12px;color:var(--text-primary);">🔐 安全状态</h4>
+      <h4 style="margin-bottom:12px;color:var(--text-primary);">安全状态</h4>
       <p style="color:var(--text-secondary);"><strong style="color:var(--text-primary);">管理员ID：</strong>${data.adminUserId}</p>
       <p style="color:var(--text-secondary);"><strong style="color:var(--text-primary);">总用户数：</strong>${data.totalUsers}</p>
-      <p style="color:var(--text-secondary);"><strong style="color:var(--text-primary);">管理员账户存在：</strong>${data.hasAdmin ? '✅ 是' : '❌ 否'}</p>
+      <p style="color:var(--text-secondary);"><strong style="color:var(--text-primary);">管理员账户存在：</strong>${data.hasAdmin ? '是' : '否'}</p>
     </div>
     <div style="background:rgba(22,93,255,0.08);padding:16px;border-radius:var(--radius-lg);border-left:4px solid var(--accent);">
-      <h4 style="margin-bottom:12px;color:var(--text-primary);">💡 安全建议</h4>
+      <h4 style="margin-bottom:12px;color:var(--text-primary);">安全建议</h4>
       <ul style="padding-left:20px;line-height:2;color:var(--text-secondary);">
         ${data.tips.map(t => `<li>${t}</li>`).join('')}
       </ul>
