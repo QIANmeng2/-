@@ -683,17 +683,17 @@ app.get('/api/recruitment/mine', authMiddleware, async (req, res) => {
 // ====================== 以下为原有接口（保持不变） ======================
 
 app.post('/api/auth/register', async (req, res) => {
-  const { username, password, teamName, coachName, wechat, level, bio } = req.body;
-  if (!username || !password || !teamName || !coachName || !wechat) return res.status(400).json({ message: '信息不完整' });
+  const { username, password, coachName, wechat, level, bio } = req.body;
+  if (!username || !password || !coachName || !wechat) return res.status(400).json({ message: '信息不完整' });
   try {
     const exists = await pool.query('SELECT id FROM users WHERE username = $1', [username]);
     if (exists.rows.length > 0) return res.status(400).json({ message: '用户名已存在' });
     const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
     const hashed = bcrypt.hashSync(password, 10);
     await pool.query('INSERT INTO users (id, username, password, teamName, coachName, wechat, level, bio) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-      [id, username, hashed, teamName, coachName, wechat, level || '大众', bio || '']);
+      [id, username, hashed, '', coachName, wechat, level || '大众', bio || '']);
     const token = jwt.sign({ userId: id }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id, teamName, coachName, wechat, level: level || '大众', bio: bio || '', disabledDates: [], gameId: '', gameServer: '手Q区', gameRank: '星耀', peakScore: 0, laneStats: '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}', heroPool: '' } });
+    res.json({ token, user: { id, teamName: '', coachName, wechat, level: level || '大众', bio: bio || '', disabledDates: [], gameId: '', gameServer: '手Q区', gameRank: '星耀', peakScore: 0, laneStats: '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}', heroPool: '' } });
   } catch (e) { res.status(500).json({ message: '注册失败' }); }
 });
 
