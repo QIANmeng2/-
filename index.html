@@ -1514,7 +1514,6 @@
       <div class="form-group"><label>用户名</label><input class="form-input" type="text" id="authUsername" required placeholder="请输入用户名"></div>
       <div class="form-group"><label>密码</label><input class="form-input" type="password" id="authPassword" required placeholder="请输入密码"></div>
       <div id="registerFields" style="display:none;">
-        <div class="form-group"><label>队伍名称</label><input class="form-input" type="text" id="regTeamName" placeholder="如：星河战队"></div>
         <div class="form-group"><label>名称/游戏ID</label><input class="form-input" type="text" id="regCoachName" placeholder="请输入"></div>
         <div class="form-group"><label>微信号</label><input class="form-input" type="text" id="regWechat" placeholder="用于联系"></div>
         <div class="form-group"><label>队伍等级</label><select class="form-select" id="regLevel"><option value="大众">大众</option><option value="KPL">KPL</option><option value="K甲">K甲</option><option value="KPL青训">KPL青训</option><option value="K甲青训">K甲青训</option><option value="全国大赛">全国大赛</option><option value="主播">主播</option></select></div>
@@ -1736,7 +1735,7 @@ async function api(path, options = {}, retries = 2) {
   if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
+    const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 12000);
     const res = await fetch(url, { ...options, headers, signal: controller.signal });
     clearTimeout(timeout);
     const data = await res.json();
@@ -1775,25 +1774,24 @@ async function handleAuth(e) {
   const password = document.getElementById('authPassword').value.trim();
   if (!username || !password) { showToast('请填写用户名和密码','error'); return; }
   if (authMode === 'register') {
-    const team = document.getElementById('regTeamName').value.trim();
     const coach = document.getElementById('regCoachName').value.trim();
     const wechat = document.getElementById('regWechat').value.trim();
     const level = document.getElementById('regLevel').value;
     const bio = document.getElementById('regBio').value.trim();
-    if (!team || !coach || !wechat) { showToast('请填写完整注册信息','error'); return; }
+    if (!coach || !wechat) { showToast('请填写完整注册信息','error'); return; }
     try {
-      const data = await api('/api/auth/register', { method:'POST', body: JSON.stringify({ username, password, teamName: team, coachName: coach, wechat, level, bio }) });
-      if (data && data.token) { authToken = data.token; localStorage.setItem('local_current_user', authToken); currentUser = data.user; closeAuthModal(); updateUI(); switchTab('square'); showToast('注册成功！','success'); }
+      const data = await api('/api/auth/register', { method:'POST', body: JSON.stringify({ username, password, coachName: coach, wechat, level, bio }) });
+      if (data && data.token) { authToken = data.token; localStorage.setItem('local_current_user', authToken); currentUser = data.user; closeAuthModal(); updateUI(); switchTab('recruit'); showToast('注册成功！','success'); }
     } catch (e) { showToast(e.message,'error'); }
   } else {
     try {
       const data = await api('/api/auth/login', { method:'POST', body: JSON.stringify({ username, password }) });
-      if (data && data.token) { authToken = data.token; localStorage.setItem('local_current_user', authToken); currentUser = data.user; closeAuthModal(); updateUI(); switchTab('square'); showToast('登录成功！','success'); }
+      if (data && data.token) { authToken = data.token; localStorage.setItem('local_current_user', authToken); currentUser = data.user; closeAuthModal(); updateUI(); switchTab('recruit'); showToast('登录成功！','success'); }
     } catch (e) { showToast(e.message,'error'); }
   }
 }
 function logout() {
-  authToken = null; localStorage.removeItem('local_current_user'); currentUser = null;
+  authToken = null; localStorage.removeItem('local_current_user'); currentUser = null; cacheStore.clear();
   stopRecruitPolling();
   updateUI(); switchTab('square'); showToast('已退出','info');
 }
@@ -2522,18 +2520,26 @@ function closeFullModal() {
 }
 
 // ---------- 实时刷新轮询 ----------
+let isRecruitPolling = false;
 function startRecruitPolling() {
   stopRecruitPolling();
   recruitPollingTimer = setInterval(async () => {
     if (currentTab !== 'recruit') { stopRecruitPolling(); return; }
+    if (isRecruitPolling) return;
+    isRecruitPolling = true;
     try {
       if (currentRecruitSubTab === 'active') {
         const data = await api('/api/recruitment/active', { skipCache: true });
         renderRecruitList(data.matches || []);
       }
     } catch {}
-  }, 5000);
+    isRecruitPolling = false;
+  }, 8000);
 }
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopRecruitPolling();
+  else if (currentTab === 'recruit' && currentRecruitSubTab === 'active') startRecruitPolling();
+});
 function stopRecruitPolling() {
   if (recruitPollingTimer) { clearInterval(recruitPollingTimer); recruitPollingTimer = null; }
 }
@@ -3696,7 +3702,7 @@ function closeModal() { switchTab(currentTab); }
 (async () => {
   if (authToken) await fetchUserInfo();
   updateUI();
-  switchTab('square');
+  switchTab('recruit');
 })();
 </script>
 </body>
