@@ -1516,8 +1516,7 @@
       <div id="registerFields" style="display:none;">
         <div class="form-group"><label>名称/游戏ID</label><input class="form-input" type="text" id="regCoachName" placeholder="请输入"></div>
         <div class="form-group"><label>微信号</label><input class="form-input" type="text" id="regWechat" placeholder="用于联系"></div>
-        <div class="form-group"><label>队伍等级</label><select class="form-select" id="regLevel"><option value="大众">大众</option><option value="KPL">KPL</option><option value="K甲">K甲</option><option value="KPL青训">KPL青训</option><option value="K甲青训">K甲青训</option><option value="全国大赛">全国大赛</option><option value="主播">主播</option></select></div>
-        <div class="form-group"><label>队伍备注</label><textarea class="form-input" id="regBio" rows="2" placeholder="介绍队伍实力，例如：巅峰2200，主玩打野"></textarea></div>
+        <div class="form-group"><label>个人等级</label><select class="form-select" id="regLevel"><option value="大众">大众</option><option value="KPL">KPL</option><option value="K甲">K甲</option><option value="KPL青训">KPL青训</option><option value="K甲青训">K甲青训</option><option value="全国大赛">全国大赛</option><option value="主播">主播</option></select></div>
       </div>
       <button class="btn btn-primary" type="submit" style="width:100%; margin-top:8px;">登录</button>
     </form>
@@ -1777,10 +1776,9 @@ async function handleAuth(e) {
     const coach = document.getElementById('regCoachName').value.trim();
     const wechat = document.getElementById('regWechat').value.trim();
     const level = document.getElementById('regLevel').value;
-    const bio = document.getElementById('regBio').value.trim();
     if (!coach || !wechat) { showToast('请填写完整注册信息','error'); return; }
     try {
-      const data = await api('/api/auth/register', { method:'POST', body: JSON.stringify({ username, password, coachName: coach, wechat, level, bio }) });
+      const data = await api('/api/auth/register', { method:'POST', body: JSON.stringify({ username, password, coachName: coach, wechat, level }) });
       if (data && data.token) { authToken = data.token; localStorage.setItem('local_current_user', authToken); currentUser = data.user; closeAuthModal(); updateUI(); switchTab('recruit'); showToast('注册成功！','success'); }
     } catch (e) { showToast(e.message,'error'); }
   } else {
