@@ -1647,22 +1647,14 @@
       <button class="close-btn" onclick="closeGuideModal()">&times;</button>
     </div>
     <div class="guide-body">
-      <h3>🔹 两大核心场景</h3>
+      <h3>🔹 核心场景</h3>
       <div class="guide-box">
         <div style="margin-bottom:16px;">
           <div style="font-weight:700; margin-bottom:8px; color: var(--secondary);">⚔️ 招募大厅（散人专用）</div>
           <ul style="margin:0; padding-left:20px; color:var(--text-secondary);">
             <li>适合：<strong>单人/带1-4个朋友</strong>，凑齐10人打训练赛</li>
-            <li>规则：红蓝双方各5人，满10人自动成局</li>
+            <li>规则：红蓝双方各5人，满10人后全员确认 → 正式成局</li>
             <li>发起招募可选三种模式：参赛/纯组织/带部分队友</li>
-          </ul>
-        </div>
-        <div>
-          <div style="font-weight:700; margin-bottom:8px; color: var(--primary);">📋 档期广场（整队专用）</div>
-          <ul style="margin:0; padding-left:20px; color:var(--text-secondary);">
-            <li>适合：<strong>已经凑齐5人的完整车队</strong></li>
-            <li>作用：发布档期等待对手队伍匹配</li>
-            <li>规则：2支队伍凑齐 → 成局 → 去群内沟通细节</li>
           </ul>
         </div>
       </div>
@@ -1671,8 +1663,19 @@
       <ol style="margin:0 0 16px; padding-left:24px; color:var(--text-secondary);">
         <li><strong>加入对局</strong>：选红蓝方+分路 → 报名</li>
         <li><strong>发起招募</strong>：设置时间、段位、模式 → 发布</li>
-        <li><strong>满员成局</strong>：10人凑齐后去QQ/微信大群沟通</li>
+        <li><strong>满员确认</strong>：10人凑齐后，所有人需点击"能参加"确认</li>
+        <li><strong>正式成局</strong>：全员确认后锁定，自动创建腾讯会议</li>
       </ol>
+
+      <h3>🔹 确认阶段规则</h3>
+      <div class="guide-box" style="border-color: rgba(245,158,11,0.3);">
+        <ul style="margin:0; padding-left:20px; color:var(--text-secondary);">
+          <li>满10人后进入<span style="color:var(--warning);">待确认</span>状态，所有人会收到确认通知</li>
+          <li>点击<strong>"能参加"</strong> → 标记为已确认，全员确认后自动成局</li>
+          <li>点击<strong>"没时间"</strong> → 自动退出，招募恢复，其他人需重新确认</li>
+          <li>开赛前10分钟若还有人未确认，自动清理未确认者并恢复招募</li>
+        </ul>
+      </div>
 
       <h3>🔹 队伍系统</h3>
       <ul style="margin:0 0 16px; padding-left:20px; color:var(--text-secondary);">
@@ -1692,7 +1695,8 @@
         <ul style="margin:0; padding-left:20px; color:var(--text-secondary);">
           <li>每条分路只能1人，全场最多10人</li>
           <li>可带朋友一起报名，无需注册多个账号</li>
-          <li>满员后自动锁定，不再接受新报名</li>
+          <li>满10人后进入确认阶段，未确认者不会占用位置</li>
+          <li>确认成局后锁定，不再接受新报名</li>
         </ul>
       </div>
     </div>
@@ -1917,7 +1921,7 @@ async function loadRecruitHall() {
   content.innerHTML = `
     <div class="info-banner">
       <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-      <span><strong>招募大厅</strong>：适合散人玩家，凑齐10人自动成局 → 去大群沟通开赛</span>
+      <span><strong>招募大厅</strong>：适合散人玩家，凑齐10人全员确认后成局 → 自动创建会议</span>
     </div>
     <div class="recruit-header">
       <div class="recruit-tabs">
