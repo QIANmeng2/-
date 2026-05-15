@@ -1323,6 +1323,10 @@ app.post('/api/teams/:id/join', authMiddleware, async (req, res) => {
     }
 
     await client.query('COMMIT');
+    // 通知队长有新成员加入
+    if (t.captainid && t.captainid !== req.userId) {
+      await sendNotification(t.captainid, 'team_join', `有新成员加入了你的队伍「${t.name}」`, req.params.id);
+    }
     res.json({ success: true });
   } catch (e) {
     await client.query('ROLLBACK');
@@ -1363,6 +1367,10 @@ app.post('/api/teams/:id/leave', authMiddleware, async (req, res) => {
     }
 
     await client.query('COMMIT');
+    // 通知队长有成员退出（非队长自己退出时）
+    if (t.captainid && t.captainid !== req.userId) {
+      await sendNotification(t.captainid, 'team_leave', `有成员退出了你的队伍「${t.name}」`, req.params.id);
+    }
     res.json({ success: true });
   } catch (e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ message: '退出失败' }); } finally { client.release(); }
 });
@@ -1385,6 +1393,8 @@ app.delete('/api/teams/:id/members/:userId', authMiddleware, async (req, res) =>
     }
 
     await client.query('COMMIT');
+    // 通知被踢出的成员
+    await sendNotification(req.params.userId, 'team_kick', `你已被队长移出队伍「${tRes.rows[0].name}」`, req.params.id);
     res.json({ success: true });
   } catch (e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ message: '操作失败' }); } finally { client.release(); }
 });
@@ -1409,6 +1419,8 @@ app.post('/api/teams/:id/transfer', authMiddleware, async (req, res) => {
     await client.query('UPDATE team_members SET role = $1 WHERE teamId = $2 AND userId = $3', ['member', req.params.id, req.userId]);
 
     await client.query('COMMIT');
+    // 通知新队长
+    await sendNotification(newCaptainId, 'team_transfer', `你已成为队伍「${tRes.rows[0].name}」的新队长`, req.params.id);
     res.json({ success: true });
   } catch (e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ message: '转让失败' }); } finally { client.release(); }
 });
@@ -1532,6 +1544,9 @@ app.delete('/api/admin/teams/:id/members/:userId', authMiddleware, adminMiddlewa
     // 如果移除的是队长，清空队伍的 captainId
     await client.query('UPDATE teams SET captainId = NULL WHERE id = $1 AND captainId = $2', [req.params.id, req.params.userId]);
     await client.query('COMMIT');
+    // 通知被移除的成员
+    const teamRes = await pool.query('SELECT name FROM teams WHERE id = $1', [req.params.id]);
+    await sendNotification(req.params.userId, 'team_remove', `你已被管理员移出队伍「${teamRes.rows[0]?.name || '未知队伍'}」`, req.params.id);
     res.json({ success: true });
   } catch (e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ message: '移除失败' }); } finally { client.release(); }
 });
