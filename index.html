@@ -3526,14 +3526,25 @@ function adminClearFilters() {
 
 async function adminAssignUserTeam(userId, userName) {
   const teams = (await api('/api/admin/teams')).teams || [];
-  const options = teams.map(t => `${t.id}:${t.name}`).join(',');
-  const selected = await dialogPrompt({ title:`🏆 分配队伍`, body:`为「${userName}」选择队伍\n可选队伍：${teams.length}支`, placeholder:'输入队伍ID（查看队伍ID列表）', defaultValue:'', confirmText:'分配', cancelText:'取消' });
+  if (teams.length === 0) { showToast('暂无队伍，请先创建队伍', 'warning'); return; }
+  const teamOptions = teams.map((t, i) => `${i + 1}. ${t.name} (ID: ${t.id})`).join('\n');
+  const selected = await dialogPrompt({
+    title: `🏆 分配队伍`,
+    body: `为「${userName}」选择队伍\n\n${teamOptions}\n\n请输入队伍ID：`,
+    placeholder: '粘贴上方队伍ID',
+    defaultValue: '',
+    confirmText: '分配',
+    cancelText: '取消'
+  });
   if (!selected) return;
+  const teamId = selected.trim();
+  const team = teams.find(t => t.id === teamId);
+  if (!team) { showToast('无效的队伍ID，请从列表中复制', 'error'); return; }
   try {
-    await api(`/api/admin/teams/${selected}/members`, { method:'POST', body: JSON.stringify({ userId }) });
-    showToast(`${userName} 已分配至队伍`, 'success');
+    await api(`/api/admin/teams/${teamId}/members`, { method: 'POST', body: JSON.stringify({ userId }) });
+    showToast(`${userName} 已分配至「${team.name}」`, 'success');
     await loadAdminUsers(document.getElementById('adminSubContent'));
-  } catch(err) { showToast(err.message,'error'); }
+  } catch (err) { showToast(err.message, 'error'); }
 }
 
 async function loadAdminLogs(container) {
