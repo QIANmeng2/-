@@ -2018,6 +2018,8 @@ function renderMatchDetail(match) {
     headerActions = `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-sm btn-danger" onclick="cancelMatch('${match.id}')" style="padding:5px 14px;">撤销招募</button>
       ${!isFull&&!isClosed?'<button class="btn btn-sm btn-ghost" onclick="closeMatch(\''+match.id+'\')" style="padding:5px 14px;">关闭报名</button>':''}
+      ${!match.meetingCode&&isFull?'<button class="btn btn-sm btn-primary" onclick="editMatchMeeting(\''+match.id+'\',\''+match.meetingCode+'\',\''+match.meetingLink+'\')" style="padding:5px 14px;">📹 填入会议信息</button>':''}
+      ${match.meetingCode&&isOrg?'<button class="btn btn-sm btn-ghost" onclick="editMatchMeeting(\''+match.id+'\',\''+match.meetingCode+'\',\''+match.meetingLink+'\')" style="padding:5px 14px;">✏️ 编辑会议</button>':''}
     </div>`;
   }
   if (myPos && !isFull && !isClosed) {
@@ -2034,7 +2036,7 @@ function renderMatchDetail(match) {
   function buildContactCard() {
     // mode=2：腾讯会议
     if (match.mode === 2) {
-      if (match.meetingA) {
+      if (match.meetingCode) {
         return `<div class="card" style="border:1px solid rgba(22,93,255,0.35);margin-bottom:20px;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
             <span style="font-size:1.2rem;">📹</span>
@@ -2043,8 +2045,8 @@ function renderMatchDetail(match) {
           <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:12px;">赛前10分钟自动开启，点击下方链接入会</p>
           <div style="background:#1A1A2E;border:1px solid rgba(22,93,255,0.2);border-radius:var(--radius-sm);padding:16px;margin-bottom:10px;">
             <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:8px;">会议号</div>
-            <div style="font-weight:700;color:#fff;font-size:1.1rem;letter-spacing:2px;margin-bottom:12px;">${match.meetingA.code}</div>
-            <a href="${match.meetingA.link}" target="_blank" class="btn btn-sm" style="background:rgba(22,93,255,0.15);color:#6BA3FF;border:1px solid rgba(22,93,255,0.4);font-size:0.82rem;padding:6px 16px;border-radius:var(--radius-sm);text-decoration:none;display:inline-block;">🏠 入会</a>
+            <div style="font-weight:700;color:#fff;font-size:1.1rem;letter-spacing:2px;margin-bottom:12px;">${match.meetingCode}</div>
+            <a href="${match.meetingLink}" target="_blank" class="btn btn-sm" style="background:rgba(22,93,255,0.15);color:#6BA3FF;border:1px solid rgba(22,93,255,0.4);font-size:0.82rem;padding:6px 16px;border-radius:var(--radius-sm);text-decoration:none;display:inline-block;">🏠 入会</a>
           </div>
           <p style="font-size:0.75rem;color:var(--text-muted);">💡 入会后可使用腾讯会议「分组讨论」功能手动分配A队/B队房间</p>
         </div>`;
@@ -2351,6 +2353,19 @@ async function createMatchMeeting(matchId) {
     if (btn) { btn.disabled = false; btn.textContent = '📹 重新创建腾讯会议'; }
     if (msg) { msg.textContent = '建会失败，请检查 tmeet 登录状态（运行 tmeet auth login）'; }
   }
+}
+
+// 编辑/填入腾讯会议信息
+async function editMatchMeeting(matchId, currentCode, currentLink) {
+  const code = await dialogPrompt({ title:'📹 会议号', body:'请输入腾讯会议号', placeholder:'如：123456789', defaultValue: currentCode || '', confirmText:'下一步', cancelText:'取消' });
+  if (code === null) return;
+  const link = await dialogPrompt({ title:'🔗 入会链接', body:'请输入入会链接', placeholder:'https://meeting.tencent.com/dm/xxx', defaultValue: currentLink || '', confirmText:'保存', cancelText:'取消' });
+  if (link === null) return;
+  try {
+    await api(`/api/recruitment/${matchId}/meeting`, { method:'PUT', body: JSON.stringify({ meetingCode: code, meetingLink: link }) });
+    showToast('会议信息已保存','success');
+    await openMatchDetail(matchId);
+  } catch(err) { showToast(err.message || '保存失败','error'); }
 }
 
 // 一键复制群号

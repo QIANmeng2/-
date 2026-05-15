@@ -110,6 +110,8 @@ async function initDB() {
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()');
     await client.query('ALTER TABLE schedules ADD COLUMN IF NOT EXISTS teamId TEXT');
     await client.query('ALTER TABLE recruitment_matches ADD COLUMN IF NOT EXISTS teamId TEXT');
+    await client.query('ALTER TABLE recruitment_matches ADD COLUMN IF NOT EXISTS meetingCode TEXT');
+    await client.query('ALTER TABLE recruitment_matches ADD COLUMN IF NOT EXISTS meetingLink TEXT');
   } finally { client.release(); }
 }
 
@@ -230,6 +232,7 @@ app.get('/api/recruitment/:id', async (req, res) => {
       match: {
         id: m.id, startTime: m.starttime, levelReq: m.levelreq, notes: m.notes,
         mode: m.mode, status: m.status, locked: m.locked,
+        meetingCode: m.meetingcode || '', meetingLink: m.meetinglink || '',
         organizer: { id: m.organizerid, teamName: org.teamname || '未知', coachName: org.coachname || '', level: org.level || '' },
         positions
       }
@@ -309,6 +312,53 @@ app.put('/api/recruitment/:id/close', authMiddleware, async (req, res) => {
     await pool.query("UPDATE recruitment_matches SET status = 'closed' WHERE id = $1", [req.params.id]);
     res.json({ success: true });
   } catch (e) { console.error(e); res.status(500).json({ message: '关闭失败' }); }
+});
+
+// 更新腾讯会议信息
+app.put('/api/recruitment/:id/meeting', authMiddleware, async (req, res) => {
+  try {
+    const mRes = await pool.query('SELECT * FROM recruitment_matches WHERE id = $1', [req.params.id]);
+    if (mRes.rows.length === 0) return res.status(404).json({ message: '对局不存在' });
+    if (mRes.rows[0].organizerid !== req.userId) return res.status(403).json({ message: '仅发起人可设置会议' });
+    const { meetingCode, meetingLink } = req.body;
+    await pool.query('UPDATE recruitment_matches SET meetingCode = $1, meetingLink = $2 WHERE id = $3', [meetingCode || '', meetingLink || '', req.params.id]);
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ message: '设置失败' }); }
+});
+
+// 创建腾讯会议（POST方法，调用tmeet CLI）
+app.post('/api/recruitment/:id/meeting', authMiddleware, async (req, res) => {
+  try {
+    const mRes = await pool.query('SELECT * FROM recruitment_matches WHERE id = $1', [req.params.id]);
+    if (mRes.rows.length === 0) return res.status(404).json({ message: '对局不存在' });
+    if (mRes.rows[0].organizerid !== req.userId) return res.status(403).json({ message: '仅发起人可创建会议' });
+    const m = mRes.rows[0];
+    // 调用 tmeet CLI 创建预约会议
+    const { execSync } = require('child_process');
+    // 会议时长2小时
+    const startTime = m.starttime;
+    const [datePart, timePart] = startTime.split(' ');
+    const endHour = parseInt(timePart.split(':')[0]) + 2;
+    const endTime = `${datePart} ${String(endHour).padStart(2,'0')}:${timePart.split(':')[1]}:00`;
+    const subject = `KPL训练赛 ${startTime}`;
+    const cmd = `tmeet meeting create --subject "${subject}" --start "${startTime}:00+08:00" --end "${endTime}+08:00" --join-type 1 2>&1`;
+    let output;
+    try {
+      output = execSync(cmd, { encoding: 'utf8', timeout: 30000 });
+    } catch (e) {
+      output = e.stdout || e.stderr || e.message;
+    }
+    let meetingCode = '', meetingLink = '';
+    try {
+      const parsed = JSON.parse(output);
+      if (parsed.data && parsed.data.meeting_info_list && parsed.data.meeting_info_list[0]) {
+        meetingCode = parsed.data.meeting_info_list[0].meeting_code || '';
+        meetingLink = parsed.data.meeting_info_list[0].join_url || '';
+      }
+    } catch { /* JSON解析失败，忽略 */ }
+    await pool.query('UPDATE recruitment_matches SET meetingCode = $1, meetingLink = $2 WHERE id = $3', [meetingCode, meetingLink, req.params.id]);
+    res.json({ success: true, meetingCode, meetingLink });
+  } catch (e) { console.error(e); res.status(500).json({ message: '创建会议失败' }); }
 });
 
 // 报名占位
