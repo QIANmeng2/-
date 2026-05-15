@@ -112,6 +112,7 @@ async function initDB() {
     await client.query('ALTER TABLE recruitment_matches ADD COLUMN IF NOT EXISTS teamId TEXT');
     await client.query('ALTER TABLE recruitment_matches ADD COLUMN IF NOT EXISTS meetingCode TEXT');
     await client.query('ALTER TABLE recruitment_matches ADD COLUMN IF NOT EXISTS meetingLink TEXT');
+    await client.query("ALTER TABLE recruitment_matches ADD COLUMN IF NOT EXISTS result TEXT DEFAULT ''");
   } finally { client.release(); }
 }
 
@@ -310,6 +311,11 @@ app.put('/api/recruitment/:id/close', authMiddleware, async (req, res) => {
     if (mRes.rows.length === 0) return res.status(404).json({ message: '对局不存在' });
     if (mRes.rows[0].organizerid !== req.userId) return res.status(403).json({ message: '仅发起人可关闭' });
     await pool.query("UPDATE recruitment_matches SET status = 'closed' WHERE id = $1", [req.params.id]);
+    // 通知发布人确认胜负结果
+    await pool.query(
+      'INSERT INTO notifications (userId, type, content, relatedId) VALUES ($1,$2,$3,$4)',
+      [req.userId, 'confirm_result', `对局「${mRes.rows[0].starttime}」已结束，请确认胜负结果`, req.params.id]
+    );
     res.json({ success: true });
   } catch (e) { console.error(e); res.status(500).json({ message: '关闭失败' }); }
 });
@@ -359,6 +365,58 @@ app.post('/api/recruitment/:id/meeting', authMiddleware, async (req, res) => {
     await pool.query('UPDATE recruitment_matches SET meetingCode = $1, meetingLink = $2 WHERE id = $3', [meetingCode, meetingLink, req.params.id]);
     res.json({ success: true, meetingCode, meetingLink });
   } catch (e) { console.error(e); res.status(500).json({ message: '创建会议失败' }); }
+});
+
+// 确认对局胜负结果（仅发起人）
+app.put('/api/recruitment/:id/confirm-result', authMiddleware, async (req, res) => {
+  try {
+    const mRes = await pool.query('SELECT * FROM recruitment_matches WHERE id = $1', [req.params.id]);
+    if (mRes.rows.length === 0) return res.status(404).json({ message: '对局不存在' });
+    if (mRes.rows[0].organizerid !== req.userId) return res.status(403).json({ message: '仅发起人可确认结果' });
+    const { result } = req.body;
+    if (!['win','loss'].includes(result)) return res.status(400).json({ message: '结果只能是 win 或 loss' });
+    await pool.query('UPDATE recruitment_matches SET result = $1 WHERE id = $2', [result, req.params.id]);
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ message: '确认失败' }); }
+});
+
+// 获取已打完的对局列表（公示榜用）
+app.get('/api/recruitment/completed', async (req, res) => {
+  try {
+    const data = await pool.query("SELECT * FROM recruitment_matches WHERE status = 'closed' AND result IS NOT NULL ORDER BY startTime DESC");
+    const organizerIds = [...new Set(data.rows.map(r => r.organizerid))];
+    let userMap = {};
+    if (organizerIds.length > 0) {
+      const usersRes = await pool.query('SELECT id, teamName, coachName FROM users WHERE id = ANY($1)', [organizerIds]);
+      usersRes.rows.forEach(u => { userMap[u.id] = u; });
+    }
+    res.json({ matches: data.rows.map(r => ({
+      id: r.id, startTime: r.starttime, levelReq: r.levelreq, mode: r.mode,
+      result: r.result, organizerName: userMap[r.organizerid]?.teamname || '未知',
+      organizerCoachName: userMap[r.organizerid]?.coachname || ''
+    })) });
+  } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
+});
+
+// 队长邀请用户加入队伍
+app.post('/api/teams/:id/invite', authMiddleware, async (req, res) => {
+  try {
+    const teamRes = await pool.query('SELECT * FROM teams WHERE id = $1', [req.params.id]);
+    if (teamRes.rows.length === 0) return res.status(404).json({ message: '队伍不存在' });
+    if (teamRes.rows[0].captainid !== req.userId) return res.status(403).json({ message: '仅队长可邀请' });
+    const { username } = req.body;
+    if (!username || !username.trim()) return res.status(400).json({ message: '请输入用户名' });
+    const userRes = await pool.query('SELECT id FROM users WHERE username = $1 OR coachName = $1', [username.trim()]);
+    if (userRes.rows.length === 0) return res.status(404).json({ message: '未找到该用户' });
+    const targetUserId = userRes.rows[0].id;
+    const existing = await pool.query('SELECT * FROM team_members WHERE teamId = $1 AND userId = $2', [req.params.id, targetUserId]);
+    if (existing.rows.length > 0) return res.status(400).json({ message: '该用户已在队中' });
+    await pool.query(
+      'INSERT INTO notifications (userId, type, content, relatedId) VALUES ($1,$2,$3,$4)',
+      [targetUserId, 'team_invite', `队伍"${teamRes.rows[0].name}"邀请你加入`, req.params.id]
+    );
+    res.json({ success: true, message: '邀请已发送' });
+  } catch (e) { console.error(e); res.status(500).json({ message: '邀请失败' }); }
 });
 
 // 报名占位
@@ -584,10 +642,15 @@ app.put('/api/users/me/disabled-dates', authMiddleware, async (req, res) => {
 
 app.get('/api/users/:id', authMiddleware, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, teamName, coachName, level, bio FROM users WHERE id = $1', [req.params.id]);
+    const result = await pool.query('SELECT * FROM users WHERE id = $1', [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ message: '用户不存在' });
     const u = result.rows[0];
-    res.json({ user: { id: u.id, teamName: u.teamname, coachName: u.coachname, level: u.level, bio: u.bio } });
+    res.json({ user: {
+      id: u.id, teamName: u.teamname, coachName: u.coachname, level: u.level, bio: u.bio || '',
+      gameId: u.gameid || '', gameServer: u.gameserver || '手Q区', gameRank: u.gamerank || '星耀',
+      peakScore: u.peakscore || 0, laneStats: u.lanestats || '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}',
+      heroPool: u.heropool || ''
+    }});
   } catch (e) { res.status(500).json({ message: '获取失败' }); }
 });
 
