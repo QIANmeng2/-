@@ -1349,12 +1349,13 @@ app.delete('/api/admin/teams/:id', authMiddleware, adminMiddleware, async (req, 
 app.post('/api/admin/teams', authMiddleware, adminMiddleware, async (req, res) => {
   const { name, bio, maxMembers, captainId } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ message: '请输入队伍名称' });
+  const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const result = await client.query(
-      'INSERT INTO teams (name, bio, captainId, maxMembers, status) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [name.trim(), bio || '', captainId || null, parseInt(maxMembers) || 7, captainId ? 'open' : 'open']
+      'INSERT INTO teams (id, name, bio, captainId, maxMembers, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [id, name.trim(), bio || '', captainId || null, parseInt(maxMembers) || 7, 'open']
     );
     const team = result.rows[0];
     if (captainId) {
