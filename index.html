@@ -1408,31 +1408,63 @@
 
     /* ===== 移动端适配 ===== */
     @media (max-width: 768px) {
-      .header-inner { height: 56px; }
-      .logo { font-size: 1rem; }
-      .main-container { padding: 16px 12px 32px; }
-      .card { padding: 18px; border-radius: var(--radius-md); }
-      .tab-nav { gap: 4px; padding: 4px; border-radius: var(--radius-md); }
-      .tab-btn { padding: 10px 14px; font-size: 0.82rem; }
-      .modal { padding: 24px; border-radius: var(--radius-lg); }
-      .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-      .stat-value { font-size: 1.5rem; }
+      .header-inner { height: 52px; padding: 0 12px; }
+      .logo { font-size: 0.95rem; gap: 8px; }
+      .logo-icon { width: 30px; height: 30px; }
+      .logo-icon svg { width: 30px; height: 30px; }
+      .user-area { gap: 8px; }
+      #userInfoDisplay { padding: 4px 10px; font-size: 0.78rem; }
+      .user-sep { margin: 0 6px !important; }
+      .main-container { padding: 12px 10px 32px; }
+      .card, .match-card { padding: 14px; border-radius: var(--radius-md); margin-bottom: 12px; }
+      .tab-nav { gap: 3px; padding: 3px; border-radius: var(--radius-md); margin-bottom: 16px; }
+      .tab-btn { padding: 8px 10px; font-size: 0.78rem; }
+      .modal { padding: 20px; border-radius: var(--radius-lg); }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      .stat-value { font-size: 1.4rem; }
       .section-header { flex-direction: column; align-items: flex-start; gap: 8px; }
       .preset-positions { grid-template-columns: 1fr; }
       .recruit-header { flex-direction: column; align-items: stretch; }
-      .recruit-tabs { overflow-x: auto; padding-bottom: 8px; }
-      .match-card-header { flex-direction: column; align-items: flex-start; }
-      #guideModal .guide-content { margin: 20px 12px; padding: 20px; }
+      .recruit-tabs { overflow-x: auto; padding-bottom: 6px; gap: 6px; }
+      .recruit-tab { padding: 8px 14px; font-size: 0.8rem; }
+      .match-card-header { flex-direction: column; align-items: flex-start; gap: 6px; }
+      .match-card-slots { gap: 6px; }
+      .slot-badge { padding: 4px 10px; font-size: 0.72rem; }
+      .match-card-org { font-size: 0.8rem; margin-bottom: 8px; }
+      .progress-bar-wrap { height: 8px; margin: 8px 0; }
+      #guideModal .guide-content { margin: 16px 8px; padding: 16px; }
       body::before { opacity: 0.6; }
     }
 
     @media (max-width: 480px) {
-      .user-area { gap: 8px; }
-      .btn-sm, .btn-xs { padding: 8px 12px; font-size: 0.78rem; min-height: 36px; }
-      .stats-grid { grid-template-columns: 1fr 1fr; }
-      .stat-card { padding: 14px; }
-      .stat-value { font-size: 1.3rem; }
+      .header-inner { height: 48px; padding: 0 10px; }
+      .logo { font-size: 0.88rem; gap: 6px; }
+      .logo-icon { width: 26px; height: 26px; }
+      .logo-icon svg { width: 26px; height: 26px; }
+      .user-area { gap: 6px; }
+      .guide-text { display: none; }
+      #btnGuide { padding: 6px; }
+      #userInfoDisplay { padding: 4px 8px; font-size: 0.75rem; }
+      .user-sep { margin: 0 4px !important; }
+      .main-container { padding: 10px 8px 24px; }
+      .card, .match-card { padding: 12px; margin-bottom: 10px; }
+      .tab-nav { gap: 2px; padding: 2px; margin-bottom: 12px; }
+      .tab-btn { padding: 6px 8px; font-size: 0.72rem; }
+      .btn-sm, .btn-xs { padding: 6px 10px; font-size: 0.74rem; min-height: 32px; }
+      .stats-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+      .stat-card { padding: 12px; }
+      .stat-value { font-size: 1.2rem; }
+      .recruit-tabs { gap: 4px; }
+      .recruit-tab { padding: 6px 10px; font-size: 0.75rem; }
+      .slot-badge { padding: 3px 8px; font-size: 0.68rem; }
       body::before { opacity: 0.4; }
+    }
+
+    @media (max-width: 390px) {
+      .logo { font-size: 0.8rem; letter-spacing: 0; }
+      .tab-btn { padding: 5px 6px; font-size: 0.68rem; }
+      .card, .match-card { padding: 10px; }
+      .slot-badge { padding: 3px 6px; font-size: 0.65rem; }
     }
 
     /* ===== 动画 ===== */
@@ -1476,17 +1508,17 @@
       <span>浅梦<span style="color:var(--secondary);">·</span>训练赛</span>
     </div>
     <div class="user-area">
-      <button class="btn btn-secondary btn-sm" onclick="openGuideModal()">
+      <button class="btn btn-secondary btn-sm" id="btnGuide" onclick="openGuideModal()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-6h2v6zm0-8h-2V7h2v4z"/></svg>
-        使用说明
+        <span class="guide-text">使用说明</span>
       </button>
       <div class="notification-bell" id="notificationBell" onclick="openNotifications()" style="display:none;">
         <span style="font-size:1.2rem;">🔔</span>
         <span class="notification-badge" id="notifBadge" style="display:none;">0</span>
       </div>
-      <div id="userInfoDisplay" style="display:none; font-size:0.85rem; padding: 8px 16px; background: var(--bg-glass); border-radius: var(--radius-sm); border: 1px solid rgba(22, 93, 255, 0.15);">
+      <div id="userInfoDisplay" style="display:none; font-size:0.85rem; padding: 8px 16px; background: var(--bg-glass); border-radius: var(--radius-sm); border: 1px solid rgba(22, 93, 255, 0.15); white-space: nowrap;">
         <span id="displayName" style="font-weight:600;"></span>
-        <span style="color: var(--text-muted); margin: 0 8px;">|</span>
+        <span class="user-sep" style="color: var(--text-muted); margin: 0 8px;">|</span>
         <span id="displayTeam" style="color: var(--text-secondary);"></span>
       </div>
       <button class="btn btn-outline btn-sm" id="btnLoginTop" onclick="openAuthModal('login')">登录</button>
