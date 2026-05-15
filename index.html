@@ -2857,39 +2857,36 @@ function renderMyTeam(team) {
     </div>
     <div class="card">
       <h4 style="margin-bottom:12px;">🔍 浏览全部队伍</h4>
-      <div id="allTeamsContainer"><button class="btn btn-ghost btn-sm" onclick="renderAllTeams()" style="width:100%;">查看所有招募中的队伍</button></div>
+      <div id="allTeamsContainer"><button class="btn btn-ghost btn-sm" onclick="renderTeamList()" style="width:100%;">查看所有招募中的队伍</button></div>
     </div>`;
 }
 
 async function renderTeamList() {
-  await renderAllTeams();
-}
-
-async function renderAllTeams() {
-  const container = document.getElementById('allTeamsContainer');
-  if (!container) return;
-  container.innerHTML = '<div class="loading-spinner"></div>';
-  try {
-    const data = await api('/api/teams', { skipCache: true });
-    if (!data.teams.length) { container.innerHTML = '<p style="color:var(--text-light);text-align:center;">暂无招募中的队伍</p>'; return; }
-    let html = '';
-    data.teams.forEach(t => {
-      const captain = t.members.find(m => m.role === 'captain');
-      html += `
-        <div style="padding:14px;background:#1A1A2E;border:1px solid rgba(114,46,209,0.2);border-radius:var(--radius-md);margin-bottom:10px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <div>
-              <strong>${t.name}</strong> ${t.bio ? `<span style="font-size:0.82rem;color:var(--text-light);"> · ${t.bio}</span>` : ''}
-              <div style="font-size:0.78rem;color:var(--text-light);margin-top:4px;">
-                队长：${captain?.coachName || captain?.username || '未知'} | ${t.memberCount}/${t.maxMembers}人 | ${t.status==='open'?'🟢招人中':'🔴已满'}
+  const container = document.getElementById('teamListContainer') || document.getElementById('allTeamsContainer');
+  if (container) {
+    container.innerHTML = '<div class="loading-spinner"></div>';
+    try {
+      const data = await api('/api/teams', { skipCache: true });
+      if (!data.teams.length) { container.innerHTML = '<p style="color:var(--text-light);text-align:center;padding:20px;">暂无招募中的队伍</p>'; return; }
+      let html = '';
+      data.teams.forEach(t => {
+        const captain = t.members.find(m => m.role === 'captain');
+        html += `
+          <div style="padding:14px;background:#1A1A2E;border:1px solid rgba(114,46,209,0.2);border-radius:var(--radius-md);margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <strong>${t.name}</strong> ${t.bio ? `<span style="font-size:0.82rem;color:var(--text-light);"> · ${t.bio}</span>` : ''}
+                <div style="font-size:0.78rem;color:var(--text-light);margin-top:4px;">
+                  队长：${captain?.coachName || captain?.username || '未知'} | ${t.memberCount}/${t.maxMembers}人 | ${t.status==='open'?'🟢招人中':'🔴已满'}
+                </div>
               </div>
+              ${t.status === 'open' ? `<button class="btn btn-primary btn-sm" onclick="joinTeam('${t.id}')">申请加入</button>` : `<span class="badge badge-closed">已满</span>`}
             </div>
-            ${t.status === 'open' ? `<button class="btn btn-primary btn-sm" onclick="joinTeam('${t.id}')">申请加入</button>` : `<span class="badge badge-closed">已满</span>`}
-          </div>
-        </div>`;
-    });
-    container.innerHTML = html;
-  } catch { container.innerHTML = '<p style="color:var(--text-light);">加载失败</p>'; }
+          </div>`;
+      });
+      container.innerHTML = html;
+    } catch { container.innerHTML = '<p style="color:var(--text-light);">加载失败</p>'; }
+  }
 }
 
 // 创建队伍弹窗
@@ -3022,32 +3019,119 @@ async function loadAdminSubTab() {
 }
 
 async function loadAdminTeams(container) {
-  const data = await api('/api/admin/teams');
-  if (!data.teams.length) {
-    container.innerHTML = '<p style="color:var(--text-light);text-align:center;padding:40px;">暂无队伍数据</p>';
-    return;
-  }
-  let html = '';
-  data.teams.forEach(t => {
-    const captain = t.members.find(m => m.role === 'captain');
-    html += `
-      <div style="padding:16px;background:#1A1A2E;border:1px solid rgba(22,93,255,0.18);border-radius:var(--radius-lg);margin-bottom:14px;">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
-          <div>
-            <strong style="font-size:1rem;color:#fff;">🏆 ${t.name}</strong>
-            ${t.bio ? `<span style="font-size:0.82rem;color:var(--text-secondary);"> · ${t.bio}</span>` : ''}
-            <div style="font-size:0.8rem;color:var(--text-secondary);margin-top:4px;">
-              队长：${captain?.coachName || captain?.username || '未知'} | ${t.memberCount}/${t.maxMembers}人 | 状态：${t.status === 'open' ? '<span style="color:var(--available);">🟢招人中</span>' : '<span style="color:var(--booked);">🔴已满</span>'}
-            </div>
-          </div>
-          <button class="btn btn-xs btn-danger" onclick="adminDeleteTeam('${t.id}')">🗑️ 解散队伍</button>
+  const [teamsData, usersData] = await Promise.all([
+    api('/api/admin/teams'),
+    api('/api/admin/users')
+  ]);
+  const teams = teamsData.teams || [];
+  const users = usersData.users || [];
+  const unassignedUsers = users.filter(u => !u.team);
+
+  container.innerHTML = `
+    <div style="margin-bottom:16px;">
+      <button class="btn btn-primary" onclick="adminCreateTeam()" style="padding:10px 20px;">🏆 新建队伍</button>
+      <span style="float:right;font-size:0.82rem;color:var(--text-secondary);">共 ${teams.length} 支队伍 | ${unassignedUsers.length} 名用户暂无队伍</span>
+    </div>
+    ${teams.length === 0 ? '<p style="color:var(--text-light);text-align:center;padding:40px;">暂无队伍数据</p>' : ''}
+    ${teams.map(t => buildAdminTeamCard(t, users, unassignedUsers)).join('')}
+  `;
+}
+
+function buildAdminTeamCard(t, users, unassignedUsers) {
+  const captain = t.members.find(m => m.role === 'captain');
+  const unassignedInTeam = unassignedUsers.slice(0, 3); // 预览未分配用户
+  return `<div style="padding:16px;background:#1A1A2E;border:1px solid rgba(22,93,255,0.18);border-radius:var(--radius-lg);margin-bottom:14px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div style="flex:1;min-width:200px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;">
+          <strong style="font-size:1.05rem;color:#fff;">🏆 ${t.name}</strong>
+          <span class="badge ${t.status==='open'?'badge-recruiting':'badge-closed'}">${t.status==='open'?'招人中':'已满'}</span>
+          <span style="font-size:0.8rem;color:var(--text-secondary);">${t.memberCount}/${t.maxMembers}人</span>
         </div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;">
-          ${t.members.map(m => `<span style="font-size:0.78rem;background:rgba(22,93,255,0.12);color:var(--text-primary);padding:3px 10px;border-radius:12px;border:1px solid rgba(22,93,255,0.25);">${m.coachName || m.username}${m.role==='captain'?' 👑':''}</span>`).join('')}
+        <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:4px;">
+          队长：<span style="color:var(--primary);">${captain?.coachName || captain?.username || '未设置'}</span>
+          ${t.bio ? ` · ${t.bio}` : ''}
         </div>
-      </div>`;
-  });
-  container.innerHTML = html;
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <button class="btn btn-xs btn-ghost" onclick="adminRenameTeam('${t.id}','${t.name.replace(/'/g,"\\'")}')">✏️ 改名</button>
+        <button class="btn btn-xs btn-ghost" onclick="adminSetCaptain('${t.id}','${t.name.replace(/'/g,"\\'")}', '${captain?.userId||''}')">👑 换队长</button>
+        <button class="btn btn-xs btn-ghost" onclick="adminAddMember('${t.id}','${t.name.replace(/'/g,"\\'")}')">➕ 加人</button>
+        <button class="btn btn-xs btn-danger" onclick="adminDeleteTeam('${t.id}')">🗑️ 解散</button>
+      </div>
+    </div>
+    ${t.members.length > 0 ? `
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+      ${t.members.map(m => `
+        <span style="font-size:0.78rem;background:rgba(22,93,255,0.12);color:${m.role==='captain'?'var(--primary)':'var(--text-primary)'};padding:4px 10px;border-radius:12px;border:1px solid rgba(22,93,255,${m.role==='captain'?'0.4':'0.2'});">
+          ${m.coachName || m.username}${m.role==='captain'?' 👑':' '}
+          <button onclick="adminRemoveMember('${t.id}','${m.userId}','${(m.coachName||m.username).replace(/'/g,"\\'")}')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.7rem;padding:0 0 0 4px;" title="移出队伍">×</button>
+        </span>`).join('')}
+    </div>` : '<p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px;">暂无成员</p>'}
+    ${t.status === 'open' && unassignedUsers.length > 0 ? `
+    <div style="font-size:0.72rem;color:var(--text-muted);">💡 还可以<a href="javascript:void(0)" onclick="adminAddMember('${t.id}','${t.name.replace(/'/g,"\\'")}')" style="color:var(--primary);">添加成员</a> · 当前有 ${unassignedUsers.length} 名用户暂无队伍</div>` : ''}
+  </div>`;
+}
+
+async function adminCreateTeam() {
+  const name = await dialogPrompt({ title:'🏆 新建队伍', body:'请输入队伍名称', placeholder:'如：星河战队', defaultValue:'', confirmText:'创建', cancelText:'取消' });
+  if (!name || !name.trim()) return;
+  const bio = await dialogPrompt({ title:'队伍简介（选填）', body:'请输入队伍简介', placeholder:'如：巅峰2200，稳定训练赛', defaultValue:'', confirmText:'下一步', cancelText:'跳过' });
+  const maxMembers = await dialogPrompt({ title:'最大人数（默认7）', body:'请输入队伍最大人数', placeholder:'7', defaultValue:'7', confirmText:'创建', cancelText:'取消' });
+  if (maxMembers === null) return;
+  try {
+    await api('/api/admin/teams', { method:'POST', body: JSON.stringify({ name: name.trim(), bio: bio?.trim()||'', maxMembers: parseInt(maxMembers)||7 }) });
+    showToast('队伍创建成功','success');
+    await loadAdminTeams(document.getElementById('adminSubContent'));
+  } catch(err) { showToast(err.message,'error'); }
+}
+
+async function adminRenameTeam(teamId, currentName) {
+  const name = await dialogPrompt({ title:'✏️ 修改队名', body:'请输入新队名', placeholder:'队伍名称', defaultValue:currentName, confirmText:'保存', cancelText:'取消' });
+  if (!name || !name.trim() || name.trim() === currentName) return;
+  try {
+    await api(`/api/admin/teams/${teamId}`, { method:'PUT', body: JSON.stringify({ name: name.trim() }) });
+    showToast('队名已修改','success');
+    await loadAdminTeams(document.getElementById('adminSubContent'));
+  } catch(err) { showToast(err.message,'error'); }
+}
+
+async function adminSetCaptain(teamId, teamName, currentCaptainId) {
+  const users = (await api('/api/admin/users')).users || [];
+  const members = users.filter(u => u.team && u.team.teamId === teamId);
+  if (members.length === 0) { showToast('该队伍暂无成员，无法设置队长','error'); return; }
+  // 简单处理：用下拉框选择一个成员
+  const options = members.map(u => `${u.id}:${u.coachName||u.username}`).join(',');
+  const selected = await dialogPrompt({ title:`👑 换队长（${teamName}）`, body:`当前队长ID: ${currentCaptainId}\n请输入新队长用户ID：`, placeholder:'输入用户ID', defaultValue:currentCaptainId||'', confirmText:'确认', cancelText:'取消' });
+  if (!selected || selected === currentCaptainId) return;
+  try {
+    await api(`/api/admin/teams/${teamId}`, { method:'PUT', body: JSON.stringify({ captainId: selected }) });
+    showToast('队长已更换','success');
+    await loadAdminTeams(document.getElementById('adminSubContent'));
+  } catch(err) { showToast(err.message,'error'); }
+}
+
+async function adminAddMember(teamId, teamName) {
+  const users = (await api('/api/admin/users')).users || [];
+  const unassigned = users.filter(u => !u.team || u.team.teamId !== teamId);
+  if (unassigned.length === 0) { showToast('所有用户都已在某支队伍中','info'); return; }
+  const options = unassigned.slice(0,20).map(u => `${u.id}:${u.coachName||u.username}(${u.gameRank||'未填'})`).join(',');
+  const selected = await dialogPrompt({ title:`➕ 添加成员（${teamName}）`, body:`共 ${unassigned.length} 名可选用户\n请输入用户ID：`, placeholder:'输入用户ID', defaultValue:'', confirmText:'添加', cancelText:'取消' });
+  if (!selected) return;
+  try {
+    await api(`/api/admin/teams/${teamId}/members`, { method:'POST', body: JSON.stringify({ userId: selected }) });
+    showToast('成员已添加','success');
+    await loadAdminTeams(document.getElementById('adminSubContent'));
+  } catch(err) { showToast(err.message,'error'); }
+}
+
+async function adminRemoveMember(teamId, userId, userName) {
+  if (!await dialog({ title:'移出成员', body:`确定将「${userName}」移出该队伍？`, confirmText:'移出', cancelText:'取消', confirmBtnClass:'btn-danger' })) return;
+  try {
+    await api(`/api/admin/teams/${teamId}/members/${userId}`, { method:'DELETE' });
+    showToast('已移出','info');
+    await loadAdminTeams(document.getElementById('adminSubContent'));
+  } catch(err) { showToast(err.message,'error'); }
 }
 
 async function adminDeleteTeam(teamId) {
@@ -3136,27 +3220,171 @@ async function loadAdminSchedules(container) {
   container.innerHTML = html;
 }
 
+// 管理员用户名片总览
+let adminUsersFilter = { level:'', gameServer:'', gameRank:'', search:'', heroPool:'', teamId:'all', minPeak:'', maxPeak:'' };
+
 async function loadAdminUsers(container) {
-  const data = await api('/api/admin/users');
-  if (!data.users || data.users.length === 0) {
-    container.innerHTML = '<p style="text-align:center;color:var(--text-light);padding:20px;">暂无用户数据</p>';
-    return;
-  }
-  let html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.82rem;">';
-  html += '<tr style="background:rgba(22,93,255,0.10);"><th style="padding:8px;text-align:left;color:var(--text-primary);">用户名</th><th>队伍/教练</th><th>等级</th><th>游戏ID</th><th>段位/巅峰</th><th>擅长英雄</th><th>操作</th></tr>';
-  data.users.forEach(u => {
-    html += `<tr style="border-bottom:1px solid var(--border-color);">
-      <td style="padding:8px;color:var(--text-primary);">${u.username}</td>
-      <td style="padding:8px;color:var(--text-primary);">${u.teamName}<br><span style="font-size:0.75rem;color:var(--text-muted);">${u.coachName}</span></td>
-      <td style="padding:8px;"><span class="badge badge-level">${u.level}</span></td>
-      <td style="padding:8px;color:var(--text-secondary);">${u.gameId ? `${u.gameId} <span style="font-size:0.72rem;color:var(--text-muted);">(${u.gameServer || '手Q区'})</span>` : '<span style="color:var(--text-muted);">未填写</span>'}</td>
-      <td style="padding:8px;color:var(--text-secondary);">${u.gameRank || '<span style="color:var(--text-muted);">未填</span>'}${u.peakScore ? ` / ${u.peakScore}` : ''}</td>
-      <td style="padding:8px;color:var(--text-secondary);">${u.heroPool || '<span style="color:var(--text-muted);">未填</span>'}</td>
-      <td style="padding:8px;"><button class="btn btn-xs btn-danger" onclick="adminDeleteUser('${u.id}')">删除</button></td>
+  const [usersData, optsData, teamsData] = await Promise.all([
+    api('/api/admin/users'),
+    api('/api/admin/users/options'),
+    api('/api/admin/teams')
+  ]);
+  const users = usersData.users || [];
+  const opts = optsData;
+  const teams = teamsData.teams || [];
+
+  const filterBar = `
+    <div style="background:#1A1A2E;border:1px solid rgba(22,93,255,0.15);border-radius:var(--radius-md);padding:14px;margin-bottom:16px;">
+      <div style="font-size:0.82rem;font-weight:600;color:var(--primary);margin-bottom:10px;">🔍 筛选名片</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;">
+        <div>
+          <label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">等级</label>
+          <select id="af_level" class="form-select" style="font-size:0.8rem;padding:6px 8px;" onchange="afSet('level',this.value);loadAdminUsers(document.getElementById('adminSubContent'))">
+            <option value="">全部</option>
+            ${opts.levels.map(l => `<option value="${l}">${l}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">服务器</label>
+          <select id="af_server" class="form-select" style="font-size:0.8rem;padding:6px 8px;" onchange="afSet('gameServer',this.value);loadAdminUsers(document.getElementById('adminSubContent'))">
+            <option value="">全部</option>
+            ${opts.servers.map(s => `<option value="${s}">${s}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">段位</label>
+          <select id="af_rank" class="form-select" style="font-size:0.8rem;padding:6px 8px;" onchange="afSet('gameRank',this.value);loadAdminUsers(document.getElementById('adminSubContent'))">
+            <option value="">全部</option>
+            ${opts.ranks.map(r => `<option value="${r}">${r}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">队伍</label>
+          <select id="af_team" class="form-select" style="font-size:0.8rem;padding:6px 8px;" onchange="afSet('teamId',this.value);loadAdminUsers(document.getElementById('adminSubContent'))">
+            <option value="all">全部</option>
+            <option value="none">未入队</option>
+            ${teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">巅峰分</label>
+          <div style="display:flex;gap:4px;align-items:center;">
+            <input type="number" id="af_minPeak" placeholder="最低" style="width:60px;padding:6px 6px;font-size:0.78rem;" onchange="afSet('minPeak',this.value);loadAdminUsers(document.getElementById('adminSubContent'))">
+            <span style="color:var(--text-muted);font-size:0.7rem;">~</span>
+            <input type="number" id="af_maxPeak" placeholder="最高" style="width:60px;padding:6px 6px;font-size:0.78rem;" onchange="afSet('maxPeak',this.value);loadAdminUsers(document.getElementById('adminSubContent'))">
+          </div>
+        </div>
+        <div>
+          <label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">搜索</label>
+          <input type="text" id="af_search" placeholder="姓名/游戏ID/教练名" style="width:100%;padding:6px 8px;font-size:0.78rem;" oninput="afSet('search',this.value)" onkeydown="if(event.key==='Enter'){afSet('search',this.value);loadAdminUsers(document.getElementById('adminSubContent'))}">
+        </div>
+        <div>
+          <label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">擅长英雄</label>
+          <input type="text" id="af_hero" placeholder="关键词" style="width:100%;padding:6px 8px;font-size:0.78rem;" onkeydown="if(event.key==='Enter'){afSet('heroPool',this.value);loadAdminUsers(document.getElementById('adminSubContent'))}">
+        </div>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:6px;">
+        <button class="btn btn-xs btn-ghost" onclick="adminClearFilters()" style="font-size:0.75rem;">重置筛选</button>
+        <button class="btn btn-xs btn-ghost" onclick="afSet('heroPool',document.getElementById('af_hero').value);loadAdminUsers(document.getElementById('adminSubContent'))" style="font-size:0.75rem;">🔍 搜索英雄</button>
+      </div>
+    </div>`;
+
+  // 用筛选条件构造查询参数
+  const params = new URLSearchParams();
+  if (adminUsersFilter.level) params.set('level', adminUsersFilter.level);
+  if (adminUsersFilter.gameServer) params.set('gameServer', adminUsersFilter.gameServer);
+  if (adminUsersFilter.gameRank) params.set('gameRank', adminUsersFilter.gameRank);
+  if (adminUsersFilter.search) params.set('search', adminUsersFilter.search);
+  if (adminUsersFilter.heroPool) params.set('heroPool', adminUsersFilter.heroPool);
+  if (adminUsersFilter.teamId && adminUsersFilter.teamId !== 'all') params.set('teamId', adminUsersFilter.teamId);
+  if (adminUsersFilter.minPeak) params.set('minPeak', adminUsersFilter.minPeak);
+  if (adminUsersFilter.maxPeak) params.set('maxPeak', adminUsersFilter.maxPeak);
+
+  const filteredData = params.toString() ? await api(`/api/admin/users?${params.toString()}`) : usersData;
+  const filtered = filteredData.users || [];
+  const total = filteredData.total || filtered.length;
+
+  // 恢复筛选器状态
+  setTimeout(() => {
+    if (adminUsersFilter.level) document.getElementById('af_level').value = adminUsersFilter.level;
+    if (adminUsersFilter.gameServer) document.getElementById('af_server').value = adminUsersFilter.gameServer;
+    if (adminUsersFilter.gameRank) document.getElementById('af_rank').value = adminUsersFilter.gameRank;
+    if (adminUsersFilter.teamId) document.getElementById('af_team').value = adminUsersFilter.teamId;
+    if (adminUsersFilter.search) document.getElementById('af_search').value = adminUsersFilter.search;
+    if (adminUsersFilter.minPeak) document.getElementById('af_minPeak').value = adminUsersFilter.minPeak;
+    if (adminUsersFilter.maxPeak) document.getElementById('af_maxPeak').value = adminUsersFilter.maxPeak;
+  }, 0);
+
+  const levelColors = { '王者': '#FFD700', '星耀': '#9B59B6', '钻石': '#3498DB', '大师': '#E74C3C', '宗师': '#FF6B35' };
+  let tableRows = '';
+  filtered.forEach(u => {
+    const levelColor = levelColors[u.level] || 'var(--text-secondary)';
+    const teamBadge = u.team
+      ? `<span style="font-size:0.72rem;background:rgba(22,93,255,0.12);color:var(--primary);padding:2px 6px;border-radius:8px;">${u.team.role==='captain'?'👑 ':''}${u.team.teamName}</span>`
+      : `<span style="font-size:0.72rem;background:rgba(245,158,11,0.12);color:var(--warning);padding:2px 6px;border-radius:8px;">未入队</span>`;
+    tableRows += `<tr style="border-bottom:1px solid var(--border-color);">
+      <td style="padding:10px 8px;color:var(--text-primary);vertical-align:top;">
+        <div style="font-weight:600;">${u.coachName || u.username}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);">@${u.username}</div>
+        ${u.wechat ? `<div style="font-size:0.72rem;color:var(--text-secondary);margin-top:2px;">📱 ${u.wechat}</div>` : ''}
+      </td>
+      <td style="padding:10px 8px;vertical-align:top;">${teamBadge}</td>
+      <td style="padding:10px 8px;vertical-align:top;"><span style="font-size:0.82rem;color:${levelColor};font-weight:600;">${u.level || '未填'}</span></td>
+      <td style="padding:10px 8px;font-size:0.78rem;color:var(--text-secondary);vertical-align:top;">
+        <div>${u.gameId || '<span style="color:var(--text-muted);">未填</span>'}</div>
+        <div style="font-size:0.72rem;color:var(--text-muted);">${u.gameServer || '手Q区'}</div>
+      </td>
+      <td style="padding:10px 8px;font-size:0.78rem;color:var(--text-secondary);vertical-align:top;">
+        <div>${u.gameRank || '未填'}</div>
+        ${u.peakScore ? `<div style="font-size:0.72rem;color:var(--primary);">🏆 ${u.peakScore}</div>` : ''}
+      </td>
+      <td style="padding:10px 8px;font-size:0.78rem;color:var(--text-secondary);vertical-align:top;max-width:120px;">
+        ${u.heroPool ? `<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${u.heroPool}">${u.heroPool}</div>` : '<span style="color:var(--text-muted);">—</span>'}
+      </td>
+      <td style="padding:10px 8px;vertical-align:top;">
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <button class="btn btn-xs btn-ghost" onclick="adminAssignUserTeam('${u.id}','${(u.coachName||u.username).replace(/'/g,"\\'")}')" style="font-size:0.72rem;padding:4px 8px;">🏆 分配队伍</button>
+          <button class="btn btn-xs btn-danger" onclick="adminDeleteUser('${u.id}')" style="font-size:0.72rem;padding:4px 8px;">删除</button>
+        </div>
+      </td>
     </tr>`;
   });
-  html += '</table></div>';
-  container.innerHTML = html;
+
+  container.innerHTML = filterBar + `
+    <div style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:10px;">共 <strong style="color:var(--primary);">${total}</strong> 名用户${params.toString() ? '（已筛选）' : ''}</div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:0.82rem;min-width:700px;">
+        <tr style="background:rgba(22,93,255,0.10);">
+          <th style="padding:10px 8px;text-align:left;color:var(--text-primary);">用户/教练</th>
+          <th style="padding:10px 8px;text-align:left;color:var(--text-primary);">队伍</th>
+          <th style="padding:10px 8px;text-align:left;color:var(--text-primary);">等级</th>
+          <th style="padding:10px 8px;text-align:left;color:var(--text-primary);">游戏ID</th>
+          <th style="padding:10px 8px;text-align:left;color:var(--text-primary);">段位/巅峰</th>
+          <th style="padding:10px 8px;text-align:left;color:var(--text-primary);">擅长英雄</th>
+          <th style="padding:10px 8px;text-align:left;color:var(--text-primary);">操作</th>
+        </tr>
+        ${tableRows || `<tr><td colspan="7" style="padding:30px;text-align:center;color:var(--text-muted);">暂无匹配用户</td></tr>`}
+      </table>
+    </div>`;
+}
+
+function afSet(key, val) { adminUsersFilter[key] = val; }
+
+function adminClearFilters() {
+  adminUsersFilter = { level:'', gameServer:'', gameRank:'', search:'', heroPool:'', teamId:'all', minPeak:'', maxPeak:'' };
+  loadAdminUsers(document.getElementById('adminSubContent'));
+}
+
+async function adminAssignUserTeam(userId, userName) {
+  const teams = (await api('/api/admin/teams')).teams || [];
+  const options = teams.map(t => `${t.id}:${t.name}`).join(',');
+  const selected = await dialogPrompt({ title:`🏆 分配队伍`, body:`为「${userName}」选择队伍\n可选队伍：${teams.length}支`, placeholder:'输入队伍ID（查看队伍ID列表）', defaultValue:'', confirmText:'分配', cancelText:'取消' });
+  if (!selected) return;
+  try {
+    await api(`/api/admin/teams/${selected}/members`, { method:'POST', body: JSON.stringify({ userId }) });
+    showToast(`${userName} 已分配至队伍`, 'success');
+    await loadAdminUsers(document.getElementById('adminSubContent'));
+  } catch(err) { showToast(err.message,'error'); }
 }
 
 async function loadAdminLogs(container) {

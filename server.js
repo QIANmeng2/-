@@ -880,23 +880,83 @@ app.delete('/api/admin/recruitments/:id', authMiddleware, adminMiddleware, async
 });
 
 // 管理员获取所有用户
+// 管理员获取所有用户（支持筛选）
 app.get('/api/admin/users', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, username, teamName, coachName, wechat, level, bio, gameId, gameServer, gameRank, peakScore, heroPool, created_at FROM users ORDER BY created_at DESC');
-    res.json({ users: result.rows.map(u => ({
-      id: u.id, username: u.username, teamName: u.teamname, coachName: u.coachname,
-      wechat: u.wechat, level: u.level, bio: u.bio, createdAt: u.created_at,
-      gameId: u.gameid || '', gameServer: u.gameserver || '', gameRank: u.gamerank || '', peakScore: u.peakscore || 0, heroPool: u.heropool || ''
-    })) });
+    const { level, gameServer, gameRank, search, heroPool, teamId, minPeak, maxPeak } = req.query;
+    let where = [], vals = [], idx = 1;
+    if (level) { where.push(`level = $${idx++}`); vals.push(level); }
+    if (gameServer) { where.push(`gameServer = $${idx++}`); vals.push(gameServer); }
+    if (gameRank) { where.push(`gameRank = $${idx++}`); vals.push(gameRank); }
+    if (search) { where.push(`(username ILIKE $${idx} OR coachName ILIKE $${idx} OR gameId ILIKE $${idx})`); vals.push(`%${search}%`); idx++; }
+    if (heroPool) { where.push(`heroPool ILIKE $${idx++}`); vals.push(`%${heroPool}%`); }
+    if (teamId === 'none') { where.push(`id NOT IN (SELECT userId FROM team_members)`); }
+    if (minPeak) { where.push(`peakScore >= $${idx++}`); vals.push(parseInt(minPeak)); }
+    if (maxPeak) { where.push(`peakScore <= $${idx++}`); vals.push(parseInt(maxPeak)); }
+    const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+    const result = await pool.query(
+      `SELECT id, username, teamName, coachName, wechat, level, bio, gameId, gameServer, gameRank, peakScore, heroPool, created_at FROM users ${whereClause} ORDER BY created_at DESC`,
+      vals
+    );
+    // 同时查询每个用户的队伍信息
+    const userIds = result.rows.map(u => u.id);
+    let memberMap = {};
+    if (userIds.length > 0) {
+      const teamIds = [...new Set(userIds)];
+      const members = await pool.query('SELECT * FROM team_members WHERE userId = ANY($1)', [teamIds]);
+      const teams = await pool.query('SELECT * FROM teams');
+      const teamMap = {};
+      teams.rows.forEach(t => { teamMap[t.id] = t; });
+      members.rows.forEach(m => {
+        const t = teamMap[m.teamid];
+        memberMap[m.userid] = t ? { teamId: t.id, teamName: t.name, role: m.role } : null;
+      });
+    }
+    res.json({
+      users: result.rows.map(u => ({
+        id: u.id, username: u.username, teamName: u.teamname, coachName: u.coachname,
+        wechat: u.wechat, level: u.level, bio: u.bio, createdAt: u.created_at,
+        gameId: u.gameid || '', gameServer: u.gameserver || '', gameRank: u.gamerank || '',
+        peakScore: u.peakscore || 0, heroPool: u.heropool || '',
+        team: memberMap[u.id] || null
+      })),
+      total: result.rows.length
+    });
   } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
 });
 
+// 管理员获取用户筛选选项
+app.get('/api/admin/users/options', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const levels = await pool.query('SELECT DISTINCT level FROM users WHERE level IS NOT NULL AND level != \'\' ORDER BY level');
+    const servers = await pool.query('SELECT DISTINCT gameServer FROM users WHERE gameServer IS NOT NULL AND gameServer != \'\' ORDER BY gameServer');
+    const ranks = await pool.query('SELECT DISTINCT gameRank FROM users WHERE gameRank IS NOT NULL AND gameRank != \'\' ORDER BY gameRank');
+    res.json({
+      levels: levels.rows.map(r => r.level),
+      servers: servers.rows.map(r => r.gameserver),
+      ranks: ranks.rows.map(r => r.gamerank)
+    });
+  } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
+});
+
+// 管理员获取所有队伍列表（用于分配成员时选择）
+app.get('/api/admin/teams/options', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const teams = await pool.query('SELECT id, name, captainId FROM teams ORDER BY name');
+    res.json({ teams: teams.rows.map(t => ({ id: t.id, name: t.name, captainId: t.captainid })) });
+  } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
+});
 // 管理员删除用户
 app.delete('/api/admin/users/:id', authMiddleware, adminMiddleware, async (req, res) => {
+  const client = await pool.connect();
   try {
-    await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
+    await client.query('BEGIN');
+    await client.query('DELETE FROM team_members WHERE userId = $1', [req.params.id]);
+    await client.query('DELETE FROM notifications WHERE userId = $1', [req.params.id]);
+    await client.query('DELETE FROM users WHERE id = $1', [req.params.id]);
+    await client.query('COMMIT');
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ message: '删除失败' }); }
+  } catch (e) { await client.query('ROLLBACK'); res.status(500).json({ message: '删除失败' }); } finally { client.release(); }
 });
 
 // 管理员操作日志（简化版：从通知表读取）
@@ -1229,6 +1289,80 @@ app.get('/api/admin/teams', authMiddleware, adminMiddleware, async (req, res) =>
     });
     res.json({ teams: result });
   } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
+});
+
+// 管理员修改队伍（改名/设队长/改状态）
+app.put('/api/admin/teams/:id', authMiddleware, adminMiddleware, async (req, res) => {
+  const { name, captainId, status } = req.body;
+  try {
+    const tRes = await pool.query('SELECT * FROM teams WHERE id = $1', [req.params.id]);
+    if (tRes.rows.length === 0) return res.status(404).json({ message: '队伍不存在' });
+    const fields = [], vals = [];
+    let idx = 1;
+    if (name !== undefined) { fields.push(`name = $${idx++}`); vals.push(name); }
+    if (status !== undefined) { fields.push(`status = $${idx++}`); vals.push(status); }
+    if (captainId !== undefined) {
+      // 同时更新 team_members 表的 role
+      if (fields.length) await pool.query(`UPDATE teams SET ${fields.join(',')} WHERE id = $${idx}`, [...vals, req.params.id]);
+      else await pool.query('UPDATE teams SET captainId = $1 WHERE id = $2', [captainId, req.params.id]);
+      await pool.query('UPDATE team_members SET role = $1 WHERE teamId = $2 AND userId = $3', ['member', req.params.id, tRes.rows[0].captainid]);
+      await pool.query('UPDATE team_members SET role = $1 WHERE teamId = $2 AND userId = $3', ['captain', req.params.id, captainId]);
+      return res.json({ success: true });
+    }
+    if (fields.length === 0) return res.status(400).json({ message: '无更新内容' });
+    await pool.query(`UPDATE teams SET ${fields.join(',')} WHERE id = $${idx}`, [...vals, req.params.id]);
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ message: '更新失败' }); }
+});
+
+// 管理员创建队伍
+app.post('/api/admin/teams', authMiddleware, adminMiddleware, async (req, res) => {
+  const { name, bio, captainId, maxMembers } = req.body;
+  if (!name) return res.status(400).json({ message: '请输入队伍名称' });
+  const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      'INSERT INTO teams (id, name, bio, captainId, maxMembers, status) VALUES ($1,$2,$3,$4,$5,$6)',
+      [id, name, bio || '', captainId || null, maxMembers || 7, 'open']
+    );
+    if (captainId) {
+      await client.query(
+        'INSERT INTO team_members (teamId, userId, role) VALUES ($1,$2,$3) ON CONFLICT (teamId, userId) DO UPDATE SET role = $3',
+        [id, captainId, 'captain']
+      );
+    }
+    await client.query('COMMIT');
+    res.json({ id, name, bio: bio || '', captainId: captainId || null });
+  } catch (e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ message: '创建失败' }); } finally { client.release(); }
+});
+
+// 管理员添加成员到队伍
+app.post('/api/admin/teams/:id/members', authMiddleware, adminMiddleware, async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ message: '请指定用户ID' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // 先从其他队伍移除（防止同时在两队）
+    await client.query('DELETE FROM team_members WHERE userId = $1', [userId]);
+    // 加入目标队伍
+    await client.query(
+      'INSERT INTO team_members (teamId, userId, role) VALUES ($1,$2,$3) ON CONFLICT (teamId, userId) DO UPDATE SET role = $3',
+      [req.params.id, userId, 'member']
+    );
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ message: '添加失败' }); } finally { client.release(); }
+});
+
+// 管理员从队伍移除成员
+app.delete('/api/admin/teams/:id/members/:userId', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM team_members WHERE teamId = $1 AND userId = $2', [req.params.id, req.params.userId]);
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ message: '移除失败' }); }
 });
 
 app.delete('/api/admin/teams/:id', authMiddleware, adminMiddleware, async (req, res) => {

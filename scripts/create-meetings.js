@@ -9,20 +9,29 @@
  */
 
 const API_BASE = 'https://perpetual-enchantment-production-b163.up.railway.app';
-const TMEET_BIN = process.platform === 'win32'
-  ? 'C:/Users/ASUS/.workbuddy/binaries/node/cli-connector-packages/tmeet.cmd'
-  : 'tmeet';
-
 const { execSync } = require('child_process');
 
 function tmeet(args) {
-  const cmd = `"${TMEET_BIN}" ${args} --format json-pretty`;
+  // meeting create 等支持 --format json
+  const jsonArgs = args.includes('meeting create') ? `${args} --format json` : args;
+  const cmd = `tmeet ${jsonArgs}`;
   try {
-    const out = execSync(cmd, { encoding: 'utf8', timeout: 30000 });
-    return JSON.parse(out);
+    const out = execSync(cmd, { encoding: 'utf8', timeout: 30000, shell: true });
+
+    // 尝试解析 JSON
+    try {
+      return JSON.parse(out);
+    } catch {
+      // auth status 等命令返回文本，解析登录状态
+      if (out.includes('Not logged in')) {
+        throw new Error('TMEET_NOT_LOGGED_IN');
+      }
+      // 返回文本对象供调用方判断
+      return { _text: out };
+    }
   } catch (err) {
-    const msg = err.stderr || err.stdout || '';
-    if (msg.includes('refresh token failed') || msg.includes('user config is empty')) {
+    const msg = err.stderr || err.stdout || err.message || '';
+    if (msg.includes('Not logged in') || msg.includes('refresh token failed') || msg.includes('user config is empty')) {
       throw new Error('TMEET_NOT_LOGGED_IN');
     }
     throw new Error(`tmeet 错误: ${msg.substring(0, 200)}`);
@@ -32,7 +41,6 @@ function tmeet(args) {
 function api(path, options = {}) {
   const { method = 'GET', body } = options;
   const url = `${API_BASE}${path}`;
-  const fetch = require('child_process').execSync;
   let cmd = `curl -s -X ${method} "${url}"`;
   if (body) {
     const escaped = body.replace(/"/g, '\\"');
@@ -71,7 +79,7 @@ function formatISO(date) {
   const d = String(date.getDate()).padStart(2, '0');
   const h = String(date.getHours()).padStart(2, '0');
   const mi = String(date.getMinutes()).padStart(2, '0');
-  return `${y}-${mo}-${d} ${h}:${mi}`;
+  return `${y}-${mo}-${d}T${h}:${mi}`;
 }
 
 function log(msg) {
@@ -84,8 +92,12 @@ async function main() {
 
   // Step 1: 检查 tmeet 登录状态
   try {
-    tmeet('auth status');
-    log('tmeet 已登录');
+    const status = tmeet('auth status');
+    if (status._text && status._text.includes('Logged in')) {
+      log('tmeet 已登录');
+    } else {
+      log('tmeet 已登录');
+    }
   } catch (e) {
     if (e.message === 'TMEET_NOT_LOGGED_IN') {
       log('❌ tmeet 未登录或登录已过期');
@@ -141,8 +153,12 @@ async function main() {
     try {
       log(`创建腾讯会议: ${subject}`);
       const outA = tmeet(`meeting create --subject "${subject}" --start "${formatISO(meetingStart)}+08:00" --end "${formatISO(meetingEnd)}+08:00"`);
-      codeA = outA.meeting_code || outA.meetingCode || outA.meeting_id || '';
-      linkA = outA.join_url || outA.joinUrl || (codeA ? `https://meeting.tencent.com/s/${codeA}` : '');
+
+      // 解析 JSON 响应
+      const data = outA.data || outA;
+      const meeting = data.meeting_info_list ? data.meeting_info_list[0] : data;
+      codeA = meeting.meeting_code || meeting.meetingCode || '';
+      linkA = meeting.join_url || meeting.joinUrl || (codeA ? `https://meeting.tencent.com/s/${codeA}` : '');
       log(`  会议号: ${codeA} ${linkA}`);
     } catch (e) {
       log(`  建会失败: ${e.message}`);
@@ -154,12 +170,7 @@ async function main() {
       continue;
     }
 
-    // Step 4: 更新服务器（通过 server.js 的建会接口，需要 organizer token）
-    // 由于服务器端无法运行 tmeet，这里直接用 UPDATE SQL 写入数据库
-    // 需要数据库直连或通过服务器的 admin 接口
-    // 简化处理：将会议信息通过 /api/recruitment/:id/meeting 写入
-    // 但该接口需要 organizer 的 JWT token
-    // 暂用环保变量 ADMIN_TOKEN（若有）或跳过
+    // Step 4: 更新服务器
     const adminToken = process.env.ADMIN_TOKEN;
     if (adminToken) {
       try {
@@ -170,7 +181,6 @@ async function main() {
         log(`服务器更新失败: ${e.message}`);
       }
     } else {
-      // 无 token 时输出 SQL，需手动执行
       log('未设置 ADMIN_TOKEN 环境变量，请手动执行以下 SQL 更新数据库:');
       log(`  UPDATE recruitment_matches SET meetingcodea='${codeA}', meetinglinka='${linkA}' WHERE id='${match.id}';`);
     }
