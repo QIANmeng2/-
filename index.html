@@ -3286,7 +3286,7 @@ async function loadAdminSchedules(container) {
 }
 
 // 管理员用户名片总览
-let adminUsersFilter = { level:'', gameServer:'', gameRank:'', search:'', heroPool:'', teamId:'all', minPeak:'', maxPeak:'' };
+let adminUsersFilter = { level:'', gameServer:'', gameRank:'', search:'', heroPool:'', teamId:'all', minPeak:'', maxPeak:'', peakSort:'' };
 
 async function loadAdminUsers(container) {
   const [usersData, optsData, teamsData] = await Promise.all([
@@ -3334,9 +3334,14 @@ async function loadAdminUsers(container) {
         <div>
           <label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:3px;">巅峰分</label>
           <div style="display:flex;gap:4px;align-items:center;">
-            <input type="number" id="af_minPeak" placeholder="最低" style="width:60px;padding:6px 6px;font-size:0.78rem;" onchange="afSet('minPeak',this.value);loadAdminUsers(document.getElementById('adminSubContent'))">
+            <input type="number" id="af_minPeak" placeholder="最低" style="width:48px;padding:6px 4px;font-size:0.78rem;" onchange="afSet('minPeak',this.value);loadAdminUsers(document.getElementById('adminSubContent'))">
             <span style="color:var(--text-muted);font-size:0.7rem;">~</span>
-            <input type="number" id="af_maxPeak" placeholder="最高" style="width:60px;padding:6px 6px;font-size:0.78rem;" onchange="afSet('maxPeak',this.value);loadAdminUsers(document.getElementById('adminSubContent'))">
+            <input type="number" id="af_maxPeak" placeholder="最高" style="width:48px;padding:6px 4px;font-size:0.78rem;" onchange="afSet('maxPeak',this.value);loadAdminUsers(document.getElementById('adminSubContent'))">
+            <select id="af_peakSort" style="padding:6px 4px;font-size:0.72rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-sm);color:var(--text-primary);" onchange="afSet('peakSort',this.value);loadAdminUsers(document.getElementById('adminSubContent'))">
+              <option value="">默认</option>
+              <option value="desc">高→低</option>
+              <option value="asc">低→高</option>
+            </select>
           </div>
         </div>
         <div>
@@ -3364,6 +3369,7 @@ async function loadAdminUsers(container) {
   if (adminUsersFilter.teamId && adminUsersFilter.teamId !== 'all') params.set('teamId', adminUsersFilter.teamId);
   if (adminUsersFilter.minPeak) params.set('minPeak', adminUsersFilter.minPeak);
   if (adminUsersFilter.maxPeak) params.set('maxPeak', adminUsersFilter.maxPeak);
+  if (adminUsersFilter.peakSort) params.set('peakSort', adminUsersFilter.peakSort);
 
   const filteredData = params.toString() ? await api(`/api/admin/users?${params.toString()}`) : usersData;
   const filtered = filteredData.users || [];
@@ -3378,6 +3384,7 @@ async function loadAdminUsers(container) {
     if (adminUsersFilter.search) document.getElementById('af_search').value = adminUsersFilter.search;
     if (adminUsersFilter.minPeak) document.getElementById('af_minPeak').value = adminUsersFilter.minPeak;
     if (adminUsersFilter.maxPeak) document.getElementById('af_maxPeak').value = adminUsersFilter.maxPeak;
+    if (document.getElementById('af_peakSort')) document.getElementById('af_peakSort').value = adminUsersFilter.peakSort || '';
   }, 0);
 
   const levelColors = { '王者': '#FFD700', '星耀': '#9B59B6', '钻石': '#3498DB', '大师': '#E74C3C', '宗师': '#FF6B35' };
@@ -3436,7 +3443,7 @@ async function loadAdminUsers(container) {
 function afSet(key, val) { adminUsersFilter[key] = val; }
 
 function adminClearFilters() {
-  adminUsersFilter = { level:'', gameServer:'', gameRank:'', search:'', heroPool:'', teamId:'all', minPeak:'', maxPeak:'' };
+  adminUsersFilter = { level:'', gameServer:'', gameRank:'', search:'', heroPool:'', teamId:'all', minPeak:'', maxPeak:'', peakSort:'' };
   loadAdminUsers(document.getElementById('adminSubContent'));
 }
 

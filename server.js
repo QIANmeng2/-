@@ -913,7 +913,7 @@ app.delete('/api/admin/recruitments/:id', authMiddleware, adminMiddleware, async
 // 管理员获取所有用户（支持筛选）
 app.get('/api/admin/users', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const { level, gameServer, gameRank, search, heroPool, teamId, minPeak, maxPeak } = req.query;
+    const { level, gameServer, gameRank, search, heroPool, teamId, minPeak, maxPeak, peakSort } = req.query;
     let sql = 'SELECT id, username, teamName, coachName, wechat, level, bio, gameId, gameServer, gameRank, peakScore, heroPool, created_at FROM users WHERE 1=1';
     const params = [];
     let idx = 1;
@@ -924,7 +924,9 @@ app.get('/api/admin/users', authMiddleware, adminMiddleware, async (req, res) =>
     if (maxPeak) { sql += ` AND peakScore <= $${idx++}`; params.push(parseInt(maxPeak)); }
     if (heroPool) { sql += ` AND heroPool ILIKE $${idx++}`; params.push(`%${heroPool}%`); }
     if (search) { sql += ` AND (username ILIKE $${idx} OR coachName ILIKE $${idx} OR gameId ILIKE $${idx})`; params.push(`%${search}%`); idx++; }
-    sql += ' ORDER BY created_at DESC';
+    if (peakSort === 'desc') { sql += ' ORDER BY peakScore DESC NULLS LAST'; }
+    else if (peakSort === 'asc') { sql += ' ORDER BY peakScore ASC NULLS LAST'; }
+    else { sql += ' ORDER BY created_at DESC'; }
     const result = await pool.query(sql, params);
     // 获取team关联
     const userIds = result.rows.map(u => u.id);
