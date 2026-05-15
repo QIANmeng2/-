@@ -879,6 +879,20 @@ app.get('/api/admin/users', authMiddleware, adminMiddleware, async (req, res) =>
   } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
 });
 
+// 管理员获取用户筛选选项
+app.get('/api/admin/users/options', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const levelsRes = await pool.query('SELECT DISTINCT level FROM users WHERE level IS NOT NULL AND level != \'\' ORDER BY level');
+    const serversRes = await pool.query('SELECT DISTINCT gameServer FROM users WHERE gameServer IS NOT NULL AND gameServer != \'\' ORDER BY gameServer');
+    const ranksRes = await pool.query('SELECT DISTINCT gameRank FROM users WHERE gameRank IS NOT NULL AND gameRank != \'\' ORDER BY gameRank');
+    res.json({
+      levels: levelsRes.rows.map(r => r.level),
+      servers: serversRes.rows.map(r => r.gameserver),
+      ranks: ranksRes.rows.map(r => r.gamerank)
+    });
+  } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
+});
+
 // 管理员删除用户
 app.delete('/api/admin/users/:id', authMiddleware, adminMiddleware, async (req, res) => {
   const client = await pool.connect();
