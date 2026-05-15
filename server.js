@@ -224,16 +224,16 @@ app.get('/api/recruitment/full', async (req, res) => {
 
 // 接收本地脚本创建的会议信息写入数据库（由 create-meetings.js 调用，需 ADMIN_SECRET 验证）
 app.put('/api/recruitment/:id/meeting-manual', async (req, res) => {
-  const { codeA, linkA, codeB, linkB } = req.body;
+  const { codeA, linkA } = req.body;
   const secret = req.headers['x-admin-secret'];
   if (secret !== (process.env.ADMIN_SECRET || 'qianmeng-local-script')) {
     return res.status(403).json({ message: 'Forbidden' });
   }
-  if (!codeA || !codeB) return res.status(400).json({ message: '缺少会议号' });
+  if (!codeA) return res.status(400).json({ message: '缺少会议号' });
   try {
     await pool.query(
-      'UPDATE recruitment_matches SET meetingCodeA=$1, meetingLinkA=$2, meetingCodeB=$3, meetingLinkB=$4 WHERE id=$5',
-      [codeA, linkA || '', codeB, linkB || '', req.params.id]
+      'UPDATE recruitment_matches SET meetingCodeA=$1, meetingLinkA=$2 WHERE id=$3',
+      [codeA, linkA || '', req.params.id]
     );
     res.json({ success: true });
   } catch (e) { console.error(e); res.status(500).json({ message: '更新失败' }); }
@@ -247,7 +247,7 @@ app.post('/api/recruitment/:id/meeting', authMiddleware, async (req, res) => {
     const m = mRes.rows[0];
     if (m.organizerid !== req.userId) return res.status(403).json({ message: '仅发起人可创建会议' });
     if (m.mode !== 2) return res.status(400).json({ message: '仅模式2（纯组织者）自动建会' });
-    if (m.meetingcodea && m.meetingcodeb) return res.json({ meetingA: { code: m.meetingcodea, link: m.meetinglinka }, meetingB: { code: m.meetingcodeb, link: m.meetinglinkb } });
+    if (m.meetingcodea) return res.json({ meetingA: { code: m.meetingcodea, link: m.meetinglinka } });
 
     // 解析开赛时间，计算会议时间（赛前10分钟开，允许2小时）
     const matchStart = new Date(m.starttime);
@@ -261,31 +261,26 @@ app.post('/api/recruitment/:id/meeting', authMiddleware, async (req, res) => {
     const tmeetCmd = process.platform === 'win32' ? 'tmeet.cmd' : 'tmeet';
     const opt = { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] };
 
-    let codeA = '', linkA = '', codeB = '', linkB = '';
+    let codeA = '', linkA = '';
 
     try {
       // 刷新 Token
       execSync(`${tmeetCmd} auth status`, opt);
-      // 创建 A 队会议
-      const outA = execSync(`${tmeetCmd} meeting create --subject "${subject} · A队" --start "${fmt(meetingStart)}+08:00" --end "${fmt(meetingEnd)}+08:00" --format json-pretty`, opt);
+      // 创建一个会议（你手动在会议内设置分组）
+      const outA = execSync(`${tmeetCmd} meeting create --subject "${subject}" --start "${fmt(meetingStart)}+08:00" --end "${fmt(meetingEnd)}+08:00" --format json-pretty`, opt);
       const jA = JSON.parse(outA);
       codeA = jA.meeting_code || jA.meetingCode || jA.meeting_id || '';
       linkA = jA.join_url || jA.joinUrl || `https://meeting.tencent.com/s/${codeA}`;
-      // 创建 B 队会议
-      const outB = execSync(`${tmeetCmd} meeting create --subject "${subject} · B队" --start "${fmt(meetingStart)}+08:00" --end "${fmt(meetingEnd)}+08:00" --format json-pretty`, opt);
-      const jB = JSON.parse(outB);
-      codeB = jB.meeting_code || jB.meetingCode || jB.meeting_id || '';
-      linkB = jB.join_url || jB.joinUrl || `https://meeting.tencent.com/s/${codeB}`;
     } catch (execErr) {
       console.error('[tmeet] 建会失败:', execErr.message);
       return res.status(500).json({ message: '创建腾讯会议失败，请确认已登录 tmeet（运行 tmeet auth login）' });
     }
 
     await pool.query(
-      'UPDATE recruitment_matches SET meetingCodeA=$1, meetingLinkA=$2, meetingCodeB=$3, meetingLinkB=$4 WHERE id=$5',
-      [codeA, linkA, codeB, linkB, req.params.id]
+      'UPDATE recruitment_matches SET meetingCodeA=$1, meetingLinkA=$2 WHERE id=$3',
+      [codeA, linkA, req.params.id]
     );
-    res.json({ meetingA: { code: codeA, link: linkA }, meetingB: { code: codeB, link: linkB } });
+    res.json({ meetingA: { code: codeA, link: linkA } });
   } catch (e) {
     console.error(e);
     res.status(500).json({ message: '建会失败' });

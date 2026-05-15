@@ -2034,25 +2034,19 @@ function renderMatchDetail(match) {
   function buildContactCard() {
     // mode=2：腾讯会议
     if (match.mode === 2) {
-      if (match.meetingA && match.meetingB) {
+      if (match.meetingA) {
         return `<div class="card" style="border:1px solid rgba(22,93,255,0.35);margin-bottom:20px;">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
             <span style="font-size:1.2rem;">📹</span>
             <h3 style="margin:0;color:var(--primary);">腾讯会议已创建</h3>
           </div>
           <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:12px;">赛前10分钟自动开启，点击下方链接入会</p>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-            <div style="background:#1A1A2E;border:1px solid rgba(22,93,255,0.2);border-radius:var(--radius-sm);padding:12px;">
-              <div style="font-weight:700;color:#fff;margin-bottom:6px;">🟦 A队会议</div>
-              <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:8px;">会议号：<strong style="color:#fff;">${match.meetingA.code}</strong></div>
-              <a href="${match.meetingA.link}" target="_blank" class="btn btn-sm" style="background:rgba(22,93,255,0.15);color:#6BA3FF;border:1px solid rgba(22,93,255,0.4);font-size:0.78rem;padding:5px 12px;border-radius:var(--radius-sm);text-decoration:none;display:inline-block;">🏠 入会</a>
-            </div>
-            <div style="background:#1A1A2E;border:1px solid rgba(114,46,209,0.2);border-radius:var(--radius-sm);padding:12px;">
-              <div style="font-weight:700;color:#fff;margin-bottom:6px;">🟥 B队会议</div>
-              <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:8px;">会议号：<strong style="color:#fff;">${match.meetingB.code}</strong></div>
-              <a href="${match.meetingB.link}" target="_blank" class="btn btn-sm" style="background:rgba(114,46,209,0.15);color:#A78BFA;border:1px solid rgba(114,46,209,0.4);font-size:0.78rem;padding:5px 12px;border-radius:var(--radius-sm);text-decoration:none;display:inline-block;">🏠 入会</a>
-            </div>
+          <div style="background:#1A1A2E;border:1px solid rgba(22,93,255,0.2);border-radius:var(--radius-sm);padding:16px;margin-bottom:10px;">
+            <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:8px;">会议号</div>
+            <div style="font-weight:700;color:#fff;font-size:1.1rem;letter-spacing:2px;margin-bottom:12px;">${match.meetingA.code}</div>
+            <a href="${match.meetingA.link}" target="_blank" class="btn btn-sm" style="background:rgba(22,93,255,0.15);color:#6BA3FF;border:1px solid rgba(22,93,255,0.4);font-size:0.82rem;padding:6px 16px;border-radius:var(--radius-sm);text-decoration:none;display:inline-block;">🏠 入会</a>
           </div>
+          <p style="font-size:0.75rem;color:var(--text-muted);">💡 入会后可使用腾讯会议「分组讨论」功能手动分配A队/B队房间</p>
         </div>`;
       } else if (isOrg) {
         // 组织者未创建会议：显示建会按钮

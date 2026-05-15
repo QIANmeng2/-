@@ -104,8 +104,7 @@ async function main() {
     const data = api('/api/recruitment/active');
     matches = (data.matches || []).filter(m =>
       m.mode === 2 &&
-      !m.meetingA &&
-      !m.meetingB
+      !m.meetingA
     );
   } catch (e) {
     log(`查询失败: ${e.message}`);
@@ -137,31 +136,20 @@ async function main() {
     const meetingEnd = new Date(meetingStart.getTime() + 2 * 60 * 60 * 1000);
     const subject = `训练赛 · ${match.startTime}`;
 
-    let codeA = '', linkA = '', codeB = '', linkB = '';
+    let codeA = '', linkA = '';
 
     try {
-      log(`创建 A 队会议: ${subject} · A队`);
-      const outA = tmeet(`meeting create --subject "${subject} · A队" --start "${formatISO(meetingStart)}+08:00" --end "${formatISO(meetingEnd)}+08:00"`);
+      log(`创建腾讯会议: ${subject}`);
+      const outA = tmeet(`meeting create --subject "${subject}" --start "${formatISO(meetingStart)}+08:00" --end "${formatISO(meetingEnd)}+08:00"`);
       codeA = outA.meeting_code || outA.meetingCode || outA.meeting_id || '';
       linkA = outA.join_url || outA.joinUrl || (codeA ? `https://meeting.tencent.com/s/${codeA}` : '');
-      log(`  A队会议: ${codeA} ${linkA}`);
+      log(`  会议号: ${codeA} ${linkA}`);
     } catch (e) {
-      log(`  A队建会失败: ${e.message}`);
+      log(`  建会失败: ${e.message}`);
       continue;
     }
 
-    try {
-      log(`创建 B 队会议: ${subject} · B队`);
-      const outB = tmeet(`meeting create --subject "${subject} · B队" --start "${formatISO(meetingStart)}+08:00" --end "${formatISO(meetingEnd)}+08:00"`);
-      codeB = outB.meeting_code || outB.meetingCode || outB.meeting_id || '';
-      linkB = outB.join_url || outB.joinUrl || (codeB ? `https://meeting.tencent.com/s/${codeB}` : '');
-      log(`  B队会议: ${codeB} ${linkB}`);
-    } catch (e) {
-      log(`  B队建会失败: ${e.message}`);
-      continue;
-    }
-
-    if (!codeA || !codeB) {
+    if (!codeA) {
       log('建会成功但未获取到会议号，跳过更新');
       continue;
     }
@@ -175,8 +163,7 @@ async function main() {
     const adminToken = process.env.ADMIN_TOKEN;
     if (adminToken) {
       try {
-        // 调用服务器端接口更新会议信息
-        const body = JSON.stringify({ codeA, linkA, codeB, linkB });
+        const body = JSON.stringify({ codeA, linkA });
         const out = execSync(`curl -s -X PUT "${API_BASE}/api/recruitment/${match.id}/meeting-manual" -H "Content-Type: application/json" -H "x-admin-secret: ${adminToken}" -d "${body.replace(/"/g, '\\"')}"`, { encoding: 'utf8', timeout: 15000 });
         log(`服务器更新结果: ${out}`);
       } catch (e) {
@@ -185,7 +172,7 @@ async function main() {
     } else {
       // 无 token 时输出 SQL，需手动执行
       log('未设置 ADMIN_TOKEN 环境变量，请手动执行以下 SQL 更新数据库:');
-      log(`  UPDATE recruitment_matches SET meetingcodea='${codeA}', meetinglinka='${linkA}', meetingcodeb='${codeB}', meetinglinkb='${linkB}' WHERE id='${match.id}';`);
+      log(`  UPDATE recruitment_matches SET meetingcodea='${codeA}', meetinglinka='${linkA}' WHERE id='${match.id}';`);
     }
 
     log(`✅ 招募 ${match.id} 建会完成`);
