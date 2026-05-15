@@ -113,6 +113,9 @@ async function initDB() {
     await client.query('ALTER TABLE recruitment_matches ADD COLUMN IF NOT EXISTS meetingCode TEXT');
     await client.query('ALTER TABLE recruitment_matches ADD COLUMN IF NOT EXISTS meetingLink TEXT');
     await client.query("ALTER TABLE recruitment_matches ADD COLUMN IF NOT EXISTS result TEXT DEFAULT ''");
+    // 招募确认流程：增加 confirmed 字段和通知 ID 字段
+    await client.query('ALTER TABLE recruitment_positions ADD COLUMN IF NOT EXISTS confirmed BOOLEAN DEFAULT false');
+    await client.query('ALTER TABLE notifications ADD COLUMN IF NOT EXISTS notification_id TEXT DEFAULT \'\'');
   } finally { client.release(); }
 }
 
@@ -141,7 +144,11 @@ function adminMiddleware(req, res, next) {
 }
 
 async function sendNotification(userId, type, content, relatedId = null) {
-  await pool.query('INSERT INTO notifications (userId, type, content, relatedId) VALUES ($1,$2,$3,$4)', [userId, type, content, relatedId]);
+  const result = await pool.query(
+    'INSERT INTO notifications (userId, type, content, relatedId, notification_id) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+    [userId, type, content, relatedId, userId + '_' + Date.now()]
+  );
+  return result.rows[0].id;
 }
 
 // ====================== 招募系统接口 ======================
@@ -174,17 +181,17 @@ app.get('/api/recruitment/active', async (req, res) => {
         notes: m.notes, mode: m.mode, status: m.status,
         organizer: { id: m.organizerid, teamName: org.teamname || '未知', coachName: org.coachname || '', level: org.level || '' },
         totalCount: pos.length,
-        positions: pos.map(p => ({ team: p.team, lane: p.lane, playerId: p.playerid, playerName: p.playername }))
+        positions: pos.map(p => ({ team: p.team, lane: p.lane, playerId: p.playerid, playerName: p.playername, confirmed: p.confirmed }))
       };
     });
     res.json({ matches: result });
   } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
 });
 
-// 获取已满对局
+// 获取已满/待确认对局
 app.get('/api/recruitment/full', async (req, res) => {
   try {
-    const matches = await pool.query("SELECT * FROM recruitment_matches WHERE status = 'full' ORDER BY createdAt DESC");
+    const matches = await pool.query("SELECT * FROM recruitment_matches WHERE status IN ('full', 'confirming') ORDER BY createdAt DESC");
     if (matches.rows.length === 0) return res.json({ matches: [] });
 
     const matchIds = matches.rows.map(m => m.id);
@@ -209,7 +216,7 @@ app.get('/api/recruitment/full', async (req, res) => {
         notes: m.notes, mode: m.mode, status: m.status,
         organizer: { id: m.organizerid, teamName: org.teamname || '未知', coachName: org.coachname || '', level: org.level || '' },
         totalCount: pos.length,
-        positions: pos.map(p => ({ team: p.team, lane: p.lane, playerId: p.playerid, playerName: p.playername }))
+        positions: pos.map(p => ({ team: p.team, lane: p.lane, playerId: p.playerid, playerName: p.playername, confirmed: p.confirmed }))
       };
     });
     res.json({ matches: result });
@@ -224,7 +231,7 @@ app.get('/api/recruitment/:id', async (req, res) => {
     const m = mRes.rows[0];
 
     const posRes = await pool.query('SELECT * FROM recruitment_positions WHERE matchId = $1', [req.params.id]);
-    const positions = posRes.rows.map(p => ({ team: p.team, lane: p.lane, playerId: p.playerid, playerName: p.playername }));
+    const positions = posRes.rows.map(p => ({ team: p.team, lane: p.lane, playerId: p.playerid, playerName: p.playername, confirmed: p.confirmed }));
 
     const orgRes = await pool.query('SELECT id, teamName, coachName, level FROM users WHERE id = $1', [m.organizerid]);
     const org = orgRes.rows[0] || {};
@@ -461,23 +468,32 @@ app.post('/api/recruitment/:id/join', authMiddleware, async (req, res) => {
       [req.params.id, team, lane, req.userId, playerName]
     );
 
-    // 检查是否满员（10人）
+    // 检查是否满员（10人）—— 进入确认阶段
     const allPos = await client.query('SELECT * FROM recruitment_positions WHERE matchId = $1', [req.params.id]);
     if (allPos.rows.length >= 10) {
-      await client.query("UPDATE recruitment_matches SET status = 'full', locked = true WHERE id = $1", [req.params.id]);
+      // 进入 confirming 状态，通知所有人确认
+      await client.query("UPDATE recruitment_matches SET status = 'confirming', locked = true WHERE id = $1", [req.params.id]);
+      const players = await client.query('SELECT playerId FROM recruitment_positions WHERE matchId = $1', [req.params.id]);
+      const matchInfo = await client.query('SELECT startTime FROM recruitment_matches WHERE id = $1', [req.params.id]);
+      const startTime = matchInfo.rows[0]?.starttime || '';
+      for (const p of players.rows) {
+        await sendNotification(p.playerid, 'recruitment_confirm',
+          `训练赛 ${startTime} 已凑齐10人，请确认你是否能参加，点击「能参加」后将锁定位置。`);
+      }
     }
 
     await client.query('COMMIT');
 
     const posRes = await pool.query('SELECT * FROM recruitment_positions WHERE matchId = $1', [req.params.id]);
-    const positions_out = posRes.rows.map(p => ({ team: p.team, lane: p.lane, playerId: p.playerid, playerName: p.playername }));
+    const positions_out = posRes.rows.map(p => ({ team: p.team, lane: p.lane, playerId: p.playerid, playerName: p.playername, confirmed: p.confirmed }));
     const updated = await pool.query('SELECT * FROM recruitment_matches WHERE id = $1', [req.params.id]);
 
     res.json({
       success: true,
       match: { id: req.params.id, status: updated.rows[0].status, locked: updated.rows[0].locked },
       positions: positions_out,
-      isFull: updated.rows[0].status === 'full'
+      isFull: updated.rows[0].status === 'full',
+      isConfirming: updated.rows[0].status === 'confirming'
     });
   } catch (e) {
     await client.query('ROLLBACK');
@@ -496,16 +512,30 @@ app.post('/api/recruitment/:id/leave', authMiddleware, async (req, res) => {
 
     await client.query('DELETE FROM recruitment_positions WHERE matchId = $1 AND playerId = $2', [req.params.id, req.userId]);
 
-    // 如果之前已满员，恢复为招募中
+    // 获取当前对局状态
     const mRes = await client.query('SELECT * FROM recruitment_matches WHERE id = $1', [req.params.id]);
-    if (mRes.rows.length > 0 && mRes.rows[0].status === 'full') {
+    const m = mRes.rows[0];
+
+    if (m && m.status === 'confirming') {
+      // 在确认阶段退出，通知其他人
+      const remaining = await client.query('SELECT playerId FROM recruitment_positions WHERE matchId = $1', [req.params.id]);
+      for (const p of remaining.rows) {
+        await sendNotification(p.playerid, 'recruitment_dropped',
+          `有人退出，训练赛 ${m.starttime} 仍在招募中（${remaining.rows.length}/10）`);
+      }
+      // 若不足10人，恢复 recruiting
+      if (remaining.rows.length < 10) {
+        await client.query("UPDATE recruitment_matches SET status = 'recruiting', locked = false WHERE id = $1", [req.params.id]);
+      }
+    } else if (m && m.status === 'full') {
+      // 正式成局后退出，恢复 recruiting（这种情况极少发生）
       await client.query("UPDATE recruitment_matches SET status = 'recruiting', locked = false WHERE id = $1", [req.params.id]);
     }
 
     await client.query('COMMIT');
 
     const allPos = await pool.query('SELECT * FROM recruitment_positions WHERE matchId = $1', [req.params.id]);
-    const positions_out = allPos.rows.map(p => ({ team: p.team, lane: p.lane, playerId: p.playerid, playerName: p.playername }));
+    const positions_out = allPos.rows.map(p => ({ team: p.team, lane: p.lane, playerId: p.playerid, playerName: p.playername, confirmed: p.confirmed }));
     const updated = await pool.query('SELECT * FROM recruitment_matches WHERE id = $1', [req.params.id]);
 
     res.json({
@@ -520,8 +550,69 @@ app.post('/api/recruitment/:id/leave', authMiddleware, async (req, res) => {
   } finally { client.release(); }
 });
 
+// 确认能否参加（confirming 阶段）
+app.put('/api/recruitment/:id/confirm', authMiddleware, async (req, res) => {
+  const { confirmed } = req.body;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const mRes = await client.query('SELECT * FROM recruitment_matches WHERE id = $1', [req.params.id]);
+    if (mRes.rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ message: '对局不存在' }); }
+    const m = mRes.rows[0];
+    if (m.status !== 'confirming') { await client.query('ROLLBACK'); return res.status(400).json({ message: '当前不在确认阶段' }); }
+
+    const posRes = await client.query('SELECT * FROM recruitment_positions WHERE matchId = $1 AND playerId = $2', [req.params.id, req.userId]);
+    if (posRes.rows.length === 0) { await client.query('ROLLBACK'); return res.status(400).json({ message: '你不在本对局中' }); }
+
+    if (confirmed === true) {
+      // 确认能参加，标记 confirmed=true
+      await client.query('UPDATE recruitment_positions SET confirmed = true WHERE matchId = $1 AND playerId = $2', [req.params.id, req.userId]);
+      // 通知其他未确认的人
+      const others = await client.query('SELECT playerId FROM recruitment_positions WHERE matchId = $1 AND playerId != $2 AND confirmed = false', [req.params.id, req.userId]);
+      for (const p of others.rows) {
+        await sendNotification(p.playerid, 'recruitment_confirmed', `有人已确认能参加训练赛 ${m.starttime}，还差 ${others.rows.length} 人确认。`);
+      }
+      // 检查是否所有人都确认了
+      const allConfirmed = await client.query('SELECT COUNT(*) FROM recruitment_positions WHERE matchId = $1 AND confirmed = false', [req.params.id]);
+      if (parseInt(allConfirmed.rows[0].count) === 0) {
+        // 全员确认，正式成局
+        await client.query("UPDATE recruitment_matches SET status = 'full' WHERE id = $1", [req.params.id]);
+        const players = await client.query('SELECT playerId FROM recruitment_positions WHERE matchId = $1', [req.params.id]);
+        for (const p of players.rows) {
+          await sendNotification(p.playerid, 'recruitment_full',
+            `🎉 训练赛 ${m.starttime} 已全员确认，正式成局！请准时参加。${m.mode === 2 && m.meetingcode ? '腾讯会议号：' + m.meetingcode : ''}`);
+        }
+      }
+    } else {
+      // 没时间，退出位置
+      await client.query('DELETE FROM recruitment_positions WHERE matchId = $1 AND playerId = $2', [req.params.id, req.userId]);
+      const remaining = await client.query('SELECT playerId FROM recruitment_positions WHERE matchId = $1', [req.params.id]);
+      for (const p of remaining.rows) {
+        await sendNotification(p.playerid, 'recruitment_dropped',
+          `有人退出，训练赛 ${m.starttime} 仍在招募中（${remaining.rows.length}/10）`);
+      }
+      if (remaining.rows.length < 10) {
+        await client.query("UPDATE recruitment_matches SET status = 'recruiting', locked = false WHERE id = $1", [req.params.id]);
+      }
+    }
+
+    await client.query('COMMIT');
+    const allPos = await pool.query('SELECT * FROM recruitment_positions WHERE matchId = $1', [req.params.id]);
+    const positions_out = allPos.rows.map(p => ({ team: p.team, lane: p.lane, playerId: p.playerid, playerName: p.playername, confirmed: p.confirmed }));
+    const updated = await pool.query('SELECT * FROM recruitment_matches WHERE id = $1', [req.params.id]);
+    res.json({
+      success: true,
+      match: { id: req.params.id, status: updated.rows[0].status, locked: updated.rows[0].locked },
+      positions: positions_out
+    });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ message: '确认失败' });
+  } finally { client.release(); }
+});
+
 // 清理占位（仅发起人，可清理恶意报名人员）
-app.delete('/api/recruitment/:id/positions/:playerId', authMiddleware, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -531,16 +622,24 @@ app.delete('/api/recruitment/:id/positions/:playerId', authMiddleware, async (re
 
     await client.query('DELETE FROM recruitment_positions WHERE matchId = $1 AND playerId = $2', [req.params.id, req.params.playerId]);
 
-    // 如果之前已满员，恢复为招募中
-    const updated = await client.query('SELECT * FROM recruitment_matches WHERE id = $1', [req.params.id]);
-    if (updated.rows.length > 0 && updated.rows[0].status === 'full') {
-      await client.query("UPDATE recruitment_matches SET status = 'recruiting', locked = false WHERE id = $1", [req.params.id]);
+    const m = mRes.rows[0];
+    // confirming/full 状态：通知其他人有人退出
+    if (m.status === 'confirming' || m.status === 'full') {
+      const remaining = await client.query('SELECT playerId FROM recruitment_positions WHERE matchId = $1', [req.params.id]);
+      for (const p of remaining.rows) {
+        await sendNotification(p.playerid, 'recruitment_dropped',
+          `管理员清理了占位，训练赛 ${m.starttime} 仍在招募中（${remaining.rows.length}/10）`);
+      }
+      // 若不足10人，恢复 recruiting
+      if (remaining.rows.length < 10) {
+        await client.query("UPDATE recruitment_matches SET status = 'recruiting', locked = false WHERE id = $1", [req.params.id]);
+      }
     }
 
     await client.query('COMMIT');
 
     const allPos = await pool.query('SELECT * FROM recruitment_positions WHERE matchId = $1', [req.params.id]);
-    const positions_out = allPos.rows.map(p => ({ team: p.team, lane: p.lane, playerId: p.playerid, playerName: p.playername }));
+    const positions_out = allPos.rows.map(p => ({ team: p.team, lane: p.lane, playerId: p.playerid, playerName: p.playername, confirmed: p.confirmed }));
     const latest = await pool.query('SELECT * FROM recruitment_matches WHERE id = $1', [req.params.id]);
 
     res.json({
@@ -928,12 +1027,17 @@ app.get('/api/admin/users', authMiddleware, adminMiddleware, async (req, res) =>
     else if (peakSort === 'asc') { sql += ' ORDER BY peakScore ASC NULLS LAST'; }
     else { sql += ' ORDER BY created_at DESC'; }
     const result = await pool.query(sql, params);
-    // 获取team关联
+    // 获取team关联（包括队伍名称和角色）
     const userIds = result.rows.map(u => u.id);
     let teamMap = {};
     if (userIds.length > 0) {
-      const tmRes = await pool.query('SELECT userid, teamid FROM team_members WHERE userid = ANY($1)', [userIds]);
-      tmRes.rows.forEach(r => { teamMap[r.userid] = r.teamid; });
+      const tmRes = await pool.query(
+        'SELECT tm.userid, tm.teamid, tm.role, t.name as team_name FROM team_members tm JOIN teams t ON tm.teamid = t.id WHERE tm.userid = ANY($1)',
+        [userIds]
+      );
+      tmRes.rows.forEach(r => {
+        teamMap[r.userid] = { teamId: r.teamid, teamName: r.team_name, role: r.role };
+      });
     }
     res.json({ users: result.rows.map(u => ({
       id: u.id, username: u.username, teamName: u.teamname, coachName: u.coachname,
@@ -1404,11 +1508,16 @@ app.post('/api/admin/teams/:id/members', authMiddleware, adminMiddleware, async 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // 查询队伍名称
+    const teamRes = await client.query('SELECT name FROM teams WHERE id = $1', [req.params.id]);
+    const teamName = teamRes.rows[0]?.name || '未知队伍';
     // 从其他队伍移除
     await client.query('DELETE FROM team_members WHERE userId = $1', [userId]);
     // 加入新队伍
     await client.query('INSERT INTO team_members (teamId, userId, role) VALUES ($1, $2, $3)', [req.params.id, userId, 'member']);
     await client.query('COMMIT');
+    // 发送通知给用户
+    await sendNotification(userId, 'team_invite', `管理员已将你加入队伍「${teamName}」，可在「我的队伍」中查看。`, req.params.id);
     res.json({ success: true });
   } catch (e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ message: '添加失败' }); } finally { client.release(); }
 });
@@ -1432,6 +1541,72 @@ async function startServer() {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 服务运行在端口 ${PORT}`);
   });
+
+  // 确认阶段超时检查：每分钟运行一次
+  // 开赛前10分钟仍未确认的用户自动退出
+  setInterval(async () => {
+    try {
+      const now = new Date();
+      const tenMinMs = 10 * 60 * 1000;
+
+      // 查找所有 confirming 状态的对局（内存中过滤时间）
+      const allConfirming = await pool.query("SELECT * FROM recruitment_matches WHERE status = 'confirming'");
+      const toProcess = allConfirming.rows.filter(m => {
+        try {
+          const startDate = new Date(m.starttime.replace(' ', 'T') + ':00');
+          return startDate - now <= tenMinMs && startDate > now;
+        } catch { return false; }
+      });
+
+      for (const m of toProcess) {
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          // 找出未确认的人员
+          const unconfirmed = await client.query(
+            'SELECT playerId FROM recruitment_positions WHERE matchId = $1 AND confirmed = false',
+            [m.id]
+          );
+          if (unconfirmed.rows.length > 0) {
+            // 通知被踢出的人
+            for (const p of unconfirmed.rows) {
+              await sendNotification(p.playerid, 'recruitment_timeout',
+                `训练赛 ${m.starttime} 即将开始，你未在规定时间内确认，已自动退出。`);
+            }
+            // 删除未确认人员
+            await client.query('DELETE FROM recruitment_positions WHERE matchId = $1 AND confirmed = false', [m.id]);
+            // 通知剩余的人
+            const remaining = await client.query('SELECT playerId FROM recruitment_positions WHERE matchId = $1', [m.id]);
+            if (remaining.rows.length < 10) {
+              await client.query("UPDATE recruitment_matches SET status = 'recruiting', locked = false WHERE id = $1", [m.id]);
+              for (const p of remaining.rows) {
+                await sendNotification(p.playerid, 'recruitment_dropped',
+                  `有人超时未确认，训练赛 ${m.starttime} 已自动恢复招募。`);
+              }
+            } else {
+              // 凑够10人，重新进入 confirming 阶段
+              await client.query("UPDATE recruitment_matches SET status = 'confirming' WHERE id = $1", [m.id]);
+              // 重置所有 confirmed 为 false
+              await client.query('UPDATE recruitment_positions SET confirmed = false WHERE matchId = $1', [m.id]);
+              for (const p of remaining.rows) {
+                await sendNotification(p.playerid, 'recruitment_confirm',
+                  `有人超时退出，训练赛 ${m.starttime} 重新凑齐10人，请重新确认。`);
+              }
+            }
+          }
+          await client.query('COMMIT');
+          console.log(`[超时检查] 对局 ${m.id} 已处理`);
+        } catch (e) {
+          await client.query('ROLLBACK');
+          console.error(`[超时检查] 对局 ${m.id} 处理失败:`, e.message);
+        } finally {
+          client.release();
+        }
+      }
+    } catch (e) {
+      console.error('[超时检查] 定时任务异常:', e.message);
+    }
+  }, 60 * 1000); // 每分钟检查一次
 }
 
 startServer();
