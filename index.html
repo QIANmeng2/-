@@ -3197,7 +3197,7 @@ function buildAdminTeamCard(t, users, unassignedUsers) {
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
         <button class="btn btn-xs btn-ghost" onclick="adminRenameTeam('${t.id}','${t.name.replace(/'/g,"\\'")}')">✏️ 改名</button>
-        <button class="btn btn-xs btn-ghost" onclick="adminSetCaptain('${t.id}','${t.name.replace(/'/g,"\\'")}', '${captain?.userId||''}')">👑 换队长</button>
+        <button class="btn btn-xs btn-ghost" onclick="adminSetCaptain('${t.id}','${t.name.replace(/'/g,"\\'")}', '${captain?.userId||''}', ${JSON.stringify(t.members).replace(/"/g,'&quot;')})">👑 换队长</button>
         <button class="btn btn-xs btn-ghost" onclick="adminAddMember('${t.id}','${t.name.replace(/'/g,"\\'")}')">➕ 加人</button>
         <button class="btn btn-xs btn-danger" onclick="adminDeleteTeam('${t.id}')">🗑️ 解散</button>
       </div>
@@ -3238,13 +3238,10 @@ async function adminRenameTeam(teamId, currentName) {
   } catch(err) { showToast(err.message,'error'); }
 }
 
-async function adminSetCaptain(teamId, teamName, currentCaptainId) {
-  const users = (await api('/api/admin/users')).users || [];
-  const members = users.filter(u => u.team && u.team.teamId === teamId);
-  if (members.length === 0) { showToast('该队伍暂无成员，无法设置队长','error'); return; }
-  // 简单处理：用下拉框选择一个成员
-  const options = members.map(u => `${u.id}:${u.coachName||u.username}`).join(',');
-  const selected = await dialogPrompt({ title:`👑 换队长（${teamName}）`, body:`当前队长ID: ${currentCaptainId}\n请输入新队长用户ID：`, placeholder:'输入用户ID', defaultValue:currentCaptainId||'', confirmText:'确认', cancelText:'取消' });
+async function adminSetCaptain(teamId, teamName, currentCaptainId, members) {
+  if (!members || members.length === 0) { showToast('该队伍暂无成员，无法设置队长','error'); return; }
+  const options = members.map(m => `${m.userId}:${m.coachName||m.username}`).join('\n');
+  const selected = await dialogPrompt({ title:`👑 换队长（${teamName}）`, body:`当前队长ID: ${currentCaptainId}\n可选成员：\n${options}\n\n请输入新队长用户ID：`, placeholder:'输入用户ID', defaultValue:currentCaptainId||'', confirmText:'确认', cancelText:'取消' });
   if (!selected || selected === currentCaptainId) return;
   try {
     await api(`/api/admin/teams/${teamId}`, { method:'PUT', body: JSON.stringify({ captainId: selected }) });
