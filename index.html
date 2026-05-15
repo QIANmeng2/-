@@ -378,6 +378,12 @@
       border: 1px solid rgba(239, 68, 68, 0.25);
     }
 
+    .badge-confirming {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--warning);
+      border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+
     .badge-level {
       background: rgba(114, 46, 209, 0.15);
       color: #a78bfa;
@@ -737,6 +743,11 @@
     .match-card.full::before {
       background: var(--danger);
       box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
+    }
+
+    .match-card.confirming::before {
+      background: var(--warning);
+      box-shadow: 0 0 12px rgba(245, 158, 11, 0.5);
     }
 
     .match-card:hover {
@@ -1951,9 +1962,9 @@ function renderRecruitList(matches) {
     const blueCount = m.positions.filter(p => p.team === 'blue').length;
     const redCount = m.positions.filter(p => p.team === 'red').length;
     const modeLabels = { 1: '模式1·参赛', 2: '模式2·组织', 3: '模式3·组队' };
-    const statusLabel = m.status === 'full' ? '已满' : m.status === 'closed' ? '已关闭' : '招募中';
-    const statusClass = m.status === 'full' ? 'badge-full' : m.status === 'closed' ? 'badge-closed' : 'badge-recruiting';
-    const cardClass = m.status === 'full' ? 'full' : 'recruiting';
+    const statusLabel = m.status === 'full' ? '已满' : m.status === 'confirming' ? '待确认' : m.status === 'closed' ? '已关闭' : '招募中';
+    const statusClass = m.status === 'full' ? 'badge-full' : m.status === 'confirming' ? 'badge-confirming' : m.status === 'closed' ? 'badge-closed' : 'badge-recruiting';
+    const cardClass = m.status === 'full' ? 'full' : m.status === 'confirming' ? 'confirming' : 'recruiting';
     const progress = (m.totalCount / 10) * 100;
     const isOrg = currentUser && currentUser.id === m.organizer.id;
 
@@ -1999,8 +2010,10 @@ function renderMatchDetail(match) {
   const isOrg = currentUser && currentUser.id === match.organizer.id;
   const myPos = currentUser ? match.positions.find(p => p.playerId === currentUser.id) : null;
   const isFull = match.status === 'full';
+  const isConfirming = match.status === 'confirming';
   const isClosed = match.status === 'closed';
-  const canJoin = currentUser && !isFull && !isClosed && currentUser.id !== match.organizer.id && !myPos;
+  // confirming 状态下不能新加入
+  const canJoin = currentUser && !isFull && !isConfirming && !isClosed && currentUser.id !== match.organizer.id && !myPos;
   const modeLabels = { 1: '模式1·参赛', 2: '模式2·组织', 3: '模式3·组队' };
 
   // 构成分路面板
@@ -2013,16 +2026,22 @@ function renderMatchDetail(match) {
       const filled = !!pos;
       const isMine = pos && currentUser && pos.playerId === currentUser.id;
       const isOrgFilled = filled && !isMine;
-      const laneDisabled = isFull || isClosed;
+      const laneDisabled = isFull || isConfirming || isClosed;
+      // confirming 状态下：不能新加入，不能自己撤销（只能点确认按钮）
       const joinBtn = canJoin
         ? `<button class="btn btn-xs btn-blue" onclick="joinLane('${match.id}','${team}','${lane}')">报名</button>`
-        : (myPos && !filled ? `<button class="btn btn-xs btn-blue" onclick="joinLane('${match.id}','${team}','${lane}')">报名</button>` : '');
-      const leaveBtn = isMine
+        : (myPos && !filled && !isConfirming ? `<button class="btn btn-xs btn-blue" onclick="joinLane('${match.id}','${team}','${lane}')">报名</button>` : '');
+      // confirming 状态下普通用户不能撤销，只能等超时或在确认弹窗中选择
+      const leaveBtn = isMine && !isConfirming
         ? `<button class="btn btn-xs btn-danger" onclick="leaveMatch('${match.id}')">撤销</button>`
         : '';
       const removeBtn = isOrg && filled
         ? `<button class="btn btn-xs btn-ghost" onclick="removePlayer('${match.id}','${pos.playerId}')" title="清理">✕</button>`
         : '';
+      // confirming 状态下显示确认状态
+      const confirmBadge = filled && isConfirming && pos.confirmed
+        ? `<span class="badge badge-success" style="font-size:0.65rem;padding:2px 6px;">已确认</span>`
+        : (filled && isConfirming && !pos.confirmed ? `<span class="badge badge-confirming" style="font-size:0.65rem;padding:2px 6px;">待确认</span>` : '');
       html += `
         <div class="lane-row ${team} ${filled?'filled':''}">
           <div class="lane-info">
@@ -2031,6 +2050,7 @@ function renderMatchDetail(match) {
           </div>
           <div class="lane-action">
             ${filled && !isMine && !isOrg ? `<span style="font-size:0.72rem;color:var(--text-light);">已占</span>` : ''}
+            ${confirmBadge || ''}
             ${leaveBtn}
             ${joinBtn}
             ${removeBtn}
@@ -2045,12 +2065,30 @@ function renderMatchDetail(match) {
   if (isOrg) {
     headerActions = `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-sm btn-danger" onclick="cancelMatch('${match.id}')" style="padding:5px 14px;">撤销招募</button>
-      ${!isFull&&!isClosed?'<button class="btn btn-sm btn-ghost" onclick="closeMatch(\''+match.id+'\')" style="padding:5px 14px;">关闭报名</button>':''}
+      ${(!isFull&&!isConfirming&&!isClosed)?'<button class="btn btn-sm btn-ghost" onclick="closeMatch(\''+match.id+'\')" style="padding:5px 14px;">关闭报名</button>':''}
       ${!match.meetingCode&&isFull?'<button class="btn btn-sm btn-primary" onclick="editMatchMeeting(\''+match.id+'\',\''+match.meetingCode+'\',\''+match.meetingLink+'\')" style="padding:5px 14px;">📹 填入会议信息</button>':''}
       ${match.meetingCode&&isOrg?'<button class="btn btn-sm btn-ghost" onclick="editMatchMeeting(\''+match.id+'\',\''+match.meetingCode+'\',\''+match.meetingLink+'\')" style="padding:5px 14px;">✏️ 编辑会议</button>':''}
     </div>`;
   }
-  if (myPos && !isFull && !isClosed) {
+  // 确认阶段的确认弹窗
+  if (myPos && isConfirming) {
+    if (myPos.confirmed) {
+      headerActions = `<div style="margin-top:10px;"><span class="badge badge-success">✅ 已确认能参加，请准时参赛</span></div>`;
+    } else {
+      headerActions = `<div class="card" style="border:1px solid rgba(245,158,11,0.4);margin-top:10px;background:rgba(245,158,11,0.05);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:1rem;">⏳</span>
+          <h4 style="margin:0;color:var(--warning);">请确认能否参加</h4>
+        </div>
+        <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:12px;">训练赛 ${match.startTime} 已凑齐10人，请确认你的参赛意向：</p>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-success btn-sm" onclick="confirmRecruitment('${match.id}', true)" style="padding:8px 20px;">✅ 能参加</button>
+          <button class="btn btn-danger btn-sm" onclick="confirmRecruitment('${match.id}', false)" style="padding:8px 20px;">❌ 没时间</button>
+        </div>
+      </div>`;
+    }
+  }
+  if (myPos && !isFull && !isConfirming && !isClosed) {
     headerActions = `<div style="margin-top:10px;"><button class="btn btn-sm btn-danger" onclick="leaveMatch('${match.id}')">撤销报名（${myPos.team==='blue'?'🟦':'🟥'} ${myPos.lane}）</button></div>`;
   }
   if (isFull) {
@@ -2342,8 +2380,14 @@ async function joinLane(matchId, team, lane) {
       showFullModal();
       cacheStore.delete('/api/recruitment/active');
       cacheStore.delete('/api/recruitment/full');
+    } else if (data.isConfirming) {
+      // 进入确认阶段
+      showToast('报名成功！等待全员确认...', 'info');
+      cacheStore.delete('/api/recruitment/active');
+      cacheStore.delete('/api/recruitment/full');
+    } else {
+      showToast('报名成功！','success');
     }
-    showToast('报名成功！','success');
     await openMatchDetail(matchId);
   } catch(err) { showToast(err.message,'error'); }
 }
@@ -2353,8 +2397,28 @@ async function leaveMatch(matchId) {
   try {
     await api(`/api/recruitment/${matchId}/leave`, { method: 'POST' });
     showToast('已撤销报名','info');
+    cacheStore.delete('/api/recruitment/active');
+    cacheStore.delete('/api/recruitment/full');
     await openMatchDetail(matchId);
   } catch(err) { showToast(err.message,'error'); }
+}
+
+// 确认能否参加（confirming 阶段）
+async function confirmRecruitment(matchId, confirmed) {
+  try {
+    const data = await api(`/api/recruitment/${matchId}/confirm`, {
+      method: 'PUT',
+      body: JSON.stringify({ confirmed })
+    });
+    if (confirmed) {
+      showToast('已确认，请准时参加！', 'success');
+    } else {
+      showToast('已退出本次训练赛', 'info');
+    }
+    cacheStore.delete('/api/recruitment/active');
+    cacheStore.delete('/api/recruitment/full');
+    await openMatchDetail(matchId);
+  } catch(err) { showToast(err.message, 'error'); }
 }
 
 async function removePlayer(matchId, playerId) {
