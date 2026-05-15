@@ -3150,7 +3150,7 @@ async function adminCreateTeam() {
   const maxMembers = await dialogPrompt({ title:'最大人数（默认7）', body:'请输入队伍最大人数', placeholder:'7', defaultValue:'7', confirmText:'创建', cancelText:'取消' });
   if (maxMembers === null) return;
   try {
-    await api('/api/admin/teams', { method:'POST', body: JSON.stringify({ name: name.trim(), bio: bio?.trim()||'', maxMembers: parseInt(maxMembers)||7 }) });
+    await api('/api/admin/teams', { method:'POST', body: JSON.stringify({ name: name.trim(), bio: bio?.trim()||'', maxMembers: parseInt(maxMembers)||7, captainId: currentUser.id }) });
     showToast('队伍创建成功','success');
     await loadAdminTeams(document.getElementById('adminSubContent'));
   } catch(err) { showToast(err.message,'error'); }
