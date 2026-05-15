@@ -1948,7 +1948,7 @@ function updateUI() {
     ui('displayName').textContent = currentUser.coachName;
     ui('displayTeam').textContent = currentUser.teamName;
     document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="mine"], #tabNav .tab-btn[data-tab="profile"]').forEach(b => b.style.display = '');
-    ui('notificationBell').style.display = 'inline-block';
+    ui('notificationBell').style.display = 'flex';
     if (currentUser.id === 'mp4hmya7ad15v6') { ui('tabAdmin').style.display = ''; }
   } else {
     ui('userInfoDisplay').style.display = 'none';
