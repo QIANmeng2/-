@@ -507,6 +507,7 @@
       max-width: 560px;
       max-height: 90vh;
       overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
       box-shadow: var(--shadow-lg), 0 0 60px rgba(79, 70, 229, 0.1);
       position: relative;
     }
@@ -1485,6 +1486,8 @@
       .stat-value { font-size: 1.4rem; }
       .section-header { flex-direction: column; align-items: flex-start; gap: 8px; }
       .preset-positions { grid-template-columns: 1fr; }
+      .preset-lane { gap: 8px; }
+      .preset-lane label { width: 52px; }
       .recruit-header { flex-direction: column; align-items: stretch; }
       .recruit-tabs { overflow-x: auto; padding-bottom: 6px; gap: 6px; }
       .recruit-tab { padding: 8px 14px; font-size: 0.8rem; }
@@ -1528,6 +1531,9 @@
       .lane-card { padding: 8px 4px; border-radius: var(--radius-sm); }
       .lane-label { font-size: 0.68rem; margin-bottom: 4px; }
       .lane-input { padding: 6px 2px; font-size: 0.7rem; }
+      .preset-lane { gap: 6px; margin-bottom: 6px; font-size: 0.8rem; }
+      .preset-lane label { width: 48px; font-size: 0.78rem; }
+      .preset-lane input { padding: 6px 8px; font-size: 0.8rem; }
       body::before { opacity: 0.4; }
     }
 
@@ -2426,23 +2432,23 @@ function buildPresetPositions() {
   let blueHtml = '', redHtml = '';
   LANES.forEach(lane => {
     blueHtml += `<div class="preset-lane">
-      <label>${LANE_ICONS[lane]}${lane}</label>
-      <input type="text" id="preset-blue-${lane}" placeholder="选填" disabled>
+      <label>${lane}</label>
+      <input type="text" id="preset-blue-${lane}" placeholder="选填">
       <span class="lock-icon">锁</span>
     </div>`;
     redHtml += `<div class="preset-lane">
-      <label>${LANE_ICONS[lane]}${lane}</label>
-      <input type="text" id="preset-red-${lane}" placeholder="选填" disabled>
+      <label>${lane}</label>
+      <input type="text" id="preset-red-${lane}" placeholder="选填">
       <span class="lock-icon">锁</span>
     </div>`;
   });
   document.getElementById('presetBlue').innerHTML = blueHtml;
   document.getElementById('presetRed').innerHTML = redHtml;
 
-  // 点击输入框启用/禁用
+  // 点击输入框切换placeholder提示
   document.querySelectorAll('.preset-lane input').forEach(input => {
-    input.addEventListener('focus', () => { input.disabled = false; input.placeholder = '输入队友的微信号'; });
-    input.addEventListener('blur', () => { if (!input.value.trim()) { input.disabled = true; input.placeholder = '选填'; } });
+    input.addEventListener('focus', () => { input.placeholder = '输入队友的微信号'; });
+    input.addEventListener('blur', () => { if (!input.value.trim()) { input.placeholder = '选填'; } });
   });
 }
 
