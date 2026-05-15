@@ -1406,6 +1406,35 @@
     #guideModal strong { color: var(--text-primary); }
     #guideModal ol { margin: 0 0 16px; padding-left: 24px; }
 
+    /* 分路段位网格 */
+    .lane-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+    }
+    .lane-card {
+      text-align: center;
+      padding: 12px;
+      background: var(--bg-glass);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+      min-width: 0;
+    }
+    .lane-label {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .lane-input {
+      text-align: center;
+      padding: 10px;
+      width: 100%;
+      min-width: 0;
+    }
+
     /* ===== 移动端适配 ===== */
     @media (max-width: 768px) {
       .header-inner { height: 52px; padding: 0 12px; }
@@ -1433,6 +1462,10 @@
       .match-card-org { font-size: 0.8rem; margin-bottom: 8px; }
       .progress-bar-wrap { height: 8px; margin: 8px 0; }
       #guideModal .guide-content { margin: 16px 8px; padding: 16px; }
+      .lane-grid { gap: 8px; }
+      .lane-card { padding: 10px 6px; }
+      .lane-label { font-size: 0.72rem; margin-bottom: 6px; }
+      .lane-input { padding: 8px 4px; font-size: 0.75rem; }
       body::before { opacity: 0.6; }
     }
 
@@ -1457,6 +1490,10 @@
       .recruit-tabs { gap: 4px; }
       .recruit-tab { padding: 6px 10px; font-size: 0.75rem; }
       .slot-badge { padding: 3px 8px; font-size: 0.68rem; }
+      .lane-grid { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+      .lane-card { padding: 8px 4px; border-radius: var(--radius-sm); }
+      .lane-label { font-size: 0.68rem; margin-bottom: 4px; }
+      .lane-input { padding: 6px 2px; font-size: 0.7rem; }
       body::before { opacity: 0.4; }
     }
 
@@ -1465,6 +1502,10 @@
       .tab-btn { padding: 5px 6px; font-size: 0.68rem; }
       .card, .match-card { padding: 10px; }
       .slot-badge { padding: 3px 6px; font-size: 0.65rem; }
+      .lane-grid { gap: 4px; }
+      .lane-card { padding: 6px 2px; }
+      .lane-label { font-size: 0.62rem; }
+      .lane-input { padding: 5px 2px; font-size: 0.65rem; }
     }
 
     /* ===== 动画 ===== */
@@ -2887,11 +2928,11 @@ function renderProfileForm() {
           <div class="form-group"><label>巅峰赛分数</label><input class="form-input" type="number" id="profilePeakScore" value="${peakScore}" placeholder="如：2200"></div>
         </div>
         <div class="form-group"><label>五大分路段位（选填）</label>
-          <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px;">
+          <div class="lane-grid">
             ${['对抗路','打野','中路','发育路','游走'].map(lane => `
-              <div style="text-align:center;padding:12px;background:var(--bg-glass);border-radius:var(--radius-md);border:1px solid var(--border-color);">
-                <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px;">${lane}</div>
-                <input class="form-input" type="text" id="lane_${lane}" value="${typeof laneStats === 'object' ? (laneStats[lane] || '0') : '0'}" style="text-align:center;padding:10px;" placeholder="段位">
+              <div class="lane-card">
+                <div class="lane-label">${lane}</div>
+                <input class="form-input lane-input" type="text" id="lane_${lane}" value="${typeof laneStats === 'object' ? (laneStats[lane] || '0') : '0'}" placeholder="段位">
               </div>`).join('')}
           </div>
         </div>
