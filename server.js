@@ -108,6 +108,11 @@ async function initDB() {
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS heroPool TEXT DEFAULT \'\'');
     await client.query('ALTER TABLE schedules ADD COLUMN IF NOT EXISTS teamId TEXT');
     await client.query('ALTER TABLE recruitment_matches ADD COLUMN IF NOT EXISTS teamId TEXT');
+    await client.query('ALTER TABLE recruitment_matches ADD COLUMN IF NOT EXISTS groupContact TEXT DEFAULT \'\'');
+    await client.query('ALTER TABLE recruitment_matches ADD COLUMN IF NOT EXISTS meetingCodeA TEXT DEFAULT \'\'');
+    await client.query('ALTER TABLE recruitment_matches ADD COLUMN IF NOT EXISTS meetingLinkA TEXT DEFAULT \'\'');
+    await client.query('ALTER TABLE recruitment_matches ADD COLUMN IF NOT EXISTS meetingCodeB TEXT DEFAULT \'\'');
+    await client.query('ALTER TABLE recruitment_matches ADD COLUMN IF NOT EXISTS meetingLinkB TEXT DEFAULT \'\'');
   } finally { client.release(); }
 }
 
@@ -167,6 +172,9 @@ app.get('/api/recruitment/active', async (req, res) => {
       return {
         id: m.id, startTime: m.starttime, levelReq: m.levelreq,
         notes: m.notes, mode: m.mode, status: m.status,
+        groupContact: m.groupcontact || '',
+        meetingA: m.meetingcodea ? { code: m.meetingcodea, link: m.meetinglinka } : null,
+        meetingB: m.meetingcodeb ? { code: m.meetingcodeb, link: m.meetinglinkb } : null,
         organizer: { id: m.organizerid, teamName: org.teamname || '未知', coachName: org.coachname || '', level: org.level || '' },
         totalCount: pos.length,
         positions: pos.map(p => ({ team: p.team, lane: p.lane, playerId: p.playerid, playerName: p.playername }))
@@ -202,6 +210,9 @@ app.get('/api/recruitment/full', async (req, res) => {
       return {
         id: m.id, startTime: m.starttime, levelReq: m.levelreq,
         notes: m.notes, mode: m.mode, status: m.status,
+        groupContact: m.groupcontact || '',
+        meetingA: m.meetingcodea ? { code: m.meetingcodea, link: m.meetinglinka } : null,
+        meetingB: m.meetingcodeb ? { code: m.meetingcodeb, link: m.meetinglinkb } : null,
         organizer: { id: m.organizerid, teamName: org.teamname || '未知', coachName: org.coachname || '', level: org.level || '' },
         totalCount: pos.length,
         positions: pos.map(p => ({ team: p.team, lane: p.lane, playerId: p.playerid, playerName: p.playername }))
@@ -209,6 +220,76 @@ app.get('/api/recruitment/full', async (req, res) => {
     });
     res.json({ matches: result });
   } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
+});
+
+// 接收本地脚本创建的会议信息写入数据库（由 create-meetings.js 调用，需 ADMIN_SECRET 验证）
+app.put('/api/recruitment/:id/meeting-manual', async (req, res) => {
+  const { codeA, linkA, codeB, linkB } = req.body;
+  const secret = req.headers['x-admin-secret'];
+  if (secret !== (process.env.ADMIN_SECRET || 'qianmeng-local-script')) {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
+  if (!codeA || !codeB) return res.status(400).json({ message: '缺少会议号' });
+  try {
+    await pool.query(
+      'UPDATE recruitment_matches SET meetingCodeA=$1, meetingLinkA=$2, meetingCodeB=$3, meetingLinkB=$4 WHERE id=$5',
+      [codeA, linkA || '', codeB, linkB || '', req.params.id]
+    );
+    res.json({ success: true });
+  } catch (e) { console.error(e); res.status(500).json({ message: '更新失败' }); }
+});
+
+// 创建腾讯会议（仅 mode=2 的招募，提前10分钟自动建会）
+app.post('/api/recruitment/:id/meeting', authMiddleware, async (req, res) => {
+  try {
+    const mRes = await pool.query('SELECT * FROM recruitment_matches WHERE id = $1', [req.params.id]);
+    if (mRes.rows.length === 0) return res.status(404).json({ message: '对局不存在' });
+    const m = mRes.rows[0];
+    if (m.organizerid !== req.userId) return res.status(403).json({ message: '仅发起人可创建会议' });
+    if (m.mode !== 2) return res.status(400).json({ message: '仅模式2（纯组织者）自动建会' });
+    if (m.meetingcodea && m.meetingcodeb) return res.json({ meetingA: { code: m.meetingcodea, link: m.meetinglinka }, meetingB: { code: m.meetingcodeb, link: m.meetinglinkb } });
+
+    // 解析开赛时间，计算会议时间（赛前10分钟开，允许2小时）
+    const matchStart = new Date(m.starttime);
+    const meetingStart = new Date(matchStart.getTime() - 10 * 60 * 1000);
+    const meetingEnd = new Date(meetingStart.getTime() + 2 * 60 * 60 * 1000);
+    const fmt = d => d.toISOString().replace(/^\d{4}-(\d{2})-(\d{2})T(\d{2}):(\d{2}):.*$/, '$1-$2 $3:$4');
+    const subject = `训练赛 · ${m.starttime}`;
+
+    // 读取 tmeet CLI 路径（优先用 PATH 中的 tmeet）
+    const { execSync } = require('child_process');
+    const tmeetCmd = process.platform === 'win32' ? 'tmeet.cmd' : 'tmeet';
+    const opt = { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] };
+
+    let codeA = '', linkA = '', codeB = '', linkB = '';
+
+    try {
+      // 刷新 Token
+      execSync(`${tmeetCmd} auth status`, opt);
+      // 创建 A 队会议
+      const outA = execSync(`${tmeetCmd} meeting create --subject "${subject} · A队" --start "${fmt(meetingStart)}+08:00" --end "${fmt(meetingEnd)}+08:00" --format json-pretty`, opt);
+      const jA = JSON.parse(outA);
+      codeA = jA.meeting_code || jA.meetingCode || jA.meeting_id || '';
+      linkA = jA.join_url || jA.joinUrl || `https://meeting.tencent.com/s/${codeA}`;
+      // 创建 B 队会议
+      const outB = execSync(`${tmeetCmd} meeting create --subject "${subject} · B队" --start "${fmt(meetingStart)}+08:00" --end "${fmt(meetingEnd)}+08:00" --format json-pretty`, opt);
+      const jB = JSON.parse(outB);
+      codeB = jB.meeting_code || jB.meetingCode || jB.meeting_id || '';
+      linkB = jB.join_url || jB.joinUrl || `https://meeting.tencent.com/s/${codeB}`;
+    } catch (execErr) {
+      console.error('[tmeet] 建会失败:', execErr.message);
+      return res.status(500).json({ message: '创建腾讯会议失败，请确认已登录 tmeet（运行 tmeet auth login）' });
+    }
+
+    await pool.query(
+      'UPDATE recruitment_matches SET meetingCodeA=$1, meetingLinkA=$2, meetingCodeB=$3, meetingLinkB=$4 WHERE id=$5',
+      [codeA, linkA, codeB, linkB, req.params.id]
+    );
+    res.json({ meetingA: { code: codeA, link: linkA }, meetingB: { code: codeB, link: linkB } });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: '建会失败' });
+  }
 });
 
 // 获取对局详情
@@ -228,6 +309,9 @@ app.get('/api/recruitment/:id', async (req, res) => {
       match: {
         id: m.id, startTime: m.starttime, levelReq: m.levelreq, notes: m.notes,
         mode: m.mode, status: m.status, locked: m.locked,
+        groupContact: m.groupcontact || '',
+        meetingA: m.meetingcodea ? { code: m.meetingcodea, link: m.meetinglinka } : null,
+        meetingB: m.meetingcodeb ? { code: m.meetingcodeb, link: m.meetinglinkb } : null,
         organizer: { id: m.organizerid, teamName: org.teamname || '未知', coachName: org.coachname || '', level: org.level || '' },
         positions
       }
@@ -237,15 +321,15 @@ app.get('/api/recruitment/:id', async (req, res) => {
 
 // 创建招募对局
 app.post('/api/recruitment', authMiddleware, async (req, res) => {
-  const { startTime, levelReq, notes, mode, positions, teamId } = req.body;
+  const { startTime, levelReq, notes, mode, positions, teamId, groupContact } = req.body;
   if (!startTime) return res.status(400).json({ message: '请选择开赛时间' });
   const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     await client.query(
-      'INSERT INTO recruitment_matches (id, organizerId, teamId, startTime, levelReq, notes, mode) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-      [id, req.userId, teamId || null, startTime, levelReq || '不限', notes || '', mode || 1]
+      'INSERT INTO recruitment_matches (id, organizerId, teamId, startTime, levelReq, notes, mode, groupContact) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+      [id, req.userId, teamId || null, startTime, levelReq || '不限', notes || '', mode || 1, groupContact || '']
     );
 
     // 预占位置（模式3或队伍招募）
@@ -275,6 +359,8 @@ app.post('/api/recruitment', authMiddleware, async (req, res) => {
       match: {
         id, startTime, levelReq: levelReq || '不限', notes: notes || '', mode: mode || 1,
         status: 'recruiting', locked: false,
+        groupContact: groupContact || '',
+        meetingA: null, meetingB: null,
         organizer: { id: req.userId, teamName: org.teamname || '未知', coachName: org.coachname || '', level: org.level || '' },
         positions: positions_out
       }
@@ -464,6 +550,9 @@ app.get('/api/recruitment/mine', authMiddleware, async (req, res) => {
 
     const result = matches.rows.map(m => ({
       id: m.id, startTime: m.starttime, levelReq: m.levelreq, notes: m.notes, mode: m.mode, status: m.status,
+      groupContact: m.groupcontact || '',
+      meetingA: m.meetingcodea ? { code: m.meetingcodea, link: m.meetinglinka } : null,
+      meetingB: m.meetingcodeb ? { code: m.meetingcodeb, link: m.meetinglinkb } : null,
       organizer: { id: m.organizerid, teamName: orgMap[m.organizerid]?.teamname || '未知' },
       myPosition: posMap[m.id]?.map(p => ({ team: p.team, lane: p.lane })) || []
     }));

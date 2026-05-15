@@ -1543,6 +1543,12 @@
         <label>自定义备注</label>
         <textarea class="form-input" id="recruitNotes" rows="2" placeholder="可填写BP规则、开赛群号等..."></textarea>
       </div>
+      <!-- 联系群号（模式1/3显示，模式2由系统自动建腾讯会议） -->
+      <div class="form-group" id="groupContactSection">
+        <label>💬 联系群号 <span style="font-size:0.75rem;color:var(--text-muted);font-weight:400;">（选填，方便队员加群沟通）</span></label>
+        <input class="form-input" type="text" id="recruitGroupContact" placeholder="如：123456789" maxlength="20">
+        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">模式2（纯组织者）将自动在赛前10分钟创建腾讯会议，无需填写</p>
+      </div>
       <!-- 带上队伍 -->
       <div id="teamRecruitSection" class="mode-form-section" style="display:none;">
         <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -2024,6 +2030,77 @@ function renderMatchDetail(match) {
     headerActions = `<div style="margin-top:10px;font-size:0.82rem;color:rgba(255,255,255,0.8);">请登录后报名参赛</div>`;
   }
 
+  // 构建联系信息卡片
+  function buildContactCard() {
+    // mode=2：腾讯会议
+    if (match.mode === 2) {
+      if (match.meetingA && match.meetingB) {
+        return `<div class="card" style="border:1px solid rgba(22,93,255,0.35);margin-bottom:20px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+            <span style="font-size:1.2rem;">📹</span>
+            <h3 style="margin:0;color:var(--primary);">腾讯会议已创建</h3>
+          </div>
+          <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:12px;">赛前10分钟自动开启，点击下方链接入会</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div style="background:#1A1A2E;border:1px solid rgba(22,93,255,0.2);border-radius:var(--radius-sm);padding:12px;">
+              <div style="font-weight:700;color:#fff;margin-bottom:6px;">🟦 A队会议</div>
+              <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:8px;">会议号：<strong style="color:#fff;">${match.meetingA.code}</strong></div>
+              <a href="${match.meetingA.link}" target="_blank" class="btn btn-sm" style="background:rgba(22,93,255,0.15);color:#6BA3FF;border:1px solid rgba(22,93,255,0.4);font-size:0.78rem;padding:5px 12px;border-radius:var(--radius-sm);text-decoration:none;display:inline-block;">🏠 入会</a>
+            </div>
+            <div style="background:#1A1A2E;border:1px solid rgba(114,46,209,0.2);border-radius:var(--radius-sm);padding:12px;">
+              <div style="font-weight:700;color:#fff;margin-bottom:6px;">🟥 B队会议</div>
+              <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:8px;">会议号：<strong style="color:#fff;">${match.meetingB.code}</strong></div>
+              <a href="${match.meetingB.link}" target="_blank" class="btn btn-sm" style="background:rgba(114,46,209,0.15);color:#A78BFA;border:1px solid rgba(114,46,209,0.4);font-size:0.78rem;padding:5px 12px;border-radius:var(--radius-sm);text-decoration:none;display:inline-block;">🏠 入会</a>
+            </div>
+          </div>
+        </div>`;
+      } else if (isOrg) {
+        // 组织者未创建会议：显示建会按钮
+        return `<div class="card" style="border:1px solid rgba(22,93,255,0.35);margin-bottom:20px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+            <span style="font-size:1.2rem;">📹</span>
+            <h3 style="margin:0;color:var(--primary);">腾讯会议</h3>
+          </div>
+          <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:12px;">点击按钮提前创建腾讯会议（赛前10分钟系统也会自动建会）</p>
+          <button class="btn btn-primary btn-sm" onclick="createMatchMeeting('${match.id}')" id="createMeetingBtn" style="padding:8px 16px;">📹 创建腾讯会议</button>
+          <p id="createMeetingMsg" style="font-size:0.78rem;color:var(--text-muted);margin-top:8px;display:none;"></p>
+        </div>`;
+      } else {
+        // 非组织者，且会议未创建
+        return `<div class="card" style="border:1px solid rgba(245,158,11,0.3);margin-bottom:20px;background:rgba(245,158,11,0.05);">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <span style="font-size:1.2rem;">⏳</span>
+            <h3 style="margin:0;color:var(--warning);">腾讯会议创建中</h3>
+          </div>
+          <p style="font-size:0.82rem;color:var(--text-secondary);">组织者将在开赛前10分钟自动创建腾讯会议，请耐心等待...</p>
+        </div>`;
+      }
+    } else {
+      // mode 1/3：QQ群号
+      if (match.groupContact) {
+        const copied = isFull ? `<div style="margin-top:8px;padding:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:var(--radius-sm);">
+          <div style="font-size:0.85rem;color:var(--success);margin-bottom:8px;">🎉 训练赛已成局，点击下方按钮加群沟通！</div>
+          <button class="btn btn-primary btn-sm" onclick="copyGroupContact('${match.groupContact}')" style="padding:8px 16px;">📋 复制群号：<strong>${match.groupContact}</strong></button>
+        </div>` : '';
+        return `<div class="card" style="border:1px solid rgba(16,185,129,0.25);margin-bottom:20px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+            <span style="font-size:1.2rem;">💬</span>
+            <h3 style="margin:0;color:var(--success);">队伍联系群</h3>
+          </div>
+          <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:10px;">QQ群号：<strong style="font-size:1rem;color:#fff;letter-spacing:1px;">${match.groupContact}</strong></p>
+          <button class="btn btn-sm" onclick="copyGroupContact('${match.groupContact}')" style="background:rgba(16,185,129,0.12);color:var(--success);border:1px solid rgba(16,185,129,0.3);font-size:0.82rem;padding:6px 14px;border-radius:var(--radius-sm);">📋 一键复制群号</button>
+          ${copied}
+        </div>`;
+      } else {
+        return `<div class="card" style="border:1px dashed rgba(255,255,255,0.15);margin-bottom:20px;background:transparent;">
+          <p style="font-size:0.82rem;color:var(--text-muted);text-align:center;">🏳 房主未填写联系群号，请通过备注或其他方式联系</p>
+        </div>`;
+      }
+    }
+  }
+
+  const contactCard = buildContactCard();
+
   content.innerHTML = `
     <div class="match-detail-header">
       <div class="back-btn" onclick="backToRecruitHall()">← 返回招募大厅</div>
@@ -2037,6 +2114,7 @@ function renderMatchDetail(match) {
       ${match.notes ? `<p style="font-size:0.85rem;margin-top:8px;opacity:0.9;">📝 ${match.notes}</p>` : ''}
       ${headerActions}
     </div>
+    ${contactCard}
     <div class="progress-text">${match.positions.length} / 10 人已就位</div>
     <div class="progress-bar-wrap" style="margin-bottom:20px;"><div class="progress-bar-fill" style="width:${(match.positions.length/10)*100}%;"></div></div>
     <div class="teams-container">
@@ -2060,6 +2138,7 @@ function openCreateRecruitModal() {
   document.getElementById('recruitStartTime').value = '';
   document.getElementById('recruitLevelReq').value = '不限';
   document.getElementById('recruitNotes').value = '';
+  document.getElementById('recruitGroupContact').value = '';
   document.getElementById('useTeamRecruit').checked = false;
   document.getElementById('teamMemberLanes').style.display = 'none';
   selectMode(1);
@@ -2132,6 +2211,9 @@ function selectMode(mode) {
   document.getElementById('mode' + mode + 'Option').classList.add('selected');
   document.getElementById('mode1Section').style.display = mode === 1 ? 'block' : 'none';
   document.getElementById('mode3Section').style.display = mode === 3 ? 'block' : 'none';
+  // 模式2为纯组织者，系统自动建腾讯会议；模式1/3需填写群号
+  const gcSection = document.getElementById('groupContactSection');
+  if (gcSection) gcSection.style.display = mode === 2 ? 'none' : 'block';
 }
 
 function buildPresetPositions() {
@@ -2206,8 +2288,10 @@ async function handleCreateRecruit(e) {
   }
 
   try {
+    const groupContact = document.getElementById('recruitGroupContact').value.trim();
     const bodyData = { startTime, levelReq, notes, mode: useTeam ? 3 : mode, positions };
     if (teamId) bodyData.teamId = teamId;
+    if (groupContact) bodyData.groupContact = groupContact;
     const data = await api('/api/recruitment', {
       method: 'POST',
       body: JSON.stringify(bodyData)
@@ -2256,6 +2340,45 @@ async function removePlayer(matchId, playerId) {
     showToast('已清理','info');
     await openMatchDetail(matchId);
   } catch(err) { showToast(err.message,'error'); }
+}
+
+// 创建腾讯会议（模式2组织者手动触发）
+async function createMatchMeeting(matchId) {
+  const btn = document.getElementById('createMeetingBtn');
+  const msg = document.getElementById('createMeetingMsg');
+  if (btn) { btn.disabled = true; btn.textContent = '⚙️ 创建中...'; }
+  if (msg) { msg.style.display = 'block'; msg.textContent = '正在创建腾讯会议，请稍候...'; }
+  try {
+    const data = await api(`/api/recruitment/${matchId}/meeting`, { method: 'POST', skipCache: true });
+    showToast('腾讯会议创建成功！','success');
+    await openMatchDetail(matchId); // 刷新显示
+  } catch(err) {
+    showToast(err.message || '建会失败','error');
+    if (btn) { btn.disabled = false; btn.textContent = '📹 重新创建腾讯会议'; }
+    if (msg) { msg.textContent = '建会失败，请检查 tmeet 登录状态（运行 tmeet auth login）'; }
+  }
+}
+
+// 一键复制群号
+function copyGroupContact(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('群号 ' + text + ' 已复制！去QQ加群吧 👌','success');
+    }).catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+}
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try { document.execCommand('copy'); showToast('群号已复制！去QQ加群吧 👌','success'); } catch { showToast('请手动复制群号：' + text,'info'); }
+  document.body.removeChild(ta);
 }
 
 async function cancelMatch(matchId, event) {
