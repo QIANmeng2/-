@@ -782,27 +782,112 @@
     .coin-type-deduct { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.25); }
     .coin-type-other { background: rgba(79,70,229,0.15); color: #818cf8; border: 1px solid rgba(79,70,229,0.25); }
     .competition-card {
+      position: relative;
       display: flex;
       align-items: center;
-      gap: 16px;
-      padding: 16px;
+      gap: 14px;
+      padding: 14px 16px;
       background: var(--bg-glass);
       border: 1px solid rgba(245,158,11,0.15);
       border-radius: var(--radius-sm);
       margin-bottom: 12px;
+      cursor: pointer;
+      transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+      text-decoration: none;
+      color: inherit;
     }
-    .competition-card .comp-qr {
-      width: 64px;
-      height: 64px;
-      border-radius: var(--radius-sm);
-      object-fit: cover;
-      background: #fff;
+    .competition-card:hover {
+      transform: scale(1.015);
+      border-color: rgba(245,158,11,0.4);
+      box-shadow: 0 0 20px rgba(245,158,11,0.12);
+      background: var(--bg-glass-hover);
+    }
+    .competition-card:active {
+      transform: scale(0.99);
+    }
+    .competition-card .comp-trophy {
+      width: 48px;
+      height: 48px;
       flex-shrink: 0;
     }
     .competition-card .comp-info { flex: 1; min-width: 0; }
-    .competition-card .comp-name { font-weight: 600; color: #fff; margin-bottom: 4px; }
-    .competition-card .comp-time { font-size: 0.78rem; color: var(--text-muted); }
-    .competition-card .comp-creator { font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px; }
+    .competition-card .comp-name { font-weight: 600; color: #fff; margin-bottom: 6px; }
+    .competition-card .comp-time { font-size: 0.75rem; color: var(--text-muted); display: none; }
+    .competition-card .comp-creator { font-size: 0.75rem; color: var(--text-secondary); display: none; }
+    .competition-card .comp-badge { display: inline-flex; align-items: center; gap: 4px; }
+    .competition-card .comp-delete-btn {
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      flex-shrink: 0;
+    }
+    .competition-card:hover .comp-delete-btn { opacity: 1; }
+    .comp-detail-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .comp-detail-panel {
+      background: var(--bg-secondary);
+      border: 1px solid rgba(245,158,11,0.2);
+      border-radius: var(--radius-md);
+      width: 100%;
+      max-width: 520px;
+      max-height: 88vh;
+      overflow-y: auto;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 30px rgba(245,158,11,0.08);
+    }
+    .comp-detail-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      position: sticky;
+      top: 0;
+      background: var(--bg-secondary);
+      z-index: 1;
+    }
+    .comp-detail-body { padding: 20px; }
+    .comp-detail-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .comp-detail-row:last-child { border-bottom: none; }
+    .comp-detail-label { font-size: 0.78rem; color: var(--text-muted); min-width: 72px; flex-shrink: 0; padding-top: 2px; }
+    .comp-detail-value { font-size: 0.85rem; color: var(--text-primary); flex: 1; word-break: break-all; }
+    .comp-detail-qr {
+      max-width: 200px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: transform 0.15s ease;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .comp-detail-qr:hover { transform: scale(1.05); }
+    .comp-qr-fullscreen {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.9);
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .comp-qr-fullscreen img {
+      max-width: 90vw;
+      max-height: 90vh;
+      border-radius: var(--radius-md);
+      box-shadow: 0 0 40px rgba(0,0,0,0.8);
+    }
+    .comp-detail-none { font-size: 0.82rem; color: var(--text-muted); font-style: italic; }
 
     /* ===== 招募系统样式 ===== */
     .recruit-tabs {
@@ -2090,27 +2175,109 @@ async function loadCompetitionList() {
   try {
     const data = await api('/api/competitions');
     const comps = data.competitions || [];
+    // 缓存数据供详情页使用
+    window._compCache = {};
+    comps.forEach(c => { window._compCache[c.id] = c; });
     if (!comps.length) {
       container.innerHTML = `<p style="text-align:center;color:var(--text-muted);padding:40px 0;">${isAdmin ? '暂无赛事，立即创建一个吧' : '暂无赛事信息'}</p>`;
       return;
     }
     container.innerHTML = comps.map(c => `
-      <div class="competition-card">
-        ${c.qr_code_url ? `<img class="comp-qr" src="${c.qr_code_url}" alt="二维码" onerror="this.style.display='none'">` : `<div class="comp-qr" style="display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:var(--text-muted);">无二维码</div>`}
+      <div class="competition-card" onclick="openCompetitionDetail('${c.id}')">
+        <svg class="comp-trophy" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M14 8H34V10H14V8Z" fill="url(#trophy-gold)"/>
+          <path d="M10 12H38V28C38 32.4183 34.4183 36 30 36H18C13.5817 36 10 32.4183 10 28V12Z" fill="url(#trophy-gold)" opacity="0.9"/>
+          <path d="M14 8H34" stroke="#FBBF24" stroke-width="2" stroke-linecap="round"/>
+          <path d="M10 12H14V36H10C10 32.4183 12.6863 29 16 29C19.3137 29 22 32.4183 22 36H10V12Z" fill="url(#trophy-gold-dark)" opacity="0.4"/>
+          <path d="M26 36H34C34 32.4183 31.3137 29 28 29C24.6863 29 22 32.4183 22 36H26Z" fill="url(#trophy-gold-dark)" opacity="0.3"/>
+          <path d="M22 36V42H26V36" fill="url(#trophy-gold)"/>
+          <path d="M17 36V42H21V36" fill="url(#trophy-gold)"/>
+          <path d="M16 42H22V45H16V42Z" fill="url(#trophy-gold)"/>
+          <path d="M26 42H32V45H26V42Z" fill="url(#trophy-gold)"/>
+          <path d="M14 14H34" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+          <text x="24" y="27" text-anchor="middle" font-size="9" font-weight="bold" fill="rgba(0,0,0,0.6)" font-family="sans-serif">杯</text>
+          <defs>
+            <linearGradient id="trophy-gold" x1="10" y1="8" x2="38" y2="45" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#FDE68A"/>
+              <stop offset="50%" stop-color="#FBBF24"/>
+              <stop offset="100%" stop-color="#D97706"/>
+            </linearGradient>
+            <linearGradient id="trophy-gold-dark" x1="10" y1="8" x2="38" y2="45" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#F59E0B"/>
+              <stop offset="100%" stop-color="#92400E"/>
+            </linearGradient>
+          </defs>
+        </svg>
         <div class="comp-info">
           <div class="comp-name">${c.name}</div>
-          <div class="comp-time">创建时间：${new Date(c.created_at).toLocaleString('zh-CN')}</div>
-          <div class="comp-creator">创建人：${c.created_by_name || c.created_by}</div>
-          <div style="margin-top:8px;">
+          <div class="comp-badge">
             <span class="badge ${c.status === 'active' ? 'badge-available' : 'badge-closed'}">${c.status === 'active' ? '进行中' : '已结束'}</span>
           </div>
         </div>
-        ${isAdmin ? `<button class="btn btn-sm btn-danger" onclick="deleteCompetition('${c.id}')" style="padding:8px 14px;">删除</button>` : ''}
+        ${isAdmin ? `<button class="btn btn-sm btn-danger comp-delete-btn" onclick="event.stopPropagation(); deleteCompetition('${c.id}')" style="padding:8px 14px;">删除</button>` : ''}
       </div>
     `).join('');
   } catch (err) {
     container.innerHTML = `<p style="color:var(--danger);">加载失败：${err.message}</p>`;
   }
+}
+
+// 赛事详情弹窗
+window._compCache = {};
+function openCompetitionDetail(id) {
+  const cached = window._compCache[id];
+  if (!cached) return;
+  const c = cached;
+  const creatorName = c.created_by_name || c.created_by_username || c.created_by || '未知';
+  const overlay = document.createElement('div');
+  overlay.className = 'comp-detail-overlay';
+  overlay.id = 'compDetailOverlay';
+  overlay.onclick = (e) => { if (e.target === overlay) closeCompetitionDetail(); };
+  overlay.innerHTML = `
+    <div class="comp-detail-panel">
+      <div class="comp-detail-header">
+        <h3 style="margin:0;font-size:1rem;color:var(--text-primary);">${c.name}</h3>
+        <button class="btn btn-sm btn-secondary" onclick="closeCompetitionDetail()" style="padding:6px 12px;font-size:0.78rem;">返回</button>
+      </div>
+      <div class="comp-detail-body">
+        <div class="comp-detail-row">
+          <span class="comp-detail-label">赛事状态</span>
+          <span class="comp-detail-value"><span class="badge ${c.status === 'active' ? 'badge-available' : 'badge-closed'}">${c.status === 'active' ? '进行中' : '已结束'}</span></span>
+        </div>
+        <div class="comp-detail-row">
+          <span class="comp-detail-label">创建时间</span>
+          <span class="comp-detail-value">${c.created_at ? new Date(c.created_at).toLocaleString('zh-CN') : '未知'}</span>
+        </div>
+        <div class="comp-detail-row">
+          <span class="comp-detail-label">创建人</span>
+          <span class="comp-detail-value">${creatorName} <span style="color:var(--text-muted);font-size:0.75rem;">(${c.created_by || '无'})</span></span>
+        </div>
+        <div class="comp-detail-row">
+          <span class="comp-detail-label">二维码</span>
+          <div class="comp-detail-value">
+            ${c.qr_code_url
+              ? `<img class="comp-detail-qr" src="${c.qr_code_url}" alt="赛事二维码" onclick="openCompQrFullscreen(this.src)">`
+              : '<span class="comp-detail-none">未上传</span>'
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.body.style.overflow = 'hidden';
+}
+function closeCompetitionDetail() {
+  const overlay = document.getElementById('compDetailOverlay');
+  if (overlay) overlay.remove();
+  document.body.style.overflow = '';
+}
+function openCompQrFullscreen(src) {
+  const fs = document.createElement('div');
+  fs.className = 'comp-qr-fullscreen';
+  fs.onclick = () => fs.remove();
+  fs.innerHTML = `<img src="${src}" alt="二维码大图">`;
+  document.body.appendChild(fs);
 }
 
 function openCreateCompetitionModal() {

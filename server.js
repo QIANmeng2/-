@@ -1577,7 +1577,13 @@ app.delete('/api/admin/teams/:id/members/:userId', authMiddleware, adminMiddlewa
 // ==================== 赛事管理 ====================
 app.get('/api/competitions', authMiddleware, async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM competitions WHERE status != 'deleted' ORDER BY created_at DESC");
+    const result = await pool.query(`
+      SELECT c.*, u.coachName AS created_by_name, u.username AS created_by_username
+      FROM competitions c
+      LEFT JOIN users u ON u.id = c.created_by
+      WHERE c.status != 'deleted'
+      ORDER BY c.created_at DESC
+    `);
     res.json({ competitions: result.rows });
   } catch(e) { res.status(500).json({ message: '查询失败' }); }
 });
