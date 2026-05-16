@@ -1,4 +1,5 @@
 const express = require('express');
+const compression = require('compression');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 // deploy trigger
@@ -144,6 +145,7 @@ async function initDB() {
 }
 
 // 万能跨域
+app.use(compression({ threshold: 512 }));
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
@@ -180,34 +182,29 @@ async function sendNotification(userId, type, content, relatedId = null) {
 // 获取招募中的对局
 app.get('/api/recruitment/active', async (req, res) => {
   try {
-    const matches = await pool.query("SELECT * FROM recruitment_matches WHERE status = 'recruiting' ORDER BY createdAt DESC");
-    if (matches.rows.length === 0) return res.json({ matches: [] });
-
-    const matchIds = matches.rows.map(m => m.id);
-    const positions = await pool.query('SELECT * FROM recruitment_positions WHERE matchId = ANY($1)', [matchIds]);
-
-    const orgIds = [...new Set(matches.rows.map(m => m.organizerid))];
-    const usersRes = await pool.query('SELECT id, teamName, coachName, level FROM users WHERE id = ANY($1)', [orgIds]);
-    const orgMap = {};
-    usersRes.rows.forEach(u => { orgMap[u.id] = u; });
-
-    const posMap = {};
-    positions.rows.forEach(p => {
-      if (!posMap[p.matchid]) posMap[p.matchid] = [];
-      posMap[p.matchid].push(p);
-    });
-
-    const result = matches.rows.map(m => {
-      const pos = posMap[m.id] || [];
-      const org = orgMap[m.organizerid] || {};
-      return {
-        id: m.id, startTime: m.starttime, levelReq: m.levelreq,
-        notes: m.notes, mode: m.mode, status: m.status,
-        organizer: { id: m.organizerid, teamName: org.teamname || '未知', coachName: org.coachname || '', level: org.level || '' },
-        totalCount: pos.length,
-        positions: pos.map(p => ({ team: p.team, lane: p.lane, playerId: p.playerid, playerName: p.playername, confirmed: p.confirmed }))
-      };
-    });
+    // 单次JOIN查询：matches + organizer信息 + positions全部一次取回
+    const matches = await pool.query(`
+      SELECT
+        m.id, m.starttime, m.levelreq, m.notes, m.mode, m.status, m.organizerid, m.createdat,
+        u.teamname AS org_teamname, u.coachname AS org_coachname, u.level AS org_level,
+        json_agg(json_build_object(
+          'team', p.team, 'lane', p.lane, 'playerId', p.playerid,
+          'playerName', p.playername, 'confirmed', p.confirmed
+        )) FILTER (WHERE p.id IS NOT NULL) AS positions
+      FROM recruitment_matches m
+      LEFT JOIN users u ON u.id = m.organizerid
+      LEFT JOIN recruitment_positions p ON p.matchid = m.id
+      WHERE m.status = 'recruiting'
+      GROUP BY m.id, u.teamname, u.coachname, u.level
+      ORDER BY m.createdat DESC
+    `);
+    const result = matches.rows.map(m => ({
+      id: m.id, startTime: m.starttime, levelReq: m.levelreq,
+      notes: m.notes, mode: m.mode, status: m.status,
+      organizer: { id: m.organizerid, teamName: m.org_teamname || '未知', coachName: m.org_coachname || '', level: m.org_level || '' },
+      totalCount: (m.positions || []).length,
+      positions: m.positions || []
+    }));
     res.json({ matches: result });
   } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
 });
@@ -215,34 +212,28 @@ app.get('/api/recruitment/active', async (req, res) => {
 // 获取已满/待确认对局
 app.get('/api/recruitment/full', async (req, res) => {
   try {
-    const matches = await pool.query("SELECT * FROM recruitment_matches WHERE status IN ('full', 'confirming') ORDER BY createdAt DESC");
-    if (matches.rows.length === 0) return res.json({ matches: [] });
-
-    const matchIds = matches.rows.map(m => m.id);
-    const positions = await pool.query('SELECT * FROM recruitment_positions WHERE matchId = ANY($1)', [matchIds]);
-
-    const orgIds = [...new Set(matches.rows.map(m => m.organizerid))];
-    const usersRes = await pool.query('SELECT id, teamName, coachName, level FROM users WHERE id = ANY($1)', [orgIds]);
-    const orgMap = {};
-    usersRes.rows.forEach(u => { orgMap[u.id] = u; });
-
-    const posMap = {};
-    positions.rows.forEach(p => {
-      if (!posMap[p.matchid]) posMap[p.matchid] = [];
-      posMap[p.matchid].push(p);
-    });
-
-    const result = matches.rows.map(m => {
-      const pos = posMap[m.id] || [];
-      const org = orgMap[m.organizerid] || {};
-      return {
-        id: m.id, startTime: m.starttime, levelReq: m.levelreq,
-        notes: m.notes, mode: m.mode, status: m.status,
-        organizer: { id: m.organizerid, teamName: org.teamname || '未知', coachName: org.coachname || '', level: org.level || '' },
-        totalCount: pos.length,
-        positions: pos.map(p => ({ team: p.team, lane: p.lane, playerId: p.playerid, playerName: p.playername, confirmed: p.confirmed }))
-      };
-    });
+    const matches = await pool.query(`
+      SELECT
+        m.id, m.starttime, m.levelreq, m.notes, m.mode, m.status, m.organizerid, m.createdat,
+        u.teamname AS org_teamname, u.coachname AS org_coachname, u.level AS org_level,
+        json_agg(json_build_object(
+          'team', p.team, 'lane', p.lane, 'playerId', p.playerid,
+          'playerName', p.playername, 'confirmed', p.confirmed
+        )) FILTER (WHERE p.id IS NOT NULL) AS positions
+      FROM recruitment_matches m
+      LEFT JOIN users u ON u.id = m.organizerid
+      LEFT JOIN recruitment_positions p ON p.matchid = m.id
+      WHERE m.status IN ('full', 'confirming')
+      GROUP BY m.id, u.teamname, u.coachname, u.level
+      ORDER BY m.createdat DESC
+    `);
+    const result = matches.rows.map(m => ({
+      id: m.id, startTime: m.starttime, levelReq: m.levelreq,
+      notes: m.notes, mode: m.mode, status: m.status,
+      organizer: { id: m.organizerid, teamName: m.org_teamname || '未知', coachName: m.org_coachname || '', level: m.org_level || '' },
+      totalCount: (m.positions || []).length,
+      positions: m.positions || []
+    }));
     res.json({ matches: result });
   } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
 });
@@ -254,10 +245,11 @@ app.get('/api/recruitment/:id', async (req, res) => {
     if (mRes.rows.length === 0) return res.status(404).json({ message: '对局不存在' });
     const m = mRes.rows[0];
 
-    const posRes = await pool.query('SELECT * FROM recruitment_positions WHERE matchId = $1', [req.params.id]);
+    const [posRes, orgRes] = await Promise.all([
+      pool.query('SELECT * FROM recruitment_positions WHERE matchId = $1', [req.params.id]),
+      pool.query('SELECT id, teamName, coachName, level FROM users WHERE id = $1', [m.organizerid])
+    ]);
     const positions = posRes.rows.map(p => ({ team: p.team, lane: p.lane, playerId: p.playerid, playerName: p.playername, confirmed: p.confirmed }));
-
-    const orgRes = await pool.query('SELECT id, teamName, coachName, level FROM users WHERE id = $1', [m.organizerid]);
     const org = orgRes.rows[0] || {};
 
     res.json({
