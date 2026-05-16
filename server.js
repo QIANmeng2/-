@@ -8,7 +8,7 @@ const { Pool } = require('pg');
 const app = express();
 const PORT = process.env.PORT || 8080;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-me';
-const ADMIN_USER_ID = process.env.ADMIN_USER_ID || '';
+const ADMIN_USER_ID = process.env.ADMIN_USER_ID || 'mp4hmya7ad15v6';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -1739,7 +1739,8 @@ app.post('/api/player/apply', authMiddleware, async (req, res) => {
     // 通知管理员
     try {
       await sendNotification(ADMIN_USER_ID, 'player_review', '有新的选手认证申请待审核: ' + gameId);
-    } catch(e) {}
+      console.log('[选手认证] 已通知管理员审核:', gameId);
+    } catch(e) { console.error('[选手认证] 通知管理员失败:', e.message); }
     res.json({ success: true, message: '认证申请已提交，预计24小时内审核' });
   } catch(e) { res.status(500).json({ message: '提交失败' }); }
 });
