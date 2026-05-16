@@ -943,59 +943,93 @@
     .coin-type-award { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.25); }
     .coin-type-deduct { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.25); }
     .coin-type-other { background: rgba(79,70,229,0.15); color: #818cf8; border: 1px solid rgba(79,70,229,0.25); }
+    /* ===== 赛事卡片 - 霓虹渐变玻璃拟态 ===== */
     .competition-card {
       position: relative;
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 16px;
-      padding: 18px 22px;
-      margin: 0 auto 14px auto;
-      max-width: 440px;
-      background: linear-gradient(135deg, rgba(245,158,11,0.04) 0%, rgba(245,158,11,0.01) 100%);
-      border: 1.5px solid rgba(245,158,11,0.22);
+      justify-content: center;
+      padding: 26px 24px 22px;
+      margin: 0 auto 16px auto;
+      max-width: 420px;
+      background: rgba(255,255,255,0.04);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.1);
       border-radius: 12px;
       cursor: pointer;
-      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+      transition: transform 0.25s cubic-bezier(.16,1,.3,1), border-color 0.25s, box-shadow 0.25s, background 0.25s;
       text-decoration: none;
       color: inherit;
-      box-shadow: 0 0 16px rgba(245,158,11,0.06), 0 2px 8px rgba(0,0,0,0.3);
-      animation: compCardPulse 3s ease-in-out infinite;
+      box-shadow: 0 0 20px rgba(123,47,253,0.2), 0 2px 12px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
+      overflow: hidden;
     }
-    @keyframes compCardPulse {
-      0%, 100% { box-shadow: 0 0 16px rgba(245,158,11,0.06), 0 2px 8px rgba(0,0,0,0.3); }
-      50% { box-shadow: 0 0 28px rgba(245,158,11,0.14), 0 2px 12px rgba(0,0,0,0.4); }
+    /* 网格纹理叠加 */
+    .competition-card::before {
+      content: '';
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 20px 20px;
+      pointer-events: none;
     }
     .competition-card:hover {
-      transform: translateY(-2px) scale(1.02);
-      border-color: rgba(245,158,11,0.5);
-      box-shadow: 0 0 32px rgba(245,158,11,0.2), 0 4px 16px rgba(0,0,0,0.4);
-      background: linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(245,158,11,0.03) 100%);
-      animation: none;
+      transform: translateY(-3px);
+      border-color: rgba(123,47,253,0.4);
+      box-shadow: 0 0 35px rgba(123,47,253,0.35), 0 8px 24px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.06);
     }
-    .competition-card:active {
-      transform: scale(0.98);
+    .competition-card:active { transform: scale(0.98); }
+    .competition-card .comp-name {
+      font-size: 17px;
+      font-weight: 800;
+      text-align: center;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #7B2FFD 0%, #00D4FF 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 6px rgba(123,47,253,0.3));
+    }
+    .competition-card:hover .comp-name {
+      filter: drop-shadow(0 0 12px rgba(123,47,253,0.5));
+    }
+    .competition-card .comp-status {
+      display: inline-block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      padding: 4px 12px;
+      border-radius: 10px;
+      background: rgba(0,0,0,0.5);
+      border: 1px solid rgba(255,255,255,0.12);
+      margin-bottom: 6px;
+    }
+    .competition-card:hover .comp-status {
+      background: rgba(0,0,0,0.3);
     }
     .competition-card .comp-trophy {
-      width: 56px;
-      height: 56px;
+      width: 70px;
+      height: 70px;
       flex-shrink: 0;
-      filter: drop-shadow(0 0 6px rgba(245,158,11,0.3));
+      transition: transform 0.35s cubic-bezier(.16,1,.3,1), filter 0.25s;
+      filter: drop-shadow(0 0 8px rgba(123,47,253,0.4)) drop-shadow(0 0 16px rgba(0,212,255,0.3));
     }
-    .competition-card .comp-info { flex: 1; min-width: 0; }
-    .competition-card .comp-name {
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: #fff;
-      margin-bottom: 4px;
-      text-shadow: 0 0 8px rgba(245,158,11,0.2);
+    .competition-card:hover .comp-trophy {
+      transform: rotate(15deg);
+      filter: drop-shadow(0 0 14px rgba(123,47,253,0.6)) drop-shadow(0 0 24px rgba(0,212,255,0.45));
     }
-    .competition-card .comp-time { font-size: 0.75rem; color: var(--text-muted); display: none; }
-    .competition-card .comp-creator { font-size: 0.75rem; color: var(--text-secondary); display: none; }
-    .competition-card .comp-badge { display: inline-flex; align-items: center; gap: 4px; }
     .competition-card .comp-delete-btn {
+      position: absolute;
+      top: 8px;
+      right: 10px;
       opacity: 0;
-      transition: opacity 0.15s ease;
-      flex-shrink: 0;
+      transition: opacity 0.2s ease;
+      z-index: 1;
+      font-size: 0.72rem;
+      padding: 4px 10px;
     }
     .competition-card:hover .comp-delete-btn { opacity: 1; }
     .comp-detail-overlay {
@@ -1969,6 +2003,9 @@
       .welcome-feat-desc { font-size: 0.7rem; }
       .welcome-footer { padding: 0 14px 18px; }
       .welcome-btn-login { padding: 12px; font-size: 0.88rem; border-radius: 8px; }
+      .competition-card { padding: 22px 16px 18px; max-width: 92vw; }
+      .competition-card .comp-name { font-size: 15px; }
+      .competition-card .comp-trophy { width: 58px; height: 58px; }
     }
 
     @media (max-width: 480px) {
@@ -2002,6 +2039,10 @@
       .preset-lane label { width: 48px; font-size: 0.78rem; }
       .preset-lane input { padding: 6px 8px; font-size: 0.8rem; }
       body::before { opacity: 0.4; }
+      .competition-card { padding: 20px 14px 16px; }
+      .competition-card .comp-name { font-size: 14px; }
+      .competition-card .comp-trophy { width: 52px; height: 52px; }
+      .competition-card .comp-status { font-size: 11px; padding: 3px 10px; }
     }
 
     @media (max-width: 390px) {
@@ -2013,6 +2054,9 @@
       .lane-card { padding: 6px 2px; }
       .lane-label { font-size: 0.62rem; }
       .lane-input { padding: 5px 2px; font-size: 0.65rem; }
+      .competition-card { padding: 16px 10px 14px; }
+      .competition-card .comp-name { font-size: 13px; }
+      .competition-card .comp-trophy { width: 46px; height: 46px; }
     }
 
     /* ===== 动画 ===== */
@@ -2540,37 +2584,41 @@ async function loadCompetitionList() {
     }
     container.innerHTML = comps.map(c => `
       <div class="competition-card" onclick="openCompetitionDetail('${c.id}')">
-        <svg class="comp-trophy" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M14 8H34V10H14V8Z" fill="url(#trophy-gold)"/>
-          <path d="M10 12H38V28C38 32.4183 34.4183 36 30 36H18C13.5817 36 10 32.4183 10 28V12Z" fill="url(#trophy-gold)" opacity="0.9"/>
-          <path d="M14 8H34" stroke="#FBBF24" stroke-width="2" stroke-linecap="round"/>
-          <path d="M10 12H14V36H10C10 32.4183 12.6863 29 16 29C19.3137 29 22 32.4183 22 36H10V12Z" fill="url(#trophy-gold-dark)" opacity="0.4"/>
-          <path d="M26 36H34C34 32.4183 31.3137 29 28 29C24.6863 29 22 32.4183 22 36H26Z" fill="url(#trophy-gold-dark)" opacity="0.3"/>
-          <path d="M22 36V42H26V36" fill="url(#trophy-gold)"/>
-          <path d="M17 36V42H21V36" fill="url(#trophy-gold)"/>
-          <path d="M16 42H22V45H16V42Z" fill="url(#trophy-gold)"/>
-          <path d="M26 42H32V45H26V42Z" fill="url(#trophy-gold)"/>
-          <path d="M14 14H34" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
-          <text x="24" y="27" text-anchor="middle" font-size="9" font-weight="bold" fill="rgba(0,0,0,0.6)" font-family="sans-serif">杯</text>
+        <div class="comp-name">${c.name}</div>
+        <span class="comp-status">${c.status === 'active' ? '进行中' : '已结束'}</span>
+        <svg class="comp-trophy" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- 杯口 -->
+          <path d="M18 24H62M18 24V28C18 40 30 52 40 52C50 52 62 40 62 28V24M18 24C14 20 10 22 10 26C10 30 14 32 18 28M62 24C66 20 70 22 70 26C70 30 66 32 62 28" stroke="url(#neonGrad)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" filter="url(#neonGlow)"/>
+          <!-- 杯身 -->
+          <path d="M20 28V52C20 58 28 64 40 64C52 64 60 58 60 52V28" stroke="url(#neonGrad2)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" filter="url(#neonGlow)"/>
+          <!-- 杯柄 L -->
+          <path d="M24 36C18 44 18 56 22 60" stroke="url(#neonGrad3)" stroke-width="2" stroke-linecap="round" filter="url(#neonGlow)"/>
+          <!-- 杯柄 R -->
+          <path d="M56 36C62 44 62 56 58 60" stroke="url(#neonGrad3)" stroke-width="2" stroke-linecap="round" filter="url(#neonGlow)"/>
+          <!-- 底座 -->
+          <path d="M28 64H52M32 68H48M34 72H46" stroke="url(#neonGrad)" stroke-width="1.8" stroke-linecap="round" filter="url(#neonGlow)"/>
+          <!-- 中心星芒 -->
+          <path d="M40 40L43 46H49L44 50L46 56L40 52L34 56L36 50L31 46H37Z" stroke="url(#neonStar)" stroke-width="1.3" stroke-linejoin="round" filter="url(#neonGlow)" opacity="0.7"/>
           <defs>
-            <linearGradient id="trophy-gold" x1="10" y1="8" x2="38" y2="45" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="#FDE68A"/>
-              <stop offset="50%" stop-color="#FBBF24"/>
-              <stop offset="100%" stop-color="#D97706"/>
+            <filter id="neonGlow">
+              <feGaussianBlur stdDeviation="3" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+            <linearGradient id="neonGrad" x1="10" y1="10" x2="70" y2="72" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#7B2FFD"/><stop offset="50%" stop-color="#00D4FF"/><stop offset="100%" stop-color="#FFD700"/>
             </linearGradient>
-            <linearGradient id="trophy-gold-dark" x1="10" y1="8" x2="38" y2="45" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="#F59E0B"/>
-              <stop offset="100%" stop-color="#92400E"/>
+            <linearGradient id="neonGrad2" x1="20" y1="28" x2="60" y2="64" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#7B2FFD"/><stop offset="60%" stop-color="#00D4FF"/><stop offset="100%" stop-color="#FFD700"/>
+            </linearGradient>
+            <linearGradient id="neonGrad3" x1="18" y1="36" x2="24" y2="60" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#FFD700"/><stop offset="100%" stop-color="#7B2FFD"/>
+            </linearGradient>
+            <linearGradient id="neonStar" x1="31" y1="46" x2="49" y2="46" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#00D4FF"/><stop offset="100%" stop-color="#FFD700"/>
             </linearGradient>
           </defs>
         </svg>
-        <div class="comp-info">
-          <div class="comp-name">${c.name}</div>
-          <div class="comp-badge">
-            <span class="badge ${c.status === 'active' ? 'badge-available' : 'badge-closed'}">${c.status === 'active' ? '进行中' : '已结束'}</span>
-          </div>
-        </div>
-        ${isAdmin ? `<button class="btn btn-sm btn-danger comp-delete-btn" onclick="event.stopPropagation(); deleteCompetition('${c.id}')" style="padding:8px 14px;">删除</button>` : ''}
+        ${isAdmin ? `<button class="btn btn-sm comp-delete-btn" onclick="event.stopPropagation(); deleteCompetition('${c.id}')" style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.25);">删除</button>` : ''}
       </div>
     `).join('');
   } catch (err) {
