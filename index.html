@@ -2150,12 +2150,26 @@ function openCreateCompetitionModal() {
 function previewCompQr(input) {
   const file = input.files[0];
   if (!file) return;
-  if (file.size > 2 * 1024 * 1024) { showToast('图片过大，请压缩至2MB以内', 'error'); input.value = ''; return; }
+  if (file.size > 5 * 1024 * 1024) { showToast('图片过大，请选择5MB以内的图片', 'error'); input.value = ''; return; }
+
   const reader = new FileReader();
-  reader.onload = (e) => {
-    document.getElementById('compQrUrl').value = e.target.result;
-    document.getElementById('compQrPreviewImg').src = e.target.result;
-    document.getElementById('compQrPreview').style.display = '';
+  reader.onload = (evt) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX_WIDTH = 800;
+      let w = img.width, h = img.height;
+      if (w > MAX_WIDTH) { h = Math.round(h * MAX_WIDTH / w); w = MAX_WIDTH; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      const compressed = canvas.toDataURL('image/jpeg', 0.85);
+      document.getElementById('compQrUrl').value = compressed;
+      document.getElementById('compQrPreviewImg').src = compressed;
+      document.getElementById('compQrPreview').style.display = '';
+    };
+    img.onerror = () => { showToast('图片加载失败', 'error'); };
+    img.src = evt.target.result;
   };
   reader.readAsDataURL(file);
 }
