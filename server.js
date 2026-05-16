@@ -194,7 +194,7 @@ async function initDB() {
 
 // 万能跨域
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
 
 // 健康检查
 app.get('/', (req, res) => res.send('OK'));
