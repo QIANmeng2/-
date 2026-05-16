@@ -2116,37 +2116,32 @@
   <div class="header-inner">
     <div class="logo">
       <div class="logo-icon">
-        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 0 8px rgba(255,215,0,0.3));overflow:visible;">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 0 4px rgba(255,215,0,0.5));overflow:visible;">
           <defs>
             <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" style="stop-color:#FFD700"/>
-              <stop offset="50%" style="stop-color:#FFAA00"/>
+              <stop offset="40%" style="stop-color:#FFAA00"/>
               <stop offset="100%" style="stop-color:#7B2FFD"/>
             </linearGradient>
             <linearGradient id="logoGrad2" x1="100%" y1="0%" x2="0%" y2="100%">
               <stop offset="0%" style="stop-color:#7B2FFD"/>
               <stop offset="100%" style="stop-color:#FFD700"/>
             </linearGradient>
-            <filter id="logoGlow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur in="SourceGraphic" stdDeviation="1.2" result="blur"/>
-              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-            </filter>
           </defs>
           <!-- 六边形外轮廓 -->
-          <path d="M24 5L40 14V34L24 43L8 34V14L24 5Z" stroke="url(#logoGrad)" stroke-width="1.3" fill="none" opacity="0.5"/>
-          <!-- 夕部 → 弯月 -->
-          <path d="M34 22C34 15 27 11 21 14C25 16 27 20 25 27" stroke="url(#logoGrad2)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none" filter="url(#logoGlow)"/>
-          <!-- 林部左 → 竖线+斜交 -->
-          <path d="M15 20V36" stroke="url(#logoGrad)" stroke-width="2.2" stroke-linecap="round" filter="url(#logoGlow)"/>
-          <path d="M11 26H19" stroke="url(#logoGrad)" stroke-width="1.6" stroke-linecap="round" opacity="0.75"/>
-          <!-- 林部右 → 竖线+斜交 -->
-          <path d="M27 22V38" stroke="url(#logoGrad2)" stroke-width="2.2" stroke-linecap="round" filter="url(#logoGlow)"/>
-          <path d="M23 32H31" stroke="url(#logoGrad2)" stroke-width="1.6" stroke-linecap="round" opacity="0.75"/>
-          <!-- 顶部梦字横 -->
-          <path d="M16 18H28" stroke="url(#logoGrad)" stroke-width="2.4" stroke-linecap="round" filter="url(#logoGlow)"/>
-          <!-- 悬浮光点 -->
-          <circle cx="37" cy="16" r="1.2" fill="#FFD700" opacity="0.7"/>
-          <circle cx="9" cy="38" r="1" fill="#7B2FFD" opacity="0.5"/>
+          <path d="M24 5L40 14V34L24 43L8 34V14L24 5Z" stroke="url(#logoGrad)" stroke-width="1.5" fill="none" opacity="0.5"/>
+          <!-- 夕部 - 弯月 -->
+          <path d="M34 22C34 15 27 11 21 14C25 16 27 20 25 27" stroke="url(#logoGrad2)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <!-- 林部左 -->
+          <path d="M15 20V36" stroke="url(#logoGrad)" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M11 26H19" stroke="url(#logoGrad)" stroke-width="1.8" stroke-linecap="round"/>
+          <!-- 林部右 -->
+          <path d="M27 22V38" stroke="url(#logoGrad2)" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M23 32H31" stroke="url(#logoGrad2)" stroke-width="1.8" stroke-linecap="round"/>
+          <!-- 梦字横笔 -->
+          <path d="M16 18H28" stroke="url(#logoGrad)" stroke-width="2.6" stroke-linecap="round"/>
+          <!-- 金光点 -->
+          <circle cx="37" cy="16" r="1.4" fill="#FFD700"/>
         </svg>
       </div>
       <span>梦工厂<span style="color:var(--secondary);">·</span>王者</span>
