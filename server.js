@@ -1570,7 +1570,7 @@ app.delete('/api/admin/teams/:id/members/:userId', authMiddleware, adminMiddlewa
 app.get('/api/competitions', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM competitions WHERE status != 'deleted' ORDER BY created_at DESC");
-    res.json(result.rows);
+    res.json({ competitions: result.rows });
   } catch(e) { res.status(500).json({ message: '查询失败' }); }
 });
 
