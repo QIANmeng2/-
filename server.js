@@ -1744,8 +1744,10 @@ app.post('/api/player/apply', authMiddleware, async (req, res) => {
       console.log('[选手认证] 已通知管理员审核:', gameId);
     } catch(e) { console.error('[选手认证] 通知管理员失败:', e.message); }
     res.json({ success: true, message: '认证申请已提交，预计24小时内审核' });
-  } catch(e) { res.status(500).json({ message: '提交失败' }); }
-});
+  } catch(e) {
+    console.error('[选手认证] 提交失败:', e.message);
+    res.status(500).json({ message: '提交失败: ' + e.message });
+  }
 
 // 查询自己的认证状态
 app.get('/api/player/status', authMiddleware, async (req, res) => {
