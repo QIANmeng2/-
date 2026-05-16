@@ -196,7 +196,10 @@ app.use(express.json());
 
 // 健康检查
 app.get('/', (req, res) => res.send('OK'));
-app.get('/health', (req, res) => res.send('OK'));
+app.get('/health', (req, res) => {
+  if (global._dbReady) res.send('OK');
+  else res.status(503).send('Initializing');
+});
 
 // 登录验证
 function authMiddleware(req, res, next) {
@@ -2020,11 +2023,19 @@ app.get('/api/admin/transfers', authMiddleware, adminMiddleware, async (req, res
 });
 
 async function startServer() {
-  await initDB();
-  console.log("✅ 数据库就绪");
+  // 先监听端口让 Railway 健康检查通过
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 服务运行在端口 ${PORT}`);
   });
+
+  // 异步初始化数据库，不阻塞启动
+  try {
+    await initDB();
+    global._dbReady = true;
+    console.log("✅ 数据库就绪");
+  } catch(e) {
+    console.error("❌ 数据库初始化失败:", e.message);
+  }
 
   // 确认阶段超时检查：每分钟运行一次
   // 开赛前10分钟仍未确认的用户自动退出
