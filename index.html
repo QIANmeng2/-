@@ -824,70 +824,168 @@
     .comp-detail-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.75);
+      background: rgba(0,0,0,0.8);
       z-index: 1000;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: 16px;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
     }
     .comp-detail-panel {
       background: var(--bg-secondary);
-      border: 1px solid rgba(245,158,11,0.2);
-      border-radius: var(--radius-md);
+      border: 1px solid rgba(245,158,11,0.18);
+      border-radius: 12px;
       width: 100%;
-      max-width: 520px;
-      max-height: 88vh;
+      max-width: 480px;
+      max-height: 90vh;
       overflow-y: auto;
-      box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 30px rgba(245,158,11,0.08);
+      box-shadow: 0 12px 48px rgba(0,0,0,0.7), 0 0 40px rgba(245,158,11,0.06);
+      animation: compDetailFadeIn 0.2s ease;
+    }
+    @keyframes compDetailFadeIn {
+      from { opacity: 0; transform: translateY(12px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
     }
     .comp-detail-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 20px;
+      padding: 20px 24px 16px;
       border-bottom: 1px solid rgba(255,255,255,0.06);
       position: sticky;
       top: 0;
       background: var(--bg-secondary);
       z-index: 1;
+      border-radius: 12px 12px 0 0;
     }
-    .comp-detail-body { padding: 20px; }
+    .comp-detail-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin: 0;
+      line-height: 1.4;
+      word-break: break-word;
+      flex: 1;
+      padding-right: 12px;
+    }
+    .comp-detail-back {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: var(--text-secondary);
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .comp-detail-back:hover {
+      background: rgba(255,255,255,0.12);
+      color: var(--text-primary);
+      border-color: rgba(245,158,11,0.3);
+    }
+    .comp-detail-body {
+      padding: 20px 24px 24px;
+    }
+    .comp-detail-section {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 10px;
+      padding: 16px 18px;
+      margin-bottom: 20px;
+    }
+    .comp-detail-section:last-child { margin-bottom: 0; }
     .comp-detail-row {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       gap: 12px;
-      padding: 10px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.04);
+      padding: 8px 0;
     }
-    .comp-detail-row:last-child { border-bottom: none; }
-    .comp-detail-label { font-size: 0.78rem; color: var(--text-muted); min-width: 72px; flex-shrink: 0; padding-top: 2px; }
-    .comp-detail-value { font-size: 0.85rem; color: var(--text-primary); flex: 1; word-break: break-all; }
-    .comp-detail-qr {
-      max-width: 200px;
-      border-radius: var(--radius-sm);
+    .comp-detail-row + .comp-detail-row {
+      border-top: 1px solid rgba(255,255,255,0.04);
+    }
+    .comp-detail-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      min-width: 64px;
+      flex-shrink: 0;
+      letter-spacing: 0.02em;
+    }
+    .comp-detail-value {
+      font-size: 0.84rem;
+      color: var(--text-secondary);
+      flex: 1;
+      word-break: break-all;
+    }
+    .comp-detail-status {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 9999px;
+    }
+    .comp-detail-status.active {
+      background: rgba(16,185,129,0.12);
+      color: #10b981;
+      border: 1px solid rgba(16,185,129,0.25);
+    }
+    .comp-detail-status.closed {
+      background: rgba(239,68,68,0.1);
+      color: #ef4444;
+      border: 1px solid rgba(239,68,68,0.2);
+    }
+    .comp-detail-qr-wrap {
+      display: flex;
+      justify-content: center;
+      padding: 16px 0 8px;
+    }
+    .comp-detail-qr-card {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
       cursor: pointer;
-      transition: transform 0.15s ease;
-      border: 1px solid rgba(255,255,255,0.08);
+      max-width: 220px;
+      width: 100%;
     }
-    .comp-detail-qr:hover { transform: scale(1.05); }
+    .comp-detail-qr-card:hover {
+      transform: scale(1.03);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.45), 0 0 0 1px rgba(245,158,11,0.2);
+    }
+    .comp-detail-qr-card img {
+      width: 100%;
+      height: auto;
+      border-radius: 6px;
+      display: block;
+    }
     .comp-qr-fullscreen {
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.9);
+      background: rgba(0,0,0,0.92);
       z-index: 2000;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
     }
     .comp-qr-fullscreen img {
-      max-width: 90vw;
-      max-height: 90vh;
-      border-radius: var(--radius-md);
-      box-shadow: 0 0 40px rgba(0,0,0,0.8);
+      max-width: 88vw;
+      max-height: 88vh;
+      border-radius: 12px;
+      box-shadow: 0 0 60px rgba(0,0,0,0.8);
     }
-    .comp-detail-none { font-size: 0.82rem; color: var(--text-muted); font-style: italic; }
+    .comp-detail-none {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      font-style: italic;
+      padding: 12px 0;
+      text-align: center;
+    }
 
     /* ===== 招募系统样式 ===== */
     .recruit-tabs {
@@ -2228,7 +2326,10 @@ function openCompetitionDetail(id) {
   const cached = window._compCache[id];
   if (!cached) return;
   const c = cached;
-  const creatorName = c.created_by_name || c.created_by_username || c.created_by || '未知';
+  const creatorName = (c.created_by_name || c.created_by_username || '').replace(/\s*\(.*?\)\s*/, '') || '未知';
+  const dateStr = c.created_at
+    ? new Date(c.created_at).toLocaleDateString('zh-CN', { year:'numeric', month:'long', day:'numeric' })
+    : '未知';
   const overlay = document.createElement('div');
   overlay.className = 'comp-detail-overlay';
   overlay.id = 'compDetailOverlay';
@@ -2236,27 +2337,31 @@ function openCompetitionDetail(id) {
   overlay.innerHTML = `
     <div class="comp-detail-panel">
       <div class="comp-detail-header">
-        <h3 style="margin:0;font-size:1rem;color:var(--text-primary);">${c.name}</h3>
-        <button class="btn btn-sm btn-secondary" onclick="closeCompetitionDetail()" style="padding:6px 12px;font-size:0.78rem;">返回</button>
+        <h3 class="comp-detail-title">${c.name}</h3>
+        <button class="comp-detail-back" onclick="closeCompetitionDetail()">返回</button>
       </div>
       <div class="comp-detail-body">
-        <div class="comp-detail-row">
-          <span class="comp-detail-label">赛事状态</span>
-          <span class="comp-detail-value"><span class="badge ${c.status === 'active' ? 'badge-available' : 'badge-closed'}">${c.status === 'active' ? '进行中' : '已结束'}</span></span>
+        <div class="comp-detail-section">
+          <div class="comp-detail-row">
+            <span class="comp-detail-label">赛事状态</span>
+            <span class="comp-detail-value"><span class="comp-detail-status ${c.status === 'active' ? 'active' : 'closed'}">${c.status === 'active' ? '进行中' : '已结束'}</span></span>
+          </div>
+          <div class="comp-detail-row">
+            <span class="comp-detail-label">创建时间</span>
+            <span class="comp-detail-value">${dateStr}</span>
+          </div>
+          <div class="comp-detail-row">
+            <span class="comp-detail-label">创建人</span>
+            <span class="comp-detail-value">${creatorName}</span>
+          </div>
         </div>
-        <div class="comp-detail-row">
-          <span class="comp-detail-label">创建时间</span>
-          <span class="comp-detail-value">${c.created_at ? new Date(c.created_at).toLocaleString('zh-CN') : '未知'}</span>
-        </div>
-        <div class="comp-detail-row">
-          <span class="comp-detail-label">创建人</span>
-          <span class="comp-detail-value">${creatorName} <span style="color:var(--text-muted);font-size:0.75rem;">(${c.created_by || '无'})</span></span>
-        </div>
-        <div class="comp-detail-row">
-          <span class="comp-detail-label">二维码</span>
-          <div class="comp-detail-value">
+        <div class="comp-detail-section">
+          <div class="comp-detail-row">
+            <span class="comp-detail-label">二维码</span>
+          </div>
+          <div class="comp-detail-qr-wrap">
             ${c.qr_code_url
-              ? `<img class="comp-detail-qr" src="${c.qr_code_url}" alt="赛事二维码" onclick="openCompQrFullscreen(this.src)">`
+              ? `<div class="comp-detail-qr-card" onclick="openCompQrFullscreen('${c.qr_code_url.replace(/'/g, "\\'")}')"><img src="${c.qr_code_url}" alt="赛事二维码"></div>`
               : '<span class="comp-detail-none">未上传</span>'
             }
           </div>
