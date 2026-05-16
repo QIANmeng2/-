@@ -3065,7 +3065,14 @@ async function submitPlayerCert(e) {
       body: JSON.stringify({ gameId, positions, peakScore, gameRank, screenshotUrl1: u1, screenshotUrl2: u2 })
     });
     clearTimeout(t);
-    if (!res.ok) { const e2 = await res.json().catch(()=>({})); throw new Error(e2.message||'提交失败'); }
+    if (!res.ok) {
+      let msg = '提交失败';
+      try {
+        const text = await res.text();
+        try { msg = JSON.parse(text).message || msg; } catch(e) { msg = text.substring(0, 200) || 'HTTP ' + res.status; }
+      } catch(e) { msg = '网络错误 (' + res.status + ')'; }
+      throw new Error(msg);
+    }
     showToast('认证申请已提交，预计24小时内审核', 'success');
     await renderMarketPanel();
   } catch(e) {
