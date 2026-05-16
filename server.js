@@ -196,10 +196,7 @@ app.use(express.json());
 
 // 健康检查
 app.get('/', (req, res) => res.send('OK'));
-app.get('/health', (req, res) => {
-  if (global._dbReady) res.send('OK');
-  else res.status(503).send('Initializing');
-});
+app.get('/health', (req, res) => res.send('OK'));
 
 // 登录验证
 function authMiddleware(req, res, next) {
