@@ -2969,8 +2969,13 @@ function openCreateClubModal() {
       <h3>创建俱乐部</h3>
       <form onsubmit="handleCreateClub(event)">
         <div class="form-group"><label>俱乐部名称 *</label><input class="form-input" type="text" id="clubName" required placeholder="如：星河战队"></div>
-        <div class="form-group"><label>老板ID *</label><input class="form-input" type="text" id="clubOwnerId" required placeholder="输入用户ID（如mp4...）" oninput="searchClubOwnerUser(this.value)"></div>
-        <div id="clubOwnerSearchResult" style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;"></div>
+        <div class="form-group">
+          <label>老板身份（选择用户）</label>
+          <input class="form-input" type="text" id="clubOwnerSearch" placeholder="搜索用户名/姓名..." oninput="filterClubOwnerUsers()" autocomplete="off">
+          <select class="form-input" id="clubOwnerId" required style="margin-top:8px;">
+            <option value="">请选择用户</option>
+          </select>
+        </div>
         <div style="display:flex;gap:10px;margin-top:16px;">
           <button type="submit" class="btn btn-primary" style="flex:1;">创建</button>
           <button type="button" class="btn btn-secondary" onclick="document.getElementById('createClubModal').remove()" style="flex:1;">取消</button>
@@ -2980,6 +2985,30 @@ function openCreateClubModal() {
   `;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  // 加载用户列表
+  loadClubOwnerUsers();
+}
+
+async function loadClubOwnerUsers() {
+  try {
+    const data = await api('/api/admin/users/simple');
+    window._clubOwnerUserList = data.users || [];
+    renderClubOwnerOptions(window._clubOwnerUserList);
+  } catch(e) { console.error('加载用户列表失败', e); }
+}
+function renderClubOwnerOptions(list) {
+  const sel = document.getElementById('clubOwnerId');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">请选择用户</option>' +
+    list.map(u => `<option value="${u.id}">${u.coachName || u.username} (${u.username})</option>`).join('');
+}
+function filterClubOwnerUsers() {
+  const kw = document.getElementById('clubOwnerSearch').value.trim().toLowerCase();
+  const list = (window._clubOwnerUserList || []).filter(u =>
+    (u.username || '').toLowerCase().includes(kw) ||
+    (u.coachName || '').toLowerCase().includes(kw)
+  );
+  renderClubOwnerOptions(list);
 }
 
 async function handleCreateClub(e) {
