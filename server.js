@@ -194,7 +194,7 @@ async function initDB() {
 
 // 万能跨域
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
 
 // 健康检查
 app.get('/', (req, res) => res.send('OK'));
@@ -1744,7 +1744,10 @@ app.post('/api/player/apply', authMiddleware, async (req, res) => {
       console.log('[选手认证] 已通知管理员审核:', gameId);
     } catch(e) { console.error('[选手认证] 通知管理员失败:', e.message); }
     res.json({ success: true, message: '认证申请已提交，预计24小时内审核' });
-  } catch(e) { res.status(500).json({ message: '提交失败' }); }
+  } catch(e) {
+    console.error('[选手认证] 提交失败:', e.message);
+    res.status(500).json({ message: '提交失败: ' + e.message });
+  }
 });
 
 // 查询自己的认证状态
@@ -1927,7 +1930,8 @@ app.post('/api/club/sign', authMiddleware, async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ message: '该选手已签约其他俱乐部' });
     }
-    const fee = p.market_value;
+    const feeWan = p.market_value; // 万为单位
+    const fee = feeWan * 10000; // 转为梦币单位
 
     // 2. 验证俱乐部存在
     const club = await client.query('SELECT * FROM clubs WHERE id = $1 FOR UPDATE', [clubId]);
@@ -1945,32 +1949,32 @@ app.post('/api/club/sign', authMiddleware, async (req, res) => {
     const boss = await client.query('SELECT dream_coins FROM users WHERE id = $1 FOR UPDATE', [ownerId]);
     if (boss.rows.length === 0 || (boss.rows[0].dream_coins || 0) < fee) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ message: '老板余额不足，签约需 ' + fee + ' 万梦币' });
+      return res.status(400).json({ message: '老板余额不足，签约需 ' + feeWan + ' 万梦币（实际扣' + fee + '）' });
     }
 
     // 4. 扣除老板梦币
     await client.query('UPDATE users SET dream_coins = dream_coins - $1 WHERE id = $2', [fee, ownerId]);
     await client.query(
       "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'deduct',$3)",
-      [ownerId, -fee, '签约选手' + (p.game_id || playerUserId) + '，费用' + fee + '万梦币']
+      [ownerId, -fee, '签约选手' + (p.game_id || playerUserId) + '，签约费 ' + feeWan + ' 万梦币']
     );
 
     // 5. 分配资金（浅梦 = 平台方 = ADMIN_USER_ID）
     const playerShare = Math.floor(fee * 0.1); // 选手得 10%
-    const platformShare = Math.floor(fee * 0.9); // 浅梦得 90%
+    const platformShare = fee - playerShare; // 浅梦得 90%
 
     // 给选手转账 10%
     await client.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id = $2', [playerShare, playerUserId]);
     await client.query(
       "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'reward',$3)",
-      [playerUserId, playerShare, '签约转会分成10%，来自俱乐部签约费' + fee + '万']
+      [playerUserId, playerShare, '签约转会分成10%（' + playerShare + '梦币），来自俱乐部签约费' + feeWan + '万']
     );
 
     // 给浅梦（管理员）转账 90%
     await client.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id = $2', [platformShare, ADMIN_USER_ID]);
     await client.query(
       "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'reward',$3)",
-      [ADMIN_USER_ID, platformShare, '俱乐部签约平台抽成90%，选手' + (p.game_id || playerUserId) + '，签约费' + fee + '万']
+      [ADMIN_USER_ID, platformShare, '俱乐部签约平台抽成90%（' + platformShare + '梦币），选手' + (p.game_id || playerUserId) + '，签约费' + feeWan + '万']
     );
 
     // 6. 更新选手所属俱乐部
@@ -1982,23 +1986,23 @@ app.post('/api/club/sign', authMiddleware, async (req, res) => {
       [clubId, playerUserId, 'player']
     );
 
-    // 8. 记录转会
+    // 8. 记录转会（fee存万单位，与market_value一致）
     await client.query(
       'INSERT INTO transfer_records (player_user_id, from_club_id, to_club_id, fee, platform_fee) VALUES ($1,NULL,$2,$3,$4)',
-      [playerUserId, clubId, fee, platformShare]
+      [playerUserId, clubId, feeWan, platformShare]
     );
 
     // 9. 通知
     await client.query(
-      "INSERT INTO notifications (userId, type, content) VALUES ($1,'club_sign','你已被俱乐部签下，获得签约分成'||$2||'万梦币')",
-      [playerUserId, String(playerShare)]
+      "INSERT INTO notifications (userId, type, content) VALUES ($1,'club_sign',$2)",
+      [playerUserId, '你已被俱乐部签下，获得签约分成' + playerShare + '梦币（签约费' + feeWan + '万）']
     );
 
     await client.query('COMMIT');
     res.json({
       success: true,
-      message: '签约成功！费用 ' + fee + ' 万梦币',
-      breakdown: { totalFee: fee, playerShare, platformShare }
+      message: '签约成功！签约费 ' + feeWan + ' 万梦币',
+      breakdown: { totalFeeWan: feeWan, totalFee: fee, playerShare, platformShare }
     });
   } catch(e) {
     await client.query('ROLLBACK');
