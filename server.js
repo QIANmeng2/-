@@ -1,5 +1,4 @@
 const express = require('express');
-const compression = require('compression');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 // deploy trigger
@@ -145,7 +144,6 @@ async function initDB() {
 }
 
 // 万能跨域
-app.use(compression({ threshold: 512 }));
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
