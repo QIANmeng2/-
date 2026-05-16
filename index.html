@@ -2643,6 +2643,7 @@ async function renderMarketPanel() {
             <div id="playerCertForm">${buildCertForm()}</div>
           ` : ''}
         </div>`;
+      setTimeout(initCertPositions, 50);
     } else {
       await loadMarketPlayers(content);
     }
@@ -2676,29 +2677,47 @@ function buildCertForm() {
     </form>`;
 }
 
-// 初始化位置选择
-document.addEventListener('DOMContentLoaded', () => {
-  const lanes = ['对抗路','打野','中路','发育路','游走'];
+// 初始化位置选择（表单渲染后调用）
+function initCertPositions() {
   const selDiv = document.getElementById('certPositions');
   if (!selDiv) return;
-  let selectedLanes = [];
+  const lanes = ['对抗路','打野','中路','发育路','游走'];
+  window._certSelectedLanes = [];
   function renderLanes() {
-    selDiv.innerHTML = lanes.map(l => `<span class="lane-chip ${selectedLanes.includes(l)?'active':''}" onclick="toggleLane('${l}')">${l}</span>`).join('');
+    const max = 2;
+    const sel = window._certSelectedLanes || [];
+    selDiv.innerHTML = lanes.map(l => {
+      const active = sel.includes(l);
+      const disabled = !active && sel.length >= max;
+      return `<span class="lane-chip${active?' active':''}${disabled?' disabled':''}" onclick="${disabled?'':`toggleLane('${l}')`}">${l}</span>`;
+    }).join('');
+    // 提示文字
+    let tip = document.getElementById('laneLimitTip');
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.id = 'laneLimitTip';
+      tip.style.cssText = 'font-size:0.7rem;color:var(--text-muted);margin-top:4px;';
+      selDiv.parentNode.appendChild(tip);
+    }
+    tip.textContent = sel.length >= max ? `已选 ${sel.length}/${max} 个（已达上限）` : `已选 ${sel.length}/${max} 个`;
   }
   window.toggleLane = (l) => {
-    if (selectedLanes.includes(l)) selectedLanes = selectedLanes.filter(x => x!==l);
-    else selectedLanes.push(l);
+    const sel = window._certSelectedLanes || [];
+    if (sel.includes(l)) { window._certSelectedLanes = sel.filter(x => x !== l); }
+    else if (sel.length < 2) { window._certSelectedLanes = [...sel, l]; }
+    else { return; }
     renderLanes();
   };
+  window.getSelectedLanes = () => window._certSelectedLanes || [];
   renderLanes();
-  window.getSelectedLanes = () => selectedLanes;
-});
+}
 
 // 选手位置 chip 样式（动态注入）
 const laneChipStyle = document.createElement('style');
 laneChipStyle.textContent = `
   .lane-chip { display:inline-block;padding:4px 12px;border-radius:9999px;font-size:0.8rem;cursor:pointer;transition:all .15s;border:1px solid rgba(255,255,255,.1);color:var(--text-muted); }
   .lane-chip.active { background:rgba(79,70,229,.15);border-color:rgba(79,70,229,.35);color:var(--primary); }
+  .lane-chip.disabled { opacity:.35;cursor:not-allowed; }
   .lane-chip:hover { border-color:rgba(79,70,229,.2); }
 `;
 document.head.appendChild(laneChipStyle);
