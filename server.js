@@ -148,6 +148,8 @@ async function initDB() {
       );
     `);
     await client.query('ALTER TABLE players ADD COLUMN IF NOT EXISTS screenshot_url2 TEXT');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS clubs (
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL UNIQUE,
         owner_id TEXT NOT NULL,
