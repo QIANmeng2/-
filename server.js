@@ -138,6 +138,7 @@ async function initDB() {
         peak_score INTEGER DEFAULT 0,
         game_rank TEXT DEFAULT '',
         screenshot_url TEXT,
+        screenshot_url2 TEXT,
         status TEXT DEFAULT 'pending',
         market_value INTEGER DEFAULT 0,
         club_id INTEGER,
@@ -146,8 +147,7 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS clubs (
+    await client.query('ALTER TABLE players ADD COLUMN IF NOT EXISTS screenshot_url2 TEXT');
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL UNIQUE,
         owner_id TEXT NOT NULL,
@@ -1713,7 +1713,7 @@ function calcMarketValue(peakScore, gameRank) {
 
 // 选手认证申请
 app.post('/api/player/apply', authMiddleware, async (req, res) => {
-  const { gameId, positions, peakScore, gameRank } = req.body;
+  const { gameId, positions, peakScore, gameRank, screenshotUrl1, screenshotUrl2 } = req.body;
   if (!gameId || !positions || peakScore === undefined || !gameRank) {
     return res.status(400).json({ message: '请填写完整的认证信息' });
   }
@@ -1727,13 +1727,13 @@ app.post('/api/player/apply', authMiddleware, async (req, res) => {
     if (existing.rows.length > 0) {
       // 重新提交
       await pool.query(
-        "UPDATE players SET game_id=$1,positions=$2,peak_score=$3,game_rank=$4,status='pending',market_value=$5,reviewed_by=NULL,reviewed_at=NULL,created_at=NOW() WHERE user_id=$6",
-        [gameId, JSON.stringify(positions), peakScore, gameRank, marketValue, req.userId]
+        "UPDATE players SET game_id=$1,positions=$2,peak_score=$3,game_rank=$4,status='pending',market_value=$5,screenshot_url=$6,screenshot_url2=$7,reviewed_by=NULL,reviewed_at=NULL,created_at=NOW() WHERE user_id=$8",
+        [gameId, JSON.stringify(positions), peakScore, gameRank, marketValue, screenshotUrl1 || null, screenshotUrl2 || null, req.userId]
       );
     } else {
       await pool.query(
-        'INSERT INTO players (user_id,game_id,positions,peak_score,game_rank,status,market_value) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-        [req.userId, gameId, JSON.stringify(positions), peakScore, gameRank, 'pending', marketValue]
+        'INSERT INTO players (user_id,game_id,positions,peak_score,game_rank,status,market_value,screenshot_url,screenshot_url2) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+        [req.userId, gameId, JSON.stringify(positions), peakScore, gameRank, 'pending', marketValue, screenshotUrl1 || null, screenshotUrl2 || null]
       );
     }
     // 通知管理员
