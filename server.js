@@ -1077,6 +1077,14 @@ app.get('/api/admin/users/options', authMiddleware, adminMiddleware, async (req,
   } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
 });
 
+// 管理员发放梦币用的用户列表（简化）
+app.get('/api/admin/users/simple', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, username, coachName FROM users ORDER BY coachName, username');
+    res.json({ users: result.rows });
+  } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
+});
+
 // 管理员删除用户
 app.delete('/api/admin/users/:id', authMiddleware, adminMiddleware, async (req, res) => {
   const client = await pool.connect();
