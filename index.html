@@ -2053,7 +2053,8 @@ function updateUI() {
     ui('displayTeam').textContent = currentUser.teamName;
     document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="mine"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="account"]').forEach(b => b.style.display = '');
     ui('notificationBell').style.display = 'flex';
-    if (currentUser.id === 'mp4hmya7ad15v6') { ui('tabAdmin').style.display = ''; ui('tabCompetition').style.display = ''; }
+    if (currentUser.id === 'mp4hmya7ad15v6') { ui('tabAdmin').style.display = ''; }
+    ui('tabCompetition').style.display = '';
   } else {
     ui('userInfoDisplay').style.display = 'none';
     ui('btnLoginTop').style.display = 'inline-block';
@@ -2066,19 +2067,16 @@ function updateUI() {
 
 // ==================== 比赛页面 ====================
 async function renderCompetitionPanel() {
-  if (!currentUser || currentUser.id !== 'mp4hmya7ad15v6') {
-    document.getElementById('tabContent').innerHTML = '<div class="card"><p style="text-align:center;color:var(--text-muted);">此页面仅管理员可用</p></div>';
-    return;
-  }
+  const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
   const content = document.getElementById('tabContent');
   content.innerHTML = `
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
-        <h3>赛事管理</h3>
-        <button class="btn btn-primary" onclick="openCreateCompetitionModal()" style="padding:10px 20px;">
+        <h3>${isAdmin ? '赛事管理' : '赛事信息'}</h3>
+        ${isAdmin ? `<button class="btn btn-primary" onclick="openCreateCompetitionModal()" style="padding:10px 20px;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           创建赛事
-        </button>
+        </button>` : ''}
       </div>
       <div id="competitionList"><div class="loading-spinner"></div></div>
     </div>
@@ -2088,11 +2086,12 @@ async function renderCompetitionPanel() {
 
 async function loadCompetitionList() {
   const container = document.getElementById('competitionList');
+  const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
   try {
     const data = await api('/api/competitions');
     const comps = data.competitions || [];
     if (!comps.length) {
-      container.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:40px 0;">暂无赛事，立即创建一个吧</p>';
+      container.innerHTML = `<p style="text-align:center;color:var(--text-muted);padding:40px 0;">${isAdmin ? '暂无赛事，立即创建一个吧' : '暂无赛事信息'}</p>`;
       return;
     }
     container.innerHTML = comps.map(c => `
@@ -2106,7 +2105,7 @@ async function loadCompetitionList() {
             <span class="badge ${c.status === 'active' ? 'badge-available' : 'badge-closed'}">${c.status === 'active' ? '进行中' : '已结束'}</span>
           </div>
         </div>
-        <button class="btn btn-sm btn-danger" onclick="deleteCompetition('${c.id}')" style="padding:8px 14px;">删除</button>
+        ${isAdmin ? `<button class="btn btn-sm btn-danger" onclick="deleteCompetition('${c.id}')" style="padding:8px 14px;">删除</button>` : ''}
       </div>
     `).join('');
   } catch (err) {
@@ -2129,9 +2128,13 @@ function openCreateCompetitionModal() {
           <input class="form-input" type="text" id="compName" required placeholder="如：浅梦杯春季赛">
         </div>
         <div class="form-group">
-          <label>二维码图片地址</label>
-          <input class="form-input" type="url" id="compQrUrl" placeholder="https://...">
-          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">可上传图片到图床，将链接粘贴于此</div>
+          <label>二维码图片</label>
+          <input class="form-input" type="file" id="compQrFile" accept="image/*" onchange="previewCompQr(this)">
+          <input type="hidden" id="compQrUrl">
+          <div id="compQrPreview" style="margin-top:8px;max-width:120px;display:none;">
+            <img id="compQrPreviewImg" style="width:100%;border-radius:8px;border:1px solid var(--border);">
+          </div>
+          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">支持 jpg / png / gif，建议不超过 2MB</div>
         </div>
         <div style="display:flex;gap:10px;margin-top:20px;">
           <button type="submit" class="btn btn-primary" style="flex:1;">创建</button>
@@ -2142,6 +2145,19 @@ function openCreateCompetitionModal() {
   `;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+}
+
+function previewCompQr(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) { showToast('图片过大，请压缩至2MB以内', 'error'); input.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    document.getElementById('compQrUrl').value = e.target.result;
+    document.getElementById('compQrPreviewImg').src = e.target.result;
+    document.getElementById('compQrPreview').style.display = '';
+  };
+  reader.readAsDataURL(file);
 }
 
 async function handleCreateCompetition(e) {
