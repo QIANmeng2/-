@@ -1928,7 +1928,9 @@
   <div class="tab-nav" id="tabNav">
     <button class="tab-btn" data-tab="competition" id="tabCompetition" style="display:none;">比赛</button>
     <button class="tab-btn" data-tab="recruit" id="tabRecruit">招募大厅</button>
+    <button class="tab-btn" data-tab="market" id="tabMarket" style="display:none;">转会市场</button>
     <button class="tab-btn" data-tab="team" id="tabTeam" style="display:none;">我的队伍</button>
+    <button class="tab-btn" data-tab="club" id="tabClub" style="display:none;">我的俱乐部</button>
     <button class="tab-btn" data-tab="mine" style="display:none;">我的日程</button>
     <button class="tab-btn" data-tab="profile" style="display:none;">个人信息</button>
     <button class="tab-btn" data-tab="account" id="tabAccount" style="display:none;">我的账户</button>
@@ -2234,7 +2236,7 @@ function updateUI() {
     ui('btnLogoutTop').style.display = 'inline-block';
     ui('displayName').textContent = currentUser.coachName;
     ui('displayTeam').textContent = currentUser.teamName;
-    document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="mine"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="account"]').forEach(b => b.style.display = '');
+    document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="mine"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="account"], #tabNav .tab-btn[data-tab="market"], #tabNav .tab-btn[data-tab="club"]').forEach(b => b.style.display = '');
     ui('notificationBell').style.display = 'flex';
     if (currentUser.id === 'mp4hmya7ad15v6') { ui('tabAdmin').style.display = ''; }
     ui('tabCompetition').style.display = '';
@@ -2242,7 +2244,7 @@ function updateUI() {
     ui('userInfoDisplay').style.display = 'none';
     ui('btnLoginTop').style.display = 'inline-block';
     ui('btnLogoutTop').style.display = 'none';
-    document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="mine"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="account"], #tabNav .tab-btn[data-tab="competition"], #tabNav .tab-btn[data-tab="admin"]').forEach(b => b.style.display = 'none');
+    document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="mine"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="account"], #tabNav .tab-btn[data-tab="competition"], #tabNav .tab-btn[data-tab="admin"], #tabNav .tab-btn[data-tab="market"], #tabNav .tab-btn[data-tab="club"]').forEach(b => b.style.display = 'none');
     ui('notificationBell').style.display = 'none';
   }
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === currentTab));
@@ -2611,6 +2613,366 @@ async function handleAwardCoins(e) {
   } catch (err) { showToast(err.message || '发放失败', 'error'); }
 }
 
+// ==================== 转会市场 ====================
+async function renderMarketPanel() {
+  const content = document.getElementById('tabContent');
+  content.innerHTML = '<div class="loading-spinner"></div>';
+  try {
+    // 检查选手认证状态
+    const playerData = await api('/api/player/status');
+    const player = playerData.player;
+    if (!player || player.status === 'pending') {
+      content.innerHTML = `
+        <div class="card" style="max-width:560px;margin:0 auto;">
+          <h3 style="margin-bottom:16px;">转会市场</h3>
+          ${!player ? `
+            <div class="info-banner" style="margin-bottom:16px;">
+              <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+              <span>进入转会市场前需要先完成<strong>选手认证</strong>。提交后24小时内审核。</span>
+            </div>
+            <div id="playerCertForm">${buildCertForm()}</div>
+          ` : `
+            <div class="info-banner" style="margin-bottom:16px;border-color:rgba(245,158,11,0.3);background:rgba(245,158,11,0.06);">
+              <span>你的认证申请<span style="color:var(--warning);">审核中</span>，通过后即可进入转会市场。</span>
+            </div>
+          `}
+          ${player && player.status === 'rejected' ? `
+            <div class="info-banner" style="margin-bottom:16px;border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.06);">
+              <span>你的认证<span style="color:var(--danger);">未通过</span>，请重新提交。</span>
+            </div>
+            <div id="playerCertForm">${buildCertForm()}</div>
+          ` : ''}
+        </div>`;
+    } else {
+      await loadMarketPlayers(content);
+    }
+  } catch(e) { content.innerHTML = `<div class="card"><p>加载失败：${e.message}</p></div>`; }
+}
+
+function buildCertForm() {
+  return `
+    <form onsubmit="submitPlayerCert(event)" style="max-width:480px;">
+      <div class="form-group"><label>游戏ID *</label><input class="form-input" type="text" id="certGameId" required placeholder="如：浅梦" maxlength="20"></div>
+      <div class="form-group">
+        <label>擅长位置（可多选）*</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;" id="certPositions"></div>
+      </div>
+      <div class="form-group"><label>巅峰分 *</label><input class="form-input" type="number" id="certPeakScore" required placeholder="如：2200" min="0" max="5000"></div>
+      <div class="form-group">
+        <label>当前段位 *</label>
+        <select class="form-input" id="certGameRank" required>
+          <option value="">请选择段位</option>
+          <option>荣耀王者100星+</option><option>荣耀王者50-99星</option><option>荣耀王者1-49星</option>
+          <option>王者50-100星</option><option>王者25-49星</option><option>王者10-24星</option><option>王者1-9星</option>
+          <option>星耀</option><option>钻石及以下</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>王者营地截图（需包含段位和巅峰分）</label>
+        <input class="form-input" type="file" id="certScreenshot" accept="image/*">
+        <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">截图将用于管理员审核验证</div>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;padding:12px;">提交认证</button>
+    </form>`;
+}
+
+// 初始化位置选择
+document.addEventListener('DOMContentLoaded', () => {
+  const lanes = ['对抗路','打野','中路','发育路','游走'];
+  const selDiv = document.getElementById('certPositions');
+  if (!selDiv) return;
+  let selectedLanes = [];
+  function renderLanes() {
+    selDiv.innerHTML = lanes.map(l => `<span class="lane-chip ${selectedLanes.includes(l)?'active':''}" onclick="toggleLane('${l}')">${l}</span>`).join('');
+  }
+  window.toggleLane = (l) => {
+    if (selectedLanes.includes(l)) selectedLanes = selectedLanes.filter(x => x!==l);
+    else selectedLanes.push(l);
+    renderLanes();
+  };
+  renderLanes();
+  window.getSelectedLanes = () => selectedLanes;
+});
+
+// 选手位置 chip 样式（动态注入）
+const laneChipStyle = document.createElement('style');
+laneChipStyle.textContent = `
+  .lane-chip { display:inline-block;padding:4px 12px;border-radius:9999px;font-size:0.8rem;cursor:pointer;transition:all .15s;border:1px solid rgba(255,255,255,.1);color:var(--text-muted); }
+  .lane-chip.active { background:rgba(79,70,229,.15);border-color:rgba(79,70,229,.35);color:var(--primary); }
+  .lane-chip:hover { border-color:rgba(79,70,229,.2); }
+`;
+document.head.appendChild(laneChipStyle);
+
+async function submitPlayerCert(e) {
+  e.preventDefault();
+  const gameId = document.getElementById('certGameId').value.trim();
+  const positions = window.getSelectedLanes();
+  const peakScore = parseInt(document.getElementById('certPeakScore').value);
+  const gameRank = document.getElementById('certGameRank').value;
+  if (!positions.length) { showToast('请至少选择一个位置','error'); return; }
+  try {
+    await api('/api/player/apply', { method:'POST', body: JSON.stringify({ gameId, positions, peakScore, gameRank }) });
+    showToast('认证申请已提交，预计24小时内审核','success');
+    await renderMarketPanel();
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+async function loadMarketPlayers(container) {
+  const data = await api('/api/market/players');
+  const players = data.players || [];
+  const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
+  container.innerHTML = `
+    <div class="card">
+      <h3>转会市场</h3>
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;">俱乐部老板可联系选手签约</p>
+      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+        <button class="btn btn-sm ${marketSort==='time'?'btn-primary':'btn-secondary'}" onclick="changeMarketSort('time')">最新</button>
+        <button class="btn btn-sm ${marketSort==='value'?'btn-primary':'btn-secondary'}" onclick="changeMarketSort('value')">按身价</button>
+        <select class="form-input" id="marketMaxValue" onchange="filterMarketPlayers()" style="width:auto;padding:4px 8px;font-size:0.8rem;">
+          <option value="">全部身价</option>
+          <option value="10">10万以下</option><option value="20">20万以下</option><option value="30">30万以下</option><option value="50">50万以下</option>
+        </select>
+      </div>
+      <div id="marketPlayerList"></div>
+    </div>
+  `;
+  window._marketPlayers = players;
+  window._marketSort = 'time';
+  window.changeMarketSort = (s) => { window._marketSort = s; renderMarketPlayerList(); };
+  window.filterMarketPlayers = () => { renderMarketPlayerList(); };
+  renderMarketPlayerList();
+}
+
+let marketSort = 'time';
+
+function renderMarketPlayerList() {
+  const container = document.getElementById('marketPlayerList');
+  const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
+  let list = window._marketPlayers || [];
+  const maxVal = document.getElementById('marketMaxValue')?.value;
+  if (maxVal) list = list.filter(p => p.market_value <= parseInt(maxVal));
+  if (window._marketSort === 'value') list.sort((a,b) => b.market_value - a.market_value);
+  else list.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+
+  if (!list.length) { container.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">暂无选手</p>'; return; }
+  container.innerHTML = list.map(p => {
+    let positions = [];
+    try { positions = JSON.parse(p.positions || '[]'); } catch(e) {}
+    return `
+    <div class="market-player-card">
+      <div class="market-player-info">
+        <div class="market-player-name">${p.game_id} <span style="font-size:0.72rem;color:var(--text-muted);">(${p.coachname || p.username})</span></div>
+        <div class="market-player-detail">巅峰${p.peak_score} | ${p.game_rank}</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;">
+          ${positions.map(l => `<span class="pos-tag pos-tag-${l}">${l}</span>`).join('')}
+        </div>
+      </div>
+      <div class="market-player-value">
+        <span style="font-size:1.2rem;font-weight:700;color:var(--warning);">${p.market_value}万</span>
+        <span style="font-size:0.7rem;color:var(--text-muted);">${p.club_name ? '已签约: '+p.club_name : '自由选手'}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// 位置标签
+const posTagStyle = document.createElement('style');
+posTagStyle.textContent = `
+  .pos-tag { display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.7rem;border:1px solid; }
+  .pos-tag-对抗路 { color:#ef4444;border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.08); }
+  .pos-tag-打野 { color:#10b981;border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.08); }
+  .pos-tag-中路 { color:#8b5cf6;border-color:rgba(139,92,246,.3);background:rgba(139,92,246,.08); }
+  .pos-tag-发育路 { color:#f59e0b;border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.08); }
+  .pos-tag-游走 { color:#06b6d4;border-color:rgba(6,182,212,.3);background:rgba(6,182,212,.08); }
+  .market-player-card { display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px;margin-bottom:8px;gap:12px; }
+  .market-player-info { flex:1;min-width:0; }
+  .market-player-name { font-size:0.92rem;font-weight:600;color:var(--text-primary);margin-bottom:2px; }
+  .market-player-detail { font-size:0.78rem;color:var(--text-secondary); }
+  .market-player-value { text-align:right;flex-shrink:0; }
+`;
+document.head.appendChild(posTagStyle);
+
+// ==================== 俱乐部页面 ====================
+async function renderClubPanel() {
+  const content = document.getElementById('tabContent');
+  content.innerHTML = '<div class="loading-spinner"></div>';
+  const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
+  try {
+    const clubsData = await api('/api/clubs');
+    const clubs = clubsData.clubs || [];
+    // 查找当前用户是老板的俱乐部
+    const myClubs = clubs.filter(c => c.owner_id === currentUser.id);
+
+    let html = '<div class="card"><h3>我的俱乐部</h3>';
+    if (isAdmin) {
+      html += `<button class="btn btn-primary btn-sm" style="margin-bottom:12px;" onclick="openCreateClubModal()">创建俱乐部</button>`;
+    }
+    if (myClubs.length > 0) {
+      html += myClubs.map(c => `
+        <div class="club-card" onclick="renderClubDetail(${c.id})" style="cursor:pointer;">
+          <div><span style="font-weight:700;color:var(--text-primary);">${c.name}</span>
+            <span style="font-size:0.72rem;color:var(--text-muted);margin-left:8px;">${c.member_count || 0}名队员</span>
+          </div>
+          <div style="font-size:0.78rem;color:var(--warning);">你 是老板</div>
+        </div>
+      `).join('');
+    } else {
+      html += '<p style="color:var(--text-muted);">你还没有自己的俱乐部</p>';
+    }
+    html += '</div>';
+
+    // 所有俱乐部列表
+    html += `<div class="card" style="margin-top:16px;"><h3 style="margin-bottom:12px;">全部俱乐部</h3>`;
+    if (clubs.length === 0) {
+      html += '<p style="color:var(--text-muted);">暂无俱乐部</p>';
+    } else {
+      html += clubs.map(c => `
+        <div class="club-card" onclick="renderClubDetail(${c.id})" style="cursor:pointer;">
+          <div>
+            <span style="font-weight:600;color:var(--text-primary);">${c.name}</span>
+            <span style="font-size:0.72rem;color:var(--text-muted);margin-left:8px;">${c.member_count || 0}名队员</span>
+          </div>
+          <div style="font-size:0.78rem;color:var(--text-secondary);">老板：${c.owner_name || c.owner_username || c.owner_id}</div>
+        </div>
+      `).join('');
+    }
+    html += '</div>';
+    content.innerHTML = html;
+  } catch(e) { content.innerHTML = `<div class="card"><p>加载失败：${e.message}</p></div>`; }
+}
+
+async function renderClubDetail(clubId) {
+  const content = document.getElementById('tabContent');
+  content.innerHTML = '<div class="loading-spinner"></div>';
+  const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
+  try {
+    const data = await api('/api/club/' + clubId);
+    const c = data.club;
+    const members = data.members || [];
+    const transfers = data.transfers || [];
+    const isOwner = c.owner_id === currentUser.id;
+
+    // 获取转会市场选手列表（老板专用）
+    let marketPlayers = [];
+    if (isOwner || isAdmin) {
+      try { const mp = await api('/api/market/players'); marketPlayers = (mp.players || []).filter(p => !p.club_id); } catch(e) {}
+    }
+
+    let html = `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+          <div>
+            <h3>${c.name}</h3>
+            <p style="font-size:0.8rem;color:var(--text-muted);">老板：${c.owner_name || c.owner_username || c.owner_id}</p>
+          </div>
+          <button class="btn btn-sm btn-secondary" onclick="renderClubPanel()">返回俱乐部列表</button>
+        </div>
+
+        <h4 style="margin-bottom:8px;font-size:0.9rem;">队员名单 (${members.length}人)</h4>
+        ${members.length === 0 ? '<p style="color:var(--text-muted);">暂无队员</p>' : members.map(m => `
+          <div class="club-member-row">
+            <div>
+              <span style="font-weight:600;">${m.coachname || m.username}</span>
+              ${m.gameid ? `<span style="font-size:0.72rem;color:var(--text-muted);margin-left:4px;">${m.gameid}</span>` : ''}
+              <span class="pos-tag club-role-${m.role}">${m.role === 'boss' ? '老板' : m.role === 'player' ? '选手' : '队员'}</span>
+            </div>
+            <div style="font-size:0.78rem;color:var(--text-secondary);">${m.gamerank || ''} ${m.peakscore ? '巅峰'+m.peakscore : ''}</div>
+            ${(isOwner || isAdmin) && m.role !== 'boss' ? `<button class="btn btn-sm btn-ghost" onclick="removeClubMember(${clubId},'${m.user_id}')" style="color:var(--danger);padding:2px 8px;font-size:0.7rem;">移除</button>` : ''}
+          </div>
+        `).join('')}
+
+        ${isOwner || isAdmin ? `
+        <h4 style="margin-top:20px;margin-bottom:8px;font-size:0.9rem;">签约自由选手</h4>
+        <select class="form-input" id="signPlayerId" style="margin-bottom:8px;">
+          <option value="">选择要签约的选手...</option>
+          ${marketPlayers.map(p => `<option value="${p.user_id}">${p.game_id}  | 巅峰${p.peak_score} ${p.game_rank} | ${p.market_value}万</option>`).join('')}
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="signPlayer(${clubId})">签约该选手</button>
+        <p style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;">签约费将从俱乐部老板账户扣除</p>
+        ` : ''}
+
+        <h4 style="margin-top:20px;margin-bottom:8px;font-size:0.9rem;">转会记录</h4>
+        ${transfers.length === 0 ? '<p style="color:var(--text-muted);">暂无转会记录</p>' : transfers.map(t => `
+          <div class="club-transfer-row" style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:0.8rem;">
+            <span>${t.player_name || t.player_username || t.player_user_id}</span>
+            <span style="color:var(--warning);margin:0 8px;">${t.fee}万</span>
+            <span style="color:var(--text-muted);">${new Date(t.created_at).toLocaleDateString('zh-CN')}</span>
+          </div>
+        `).join('')}
+      </div>`;
+    content.innerHTML = html;
+  } catch(e) { content.innerHTML = `<div class="card"><p>加载失败：${e.message}</p></div>`; }
+}
+
+async function signPlayer(clubId) {
+  const playerUserId = document.getElementById('signPlayerId').value;
+  if (!playerUserId) { showToast('请选择选手','error'); return; }
+  if (!confirm('确认签约该选手？签约费将从你的账户扣除。')) return;
+  try {
+    const res = await api('/api/club/sign', { method:'POST', body: JSON.stringify({ playerUserId, clubId }) });
+    showToast(res.message || '签约成功','success');
+    await renderClubDetail(clubId);
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+async function removeClubMember(clubId, userId) {
+  if (!confirm('确认移除该队员？')) return;
+  try {
+    await api('/api/club/' + clubId + '/manage', { method:'POST', body: JSON.stringify({ action:'remove', userId }) });
+    showToast('队员已移除','success');
+    await renderClubDetail(clubId);
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+function openCreateClubModal() {
+  const existing = document.getElementById('createClubModal');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'createClubModal';
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal modal-sm">
+      <h3>创建俱乐部</h3>
+      <form onsubmit="handleCreateClub(event)">
+        <div class="form-group"><label>俱乐部名称 *</label><input class="form-input" type="text" id="clubName" required placeholder="如：星河战队"></div>
+        <div class="form-group"><label>老板ID *</label><input class="form-input" type="text" id="clubOwnerId" required placeholder="输入用户ID（如mp4...）" oninput="searchClubOwnerUser(this.value)"></div>
+        <div id="clubOwnerSearchResult" style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;"></div>
+        <div style="display:flex;gap:10px;margin-top:16px;">
+          <button type="submit" class="btn btn-primary" style="flex:1;">创建</button>
+          <button type="button" class="btn btn-secondary" onclick="document.getElementById('createClubModal').remove()" style="flex:1;">取消</button>
+        </div>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+}
+
+async function handleCreateClub(e) {
+  e.preventDefault();
+  const name = document.getElementById('clubName').value.trim();
+  const ownerId = document.getElementById('clubOwnerId').value.trim();
+  if (!name || !ownerId) return;
+  try {
+    await api('/api/club/create', { method:'POST', body: JSON.stringify({ name, ownerId }) });
+    showToast('俱乐部创建成功','success');
+    document.getElementById('createClubModal').remove();
+    await renderClubPanel();
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+// 俱乐部样式
+const clubStyles = document.createElement('style');
+clubStyles.textContent = `
+  .club-card { display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px;margin-bottom:8px;transition:border-color .15s; }
+  .club-card:hover { border-color:rgba(79,70,229,.25); }
+  .club-member-row { display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(255,255,255,.02);border-radius:8px;margin-bottom:6px;gap:8px;flex-wrap:wrap; }
+  .club-role-boss { background:rgba(245,158,11,.12);color:#f59e0b;border-color:rgba(245,158,11,.25); }
+  .club-role-player { background:rgba(79,70,229,.12);color:var(--primary);border-color:rgba(79,70,229,.25); }
+  .club-role-member { background:rgba(255,255,255,.04);color:var(--text-secondary); }
+`;
+document.head.appendChild(clubStyles);
+
 // ---------- 通知 ----------
 async function checkNotifications() {
   if (!currentUser) return;
@@ -2699,6 +3061,8 @@ async function switchTab(tab) {
     else if (tab === 'recruit') { currentRecruitSubTab = 'active'; await loadRecruitHall(); startRecruitPolling(); }
     else if (tab === 'competition') await renderCompetitionPanel();
     else if (tab === 'account') await renderAccountPanel();
+    else if (tab === 'market') await renderMarketPanel();
+    else if (tab === 'club') await renderClubPanel();
   } catch {
     content.innerHTML = '<div class="card"><p>加载失败</p><button class="btn btn-sm btn-primary" onclick="switchTab(\''+tab+'\')">重试</button></div>';
   }
@@ -3916,6 +4280,8 @@ async function renderAdminPanel() {
         <button class="recruit-tab ${currentAdminSubTab==='teams'?'active':''}" onclick="switchAdminSubTab('teams')">队伍管理</button>
         <button class="recruit-tab ${currentAdminSubTab==='logs'?'active':''}" onclick="switchAdminSubTab('logs')">操作日志</button>
         <button class="recruit-tab ${currentAdminSubTab==='security'?'active':''}" onclick="switchAdminSubTab('security')">权限安全</button>
+        <button class="recruit-tab ${currentAdminSubTab==='players'?'active':''}" onclick="switchAdminSubTab('players')">选手审核</button>
+        <button class="recruit-tab ${currentAdminSubTab==='clubs'?'active':''}" onclick="switchAdminSubTab('clubs')">俱乐部管理</button>
       </div>
       <div id="adminSubContent"><div class="loading-spinner"></div></div>
     </div>
@@ -3928,7 +4294,8 @@ async function switchAdminSubTab(tab) {
   document.querySelectorAll('.recruit-tab').forEach(t => {
     t.classList.toggle('active', t.textContent.includes({
       dashboard: '仪表盘', recruitments: '招募管理', schedules: '档期管理',
-      users: '用户管理', teams: '队伍管理', logs: '操作日志', security: '权限安全'
+      users: '用户管理', teams: '队伍管理', logs: '操作日志', security: '权限安全',
+      players: '选手审核', clubs: '俱乐部管理'
     }[tab]));
   });
   document.getElementById('adminSubContent').innerHTML = '<div class="loading-spinner"></div>';
@@ -3946,6 +4313,8 @@ async function loadAdminSubTab() {
       case 'teams': await loadAdminTeams(container); break;
       case 'logs': await loadAdminLogs(container); break;
       case 'security': await loadAdminSecurity(container); break;
+      case 'players': await loadAdminPlayers(container); break;
+      case 'clubs': await loadAdminClubs(container); break;
     }
   } catch (err) {
     container.innerHTML = `<p style="color:var(--danger);">加载失败：${err.message}</p>`;
@@ -4374,6 +4743,70 @@ async function loadAdminSecurity(container) {
         ${data.tips.map(t => `<li>${t}</li>`).join('')}
       </ul>
     </div>
+  `;
+}
+
+// 管理员 - 选手审核
+async function loadAdminPlayers(container) {
+  const data = await api('/api/admin/players');
+  const players = data.players || [];
+  if (!players.length) {
+    container.innerHTML = '<p style="color:var(--text-muted);">暂无选手认证申请</p>';
+    return;
+  }
+  container.innerHTML = `
+    <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;">共 ${players.length} 条记录</div>
+    ${players.map(p => {
+      let positions = [];
+      try { positions = JSON.parse(p.positions || '[]'); } catch(e) {}
+      return `
+      <div style="padding:12px 16px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:10px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <div>
+            <div style="font-weight:600;color:var(--text-primary);">${p.game_id} <span style="font-size:0.72rem;color:var(--text-muted);">(${p.coachname || p.username})</span></div>
+            <div style="font-size:0.78rem;color:var(--text-secondary);">巅峰${p.peak_score} | ${p.game_rank}</div>
+            <div style="margin-top:4px;">${positions.map(l => `<span class="pos-tag pos-tag-${l}">${l}</span>`).join(' ')}</div>
+            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">身价预估：${p.market_value}万 | ${new Date(p.created_at).toLocaleDateString('zh-CN')}</div>
+          </div>
+          <div>
+            ${p.status === 'pending' ? `
+              <button class="btn btn-sm" style="background:rgba(16,185,129,.1);color:#10b981;border:1px solid rgba(16,185,129,.3);" onclick="reviewPlayer('${p.user_id}','approved')">通过</button>
+              <button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3);margin-left:4px;" onclick="reviewPlayer('${p.user_id}','rejected')">拒绝</button>
+            ` : `<span style="color:${p.status==='approved'?'var(--success)':'var(--danger)'};">${p.status==='approved'?'已通过':'已拒绝'}</span>`}
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+  `;
+}
+
+async function reviewPlayer(userId, status) {
+  try {
+    await api('/api/admin/player-review', { method:'POST', body: JSON.stringify({ userId, status }) });
+    showToast(status === 'approved' ? '已通过审核' : '已拒绝', 'success');
+    await loadAdminSubTab();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+// 管理员 - 俱乐部管理
+async function loadAdminClubs(container) {
+  const clubsData = await api('/api/clubs');
+  const clubs = clubsData.clubs || [];
+  if (!clubs.length) {
+    container.innerHTML = '<p style="color:var(--text-muted);">暂无俱乐部</p><button class="btn btn-primary btn-sm" onclick="openCreateClubModal()" style="margin-top:8px;">创建俱乐部</button>';
+    return;
+  }
+  container.innerHTML = `
+    <button class="btn btn-primary btn-sm" onclick="openCreateClubModal()" style="margin-bottom:12px;">创建俱乐部</button>
+    ${clubs.map(c => `
+      <div class="club-card" onclick="renderClubDetail(${c.id})" style="cursor:pointer;">
+        <div>
+          <span style="font-weight:600;color:var(--text-primary);">${c.name}</span>
+          <span style="font-size:0.72rem;color:var(--text-muted);margin-left:8px;">${c.member_count || 0}名队员</span>
+        </div>
+        <div style="font-size:0.78rem;color:var(--text-secondary);">老板：${c.owner_name || c.owner_username || c.owner_id}</div>
+      </div>
+    `).join('')}
   `;
 }
 

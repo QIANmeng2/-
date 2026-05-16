@@ -130,6 +130,53 @@ async function initDB() {
       );
     `);
     await client.query(`
+      CREATE TABLE IF NOT EXISTS players (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL UNIQUE,
+        game_id TEXT NOT NULL,
+        positions TEXT NOT NULL,
+        peak_score INTEGER DEFAULT 0,
+        game_rank TEXT DEFAULT '',
+        screenshot_url TEXT,
+        status TEXT DEFAULT 'pending',
+        market_value INTEGER DEFAULT 0,
+        club_id INTEGER,
+        reviewed_by TEXT,
+        reviewed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS clubs (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        owner_id TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS club_members (
+        id SERIAL PRIMARY KEY,
+        club_id INTEGER NOT NULL,
+        user_id TEXT NOT NULL,
+        role TEXT DEFAULT 'member',
+        joined_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(club_id, user_id)
+      );
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS transfer_records (
+        id SERIAL PRIMARY KEY,
+        player_user_id TEXT NOT NULL,
+        from_club_id INTEGER,
+        to_club_id INTEGER,
+        fee INTEGER NOT NULL,
+        platform_fee INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'completed',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS coin_transactions (
         id SERIAL PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -1641,6 +1688,333 @@ app.get('/api/admin/coin-transactions', authMiddleware, adminMiddleware, async (
   try {
     const result = await pool.query('SELECT ct.*, u.coachName, u.username FROM coin_transactions ct LEFT JOIN users u ON ct.user_id = u.id ORDER BY ct.created_at DESC LIMIT 200');
     res.json({ transactions: result.rows });
+  } catch(e) { res.status(500).json({ message: '查询失败' }); }
+});
+
+// ====================== 选手认证系统 ======================
+
+// 身价计算
+function calcMarketValue(peakScore, gameRank) {
+  const peakTable = [[2200,50],[2100,40],[2000,32],[1900,25],[1800,18],[1700,12],[1600,8],[1500,5]];
+  let peakVal = 2;
+  for (const [min,val] of peakTable) { if (peakScore >= min) { peakVal = val; break; } }
+
+  let rankVal = 1;
+  if (gameRank.includes('荣耀') && gameRank.includes('100')) rankVal = 45;
+  else if (gameRank.includes('荣耀') && gameRank.includes('50')) rankVal = 35;
+  else if (gameRank.includes('荣耀')) rankVal = 28;
+  else if (gameRank.includes('王者50') || gameRank.includes('王者100')) rankVal = 22;
+  else if (gameRank.includes('王者25')) rankVal = 15;
+  else if (gameRank.includes('王者10')) rankVal = 10;
+  else if (gameRank.includes('王者')) rankVal = 6;
+  else if (gameRank.includes('星耀')) rankVal = 3;
+  return Math.max(peakVal, rankVal);
+}
+
+// 选手认证申请
+app.post('/api/player/apply', authMiddleware, async (req, res) => {
+  const { gameId, positions, peakScore, gameRank } = req.body;
+  if (!gameId || !positions || peakScore === undefined || !gameRank) {
+    return res.status(400).json({ message: '请填写完整的认证信息' });
+  }
+  try {
+    // 检查是否已有认证记录
+    const existing = await pool.query('SELECT * FROM players WHERE user_id = $1', [req.userId]);
+    if (existing.rows.length > 0 && existing.rows[0].status !== 'rejected') {
+      return res.status(400).json({ message: '你已有待审核或已通过的认证记录' });
+    }
+    const marketValue = calcMarketValue(peakScore, gameRank);
+    if (existing.rows.length > 0) {
+      // 重新提交
+      await pool.query(
+        "UPDATE players SET game_id=$1,positions=$2,peak_score=$3,game_rank=$4,status='pending',market_value=$5,reviewed_by=NULL,reviewed_at=NULL,created_at=NOW() WHERE user_id=$6",
+        [gameId, JSON.stringify(positions), peakScore, gameRank, marketValue, req.userId]
+      );
+    } else {
+      await pool.query(
+        'INSERT INTO players (user_id,game_id,positions,peak_score,game_rank,status,market_value) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+        [req.userId, gameId, JSON.stringify(positions), peakScore, gameRank, 'pending', marketValue]
+      );
+    }
+    // 通知管理员
+    try {
+      await sendNotification(ADMIN_USER_ID, 'player_review', '有新的选手认证申请待审核: ' + gameId);
+    } catch(e) {}
+    res.json({ success: true, message: '认证申请已提交，预计24小时内审核' });
+  } catch(e) { res.status(500).json({ message: '提交失败' }); }
+});
+
+// 查询自己的认证状态
+app.get('/api/player/status', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT p.*, c.name AS club_name FROM players p LEFT JOIN clubs c ON p.club_id = c.id WHERE p.user_id = $1`,
+      [req.userId]
+    );
+    res.json({ player: result.rows[0] || null });
+  } catch(e) { res.status(500).json({ message: '查询失败' }); }
+});
+
+// 管理员：获取所有认证申请
+app.get('/api/admin/players', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT p.*, u.username, u.coachName FROM players p
+       LEFT JOIN users u ON p.user_id = u.id
+       ORDER BY p.status ASC, p.created_at DESC`
+    );
+    res.json({ players: result.rows });
+  } catch(e) { res.status(500).json({ message: '查询失败' }); }
+});
+
+// 管理员：审核选手认证
+app.post('/api/admin/player-review', authMiddleware, adminMiddleware, async (req, res) => {
+  const { userId, status } = req.body;
+  if (!userId || !['approved','rejected'].includes(status)) return res.status(400).json({ message: '参数错误' });
+  try {
+    if (status === 'rejected') {
+      await pool.query("UPDATE players SET status='rejected',reviewed_by=$1,reviewed_at=NOW() WHERE user_id=$2", [req.userId, userId]);
+      return res.json({ success: true });
+    }
+    // 审批通过：取当前巅峰分/段位重新计算身价
+    const player = await pool.query('SELECT * FROM players WHERE user_id = $1', [userId]);
+    if (player.rows.length === 0) return res.status(404).json({ message: '选手不存在' });
+    const p = player.rows[0];
+    const marketValue = calcMarketValue(p.peak_score, p.game_rank);
+    await pool.query(
+      "UPDATE players SET status='approved',market_value=$1,reviewed_by=$2,reviewed_at=NOW() WHERE user_id=$3",
+      [marketValue, req.userId, userId]
+    );
+    await sendNotification(userId, 'player_approved', `你的选手认证已通过！身价：${marketValue}万梦币`);
+    res.json({ success: true, marketValue });
+  } catch(e) { res.status(500).json({ message: '操作失败' }); }
+});
+
+// ====================== 转会市场 ======================
+app.get('/api/market/players', authMiddleware, async (req, res) => {
+  const { sort, maxValue } = req.query;
+  try {
+    let query = `
+      SELECT p.*, u.username, u.coachName, c.name AS club_name
+      FROM players p
+      LEFT JOIN users u ON p.user_id = u.id
+      LEFT JOIN clubs c ON p.club_id = c.id
+      WHERE p.status = 'approved'
+    `;
+    const params = [];
+    if (maxValue) {
+      params.push(parseInt(maxValue));
+      query += ` AND p.market_value <= $${params.length}`;
+    }
+    query += ' ORDER BY ';
+    if (sort === 'value') query += 'p.market_value DESC, p.created_at DESC';
+    else query += 'p.created_at DESC';
+
+    const result = await pool.query(query, params);
+    res.json({ players: result.rows });
+  } catch(e) { res.status(500).json({ message: '查询失败' }); }
+});
+
+// ====================== 俱乐部系统 ======================
+
+// 创建俱乐部（仅管理员）
+app.post('/api/club/create', authMiddleware, adminMiddleware, async (req, res) => {
+  const { name, ownerId } = req.body;
+  if (!name || !ownerId) return res.status(400).json({ message: '请填写俱乐部名称和老板ID' });
+  try {
+    const existing = await pool.query('SELECT * FROM clubs WHERE name = $1', [name]);
+    if (existing.rows.length > 0) return res.status(400).json({ message: '俱乐部名称已存在' });
+    const result = await pool.query(
+      'INSERT INTO clubs (name, owner_id) VALUES ($1, $2) RETURNING id',
+      [name, ownerId]
+    );
+    const clubId = result.rows[0].id;
+    // 自动将老板加入队员名单
+    await pool.query('INSERT INTO club_members (club_id, user_id, role) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [clubId, ownerId, 'boss']);
+    res.json({ success: true, clubId });
+  } catch(e) { res.status(500).json({ message: '创建失败' }); }
+});
+
+// 获取所有俱乐部列表
+app.get('/api/clubs', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT c.*, u.username AS owner_username, u.coachName AS owner_name,
+        (SELECT COUNT(*) FROM club_members WHERE club_id = c.id) AS member_count
+      FROM clubs c
+      LEFT JOIN users u ON c.owner_id = u.id
+      ORDER BY c.id
+    `);
+    res.json({ clubs: result.rows });
+  } catch(e) { res.status(500).json({ message: '查询失败' }); }
+});
+
+// 俱乐部详情
+app.get('/api/club/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const club = await pool.query(`
+      SELECT c.*, u.username AS owner_username, u.coachName AS owner_name
+      FROM clubs c LEFT JOIN users u ON c.owner_id = u.id WHERE c.id = $1
+    `, [id]);
+    if (club.rows.length === 0) return res.status(404).json({ message: '俱乐部不存在' });
+
+    const members = await pool.query(`
+      SELECT cm.*, u.username, u.coachName, u.gameId, u.gameRank, u.peakScore
+      FROM club_members cm
+      LEFT JOIN users u ON cm.user_id = u.id
+      WHERE cm.club_id = $1
+      ORDER BY cm.role, cm.joined_at
+    `, [id]);
+
+    // 签约历史
+    const transfers = await pool.query(`
+      SELECT tr.*, u.username AS player_username, u.coachName AS player_name
+      FROM transfer_records tr
+      LEFT JOIN users u ON tr.player_user_id = u.id
+      WHERE tr.to_club_id = $1 OR tr.from_club_id = $1
+      ORDER BY tr.created_at DESC
+      LIMIT 30
+    `, [id]);
+
+    res.json({ club: club.rows[0], members: members.rows, transfers: transfers.rows });
+  } catch(e) { res.status(500).json({ message: '查询失败' }); }
+});
+
+// 老板管理队员（移除队员）
+app.post('/api/club/:id/manage', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { action, userId } = req.body;
+  try {
+    // 验证是否为该俱乐部老板
+    const club = await pool.query('SELECT * FROM clubs WHERE id = $1', [id]);
+    if (club.rows.length === 0) return res.status(404).json({ message: '俱乐部不存在' });
+    if (club.rows[0].owner_id !== req.userId && req.userId !== ADMIN_USER_ID) {
+      return res.status(403).json({ message: '仅俱乐部老板可管理' });
+    }
+    if (action === 'remove') {
+      await pool.query('DELETE FROM club_members WHERE club_id = $1 AND user_id = $2', [id, userId]);
+      await pool.query('UPDATE players SET club_id = NULL WHERE user_id = $1', [userId]);
+      res.json({ success: true, message: '队员已移除' });
+    } else {
+      res.status(400).json({ message: '未知操作' });
+    }
+  } catch(e) { res.status(500).json({ message: '操作失败' }); }
+});
+
+// ====================== 签约系统 ======================
+
+// 签约选手（完整财务逻辑）
+app.post('/api/club/sign', authMiddleware, async (req, res) => {
+  const { playerUserId, clubId } = req.body;
+  if (!playerUserId || !clubId) return res.status(400).json({ message: '参数不完整' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. 验证选手已认证且未签约
+    const player = await client.query("SELECT * FROM players WHERE user_id = $1 AND status = 'approved' FOR UPDATE", [playerUserId]);
+    if (player.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: '选手未通过认证或已不可签约' });
+    }
+    const p = player.rows[0];
+    if (p.club_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: '该选手已签约其他俱乐部' });
+    }
+    const fee = p.market_value;
+
+    // 2. 验证俱乐部存在
+    const club = await client.query('SELECT * FROM clubs WHERE id = $1 FOR UPDATE', [clubId]);
+    if (club.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: '俱乐部不存在' });
+    }
+
+    // 3. 验证老板余额
+    const ownerId = club.rows[0].owner_id;
+    if (ownerId !== req.userId && req.userId !== ADMIN_USER_ID) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ message: '仅俱乐部老板可签约' });
+    }
+    const boss = await client.query('SELECT dream_coins FROM users WHERE id = $1 FOR UPDATE', [ownerId]);
+    if (boss.rows.length === 0 || (boss.rows[0].dream_coins || 0) < fee) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ message: '老板余额不足，签约需 ' + fee + ' 万梦币' });
+    }
+
+    // 4. 扣除老板梦币
+    await client.query('UPDATE users SET dream_coins = dream_coins - $1 WHERE id = $2', [fee, ownerId]);
+    await client.query(
+      "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'deduct',$3)",
+      [ownerId, -fee, '签约选手' + (p.game_id || playerUserId) + '，费用' + fee + '万梦币']
+    );
+
+    // 5. 分配资金（浅梦 = 平台方 = ADMIN_USER_ID）
+    const playerShare = Math.floor(fee * 0.1); // 选手得 10%
+    const platformShare = Math.floor(fee * 0.9); // 浅梦得 90%
+
+    // 给选手转账 10%
+    await client.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id = $2', [playerShare, playerUserId]);
+    await client.query(
+      "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'reward',$3)",
+      [playerUserId, playerShare, '签约转会分成10%，来自俱乐部签约费' + fee + '万']
+    );
+
+    // 给浅梦（管理员）转账 90%
+    await client.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id = $2', [platformShare, ADMIN_USER_ID]);
+    await client.query(
+      "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'reward',$3)",
+      [ADMIN_USER_ID, platformShare, '俱乐部签约平台抽成90%，选手' + (p.game_id || playerUserId) + '，签约费' + fee + '万']
+    );
+
+    // 6. 更新选手所属俱乐部
+    await client.query('UPDATE players SET club_id = $1 WHERE user_id = $2', [clubId, playerUserId]);
+
+    // 7. 添加选手到俱乐部
+    await client.query(
+      'INSERT INTO club_members (club_id, user_id, role) VALUES ($1,$2,$3) ON CONFLICT (club_id,user_id) DO UPDATE SET role=$3',
+      [clubId, playerUserId, 'player']
+    );
+
+    // 8. 记录转会
+    await client.query(
+      'INSERT INTO transfer_records (player_user_id, from_club_id, to_club_id, fee, platform_fee) VALUES ($1,NULL,$2,$3,$4)',
+      [playerUserId, clubId, fee, platformShare]
+    );
+
+    // 9. 通知
+    await client.query(
+      "INSERT INTO notifications (userId, type, content) VALUES ($1,'club_sign','你已被俱乐部签下，获得签约分成'||$2||'万梦币')",
+      [playerUserId, String(playerShare)]
+    );
+
+    await client.query('COMMIT');
+    res.json({
+      success: true,
+      message: '签约成功！费用 ' + fee + ' 万梦币',
+      breakdown: { totalFee: fee, playerShare, platformShare }
+    });
+  } catch(e) {
+    await client.query('ROLLBACK');
+    console.error('[签约失败]', e);
+    res.status(500).json({ message: '签约失败: ' + e.message });
+  } finally { client.release(); }
+});
+
+// 管理员查看所有转会记录
+app.get('/api/admin/transfers', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT tr.*, u.username AS player_username, u.coachName AS player_name
+      FROM transfer_records tr
+      LEFT JOIN users u ON tr.player_user_id = u.id
+      ORDER BY tr.created_at DESC
+      LIMIT 50
+    `);
+    res.json({ transfers: result.rows });
   } catch(e) { res.status(500).json({ message: '查询失败' }); }
 });
 
