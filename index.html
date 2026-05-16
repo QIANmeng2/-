@@ -3054,25 +3054,47 @@ async function submitPlayerCert(e) {
   const peakScore = parseInt(document.getElementById('certPeakScore').value);
   const gameRank = document.getElementById('certGameRank').value;
   if (!positions.length) { showToast('请至少选择一个位置','error'); return; }
-  // 转base64
-  const toBase64 = (file) => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    if (file) reader.readAsDataURL(file); else resolve(null);
-  });
-  let screenshotUrl1 = null, screenshotUrl2 = null;
   const f1 = document.getElementById('certScreenshot1').files[0];
   const f2 = document.getElementById('certScreenshot2').files[0];
   if (!f1 && !f2) { showToast('请至少上传一张截图','error'); return; }
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  const origText = submitBtn.textContent;
+  submitBtn.disabled = true;
+  // Canvas 压缩图片（max 800px, jpeg 0.7）
+  const compress = (file) => new Promise((resolve) => {
+    if (!file) return resolve(null);
+    const img = new Image();
+    const r = new FileReader();
+    r.onload = (ev) => { img.src = ev.target.result; };
+    r.readAsDataURL(file);
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if (w > 800) { h = Math.round(h * 800 / w); w = 800; }
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(c.toDataURL('image/jpeg', 0.7));
+    };
+    img.onerror = () => resolve(null);
+  });
   try {
-    const submitBtn = e.target.querySelector('button[type="submit"]');
-    submitBtn.disabled = true; submitBtn.textContent = '提交中...';
-    [screenshotUrl1, screenshotUrl2] = await Promise.all([toBase64(f1), toBase64(f2)]);
-    await api('/api/player/apply', { method:'POST', body: JSON.stringify({ gameId, positions, peakScore, gameRank, screenshotUrl1, screenshotUrl2 }) });
-    showToast('认证申请已提交，预计24小时内审核','success');
+    submitBtn.textContent = '压缩中...';
+    const [u1, u2] = await Promise.all([compress(f1), compress(f2)]);
+    submitBtn.textContent = '提交中...';
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 20000);
+    const res = await fetch(API_BASE + '/api/player/apply', {
+      method:'POST', signal: ctrl.signal,
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + authToken },
+      body: JSON.stringify({ gameId, positions, peakScore, gameRank, screenshotUrl1: u1, screenshotUrl2: u2 })
+    });
+    clearTimeout(t);
+    if (!res.ok) { const e2 = await res.json().catch(()=>({})); throw new Error(e2.message||'提交失败'); }
+    showToast('认证申请已提交，预计24小时内审核', 'success');
     await renderMarketPanel();
-  } catch(e) { showToast(e.message,'error'); }
+  } catch(e) {
+    submitBtn.disabled = false; submitBtn.textContent = origText;
+    showToast(e.name === 'AbortError' ? '上传超时，请重试或缩小图片' : (e.message||'提交失败'), 'error');
+  }
 }
 
 // 截图预览
