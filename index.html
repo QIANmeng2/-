@@ -2395,6 +2395,28 @@ function switchCoinTab(tab) {
   loadCoinSubTab();
 }
 
+async function loadAwardUsers() {
+  try {
+    const data = await api('/api/admin/users/simple');
+    window._awardUserList = data.users || [];
+    renderAwardUserOptions(window._awardUserList);
+  } catch(e) { console.error('加载用户列表失败', e); }
+}
+function renderAwardUserOptions(list) {
+  const sel = document.getElementById('awardUserId');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">请选择用户</option>' +
+    list.map(u => `<option value="${u.id}">${u.coachName || u.username} (${u.username})</option>`).join('');
+}
+function filterAwardUsers() {
+  const kw = document.getElementById('awardUserSearch').value.trim().toLowerCase();
+  const list = (window._awardUserList || []).filter(u =>
+    (u.username || '').toLowerCase().includes(kw) ||
+    (u.coachName || '').toLowerCase().includes(kw)
+  );
+  renderAwardUserOptions(list);
+}
+
 async function loadCoinSubTab() {
   const container = document.getElementById('coinSubContent');
   try {
@@ -2438,29 +2460,8 @@ async function loadCoinSubTab() {
           </div>
           <button type="submit" class="btn btn-primary" style="padding:12px 28px;">确认发放</button>
         </form>
-        <script>
-          (async function loadAwardUsers() {
-            try {
-              const data = await api('/api/admin/users/simple');
-              window._awardUserList = data.users || [];
-              renderAwardUserOptions(window._awardUserList);
-            } catch(e) { console.error('加载用户列表失败', e); }
-          })();
-          function renderAwardUserOptions(list) {
-            const sel = document.getElementById('awardUserId');
-            sel.innerHTML = '<option value="">请选择用户</option>' +
-              list.map(u => `<option value="${u.id}">${u.coachName || u.username} (${u.username})</option>`).join('');
-          }
-          function filterAwardUsers() {
-            const kw = document.getElementById('awardUserSearch').value.trim().toLowerCase();
-            const list = (window._awardUserList || []).filter(u =>
-              (u.username || '').toLowerCase().includes(kw) ||
-              (u.coachName || '').toLowerCase().includes(kw)
-            );
-            renderAwardUserOptions(list);
-          }
-        </script>
       `;
+      loadAwardUsers();
     } else if (currentCoinSubTab === 'log') {
       const data = await api('/api/admin/coin-transactions');
       const txs = data.transactions || [];
