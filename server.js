@@ -1607,7 +1607,11 @@ app.post('/api/admin/award-coins', authMiddleware, adminMiddleware, async (req, 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id = $2', [amount, userId]);
+    const updateRes = await client.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id = $2', [amount, userId]);
+    if (updateRes.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ message: '用户不存在，请检查用户ID是否正确' });
+    }
     await client.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'reward',$3)", [userId, amount, note || '赛事奖励']);
     await client.query('COMMIT');
     try {
@@ -1622,7 +1626,7 @@ app.post('/api/admin/award-coins', authMiddleware, adminMiddleware, async (req, 
 app.get('/api/admin/coin-transactions', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const result = await pool.query('SELECT ct.*, u.coachName, u.username FROM coin_transactions ct LEFT JOIN users u ON ct.user_id = u.id ORDER BY ct.created_at DESC LIMIT 200');
-    res.json(result.rows);
+    res.json({ transactions: result.rows });
   } catch(e) { res.status(500).json({ message: '查询失败' }); }
 });
 
