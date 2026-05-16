@@ -119,7 +119,7 @@ async function initDB() {
     await client.query('ALTER TABLE recruitment_positions ADD COLUMN IF NOT EXISTS confirmed BOOLEAN DEFAULT false');
     await client.query('ALTER TABLE notifications ADD COLUMN IF NOT EXISTS notification_id TEXT DEFAULT \'\'');
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS dream_coins INTEGER DEFAULT 0');
-    await client.query(\`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS competitions (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -128,8 +128,8 @@ async function initDB() {
         status TEXT DEFAULT 'active',
         created_at TIMESTAMP DEFAULT NOW()
       );
-    \`);
-    await client.query(\`
+    `);
+    await client.query(`
       CREATE TABLE IF NOT EXISTS coin_transactions (
         id SERIAL PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -139,7 +139,7 @@ async function initDB() {
         related_match_id TEXT,
         created_at TIMESTAMP DEFAULT NOW()
       );
-    \`);
+    `);
   } finally { client.release(); }
 }
 
@@ -637,6 +637,7 @@ app.put('/api/recruitment/:id/confirm', authMiddleware, async (req, res) => {
 });
 
 // 清理占位（仅发起人，可清理恶意报名人员）
+app.delete('/api/recruitment/:id/positions/:playerId', authMiddleware, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
