@@ -3046,10 +3046,10 @@ async function submitPlayerCert(e) {
     r.readAsDataURL(file);
     img.onload = () => {
       let w = img.width, h = img.height;
-      if (w > 800) { h = Math.round(h * 800 / w); w = 800; }
+      if (w > 500) { h = Math.round(h * 500 / w); w = 500; }
       const c = document.createElement('canvas'); c.width = w; c.height = h;
       c.getContext('2d').drawImage(img, 0, 0, w, h);
-      resolve(c.toDataURL('image/jpeg', 0.7));
+      resolve(c.toDataURL('image/jpeg', 0.35));
     };
     img.onerror = () => resolve(null);
   });
