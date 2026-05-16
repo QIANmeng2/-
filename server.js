@@ -194,7 +194,7 @@ async function initDB() {
 
 // 万能跨域
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: '20mb' }));
+app.use(express.json());
 
 // 健康检查
 app.get('/', (req, res) => res.send('OK'));
@@ -1744,10 +1744,8 @@ app.post('/api/player/apply', authMiddleware, async (req, res) => {
       console.log('[选手认证] 已通知管理员审核:', gameId);
     } catch(e) { console.error('[选手认证] 通知管理员失败:', e.message); }
     res.json({ success: true, message: '认证申请已提交，预计24小时内审核' });
-  } catch(e) {
-    console.error('[选手认证] 提交失败:', e.message);
-    res.status(500).json({ message: '提交失败: ' + e.message });
-  }
+  } catch(e) { res.status(500).json({ message: '提交失败' }); }
+});
 
 // 查询自己的认证状态
 app.get('/api/player/status', authMiddleware, async (req, res) => {
