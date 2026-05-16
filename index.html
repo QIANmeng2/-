@@ -533,6 +533,168 @@
       background-clip: text;
     }
 
+    /* ===== 欢迎引导弹窗 ===== */
+    .welcome-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      animation: welcomeFadeIn .35s ease;
+    }
+    @keyframes welcomeFadeIn {
+      from { opacity:0; }
+      to   { opacity:1; }
+    }
+    .welcome-panel {
+      background: linear-gradient(160deg, rgba(26,26,46,0.95) 0%, rgba(18,18,31,0.98) 100%);
+      border: 1px solid rgba(245,158,11,0.2);
+      border-radius: 16px;
+      max-width: 500px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 0 60px rgba(245,158,11,0.08), 0 20px 60px rgba(0,0,0,0.6);
+      animation: welcomeScaleIn .4s cubic-bezier(.16,1,.3,1);
+      position: relative;
+    }
+    @keyframes welcomeScaleIn {
+      from { opacity:0; transform:scale(0.92) translateY(20px); }
+      to   { opacity:1; transform:scale(1)    translateY(0); }
+    }
+    .welcome-glow {
+      position: absolute;
+      top:-1px;left:20%;right:20%;
+      height:2px;
+      background: linear-gradient(90deg, transparent, rgba(245,158,11,0.6), transparent);
+      border-radius: 2px;
+    }
+    .welcome-header {
+      padding: 32px 28px 0;
+      text-align: center;
+    }
+    .welcome-icon-ring {
+      width: 64px;height:64px;
+      margin:0 auto 16px;
+      border-radius:50%;
+      background: linear-gradient(135deg, rgba(245,158,11,0.15), rgba(245,158,11,0.05));
+      border:1.5px solid rgba(245,158,11,0.25);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .welcome-icon-ring svg { width:34px;height:34px; }
+    .welcome-title {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: .04em;
+      background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 40%, #f59e0b 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 4px;
+    }
+    .welcome-subtitle {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      letter-spacing: .06em;
+      margin-bottom: 4px;
+    }
+    .welcome-divider {
+      width: 48px;height: 2px;
+      background: linear-gradient(90deg, rgba(245,158,11,0.5), transparent);
+      margin: 0 auto 20px;
+    }
+    .welcome-features {
+      padding: 0 28px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .welcome-feature {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 12px 14px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 10px;
+      transition: border-color .15s, background .15s;
+    }
+    .welcome-feature:hover {
+      border-color: rgba(245,158,11,0.15);
+      background: rgba(245,158,11,0.03);
+    }
+    .welcome-feat-icon {
+      width: 36px;height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .welcome-feat-icon.recruit { background: rgba(79,70,229,0.15); }
+    .welcome-feat-icon.recruit svg { color: #818cf8; }
+    .welcome-feat-icon.market { background: rgba(245,158,11,0.15); }
+    .welcome-feat-icon.market svg { color: #fbbf24; }
+    .welcome-feat-icon.club { background: rgba(16,185,129,0.15); }
+    .welcome-feat-icon.club svg { color: #34d399; }
+    .welcome-feat-icon.comp { background: rgba(239,68,68,0.15); }
+    .welcome-feat-icon.comp svg { color: #f87171; }
+    .welcome-feat-icon.coin { background: rgba(139,92,246,0.15); }
+    .welcome-feat-icon.coin svg { color: #a78bfa; }
+    .welcome-feat-label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 2px;
+    }
+    .welcome-feat-desc {
+      font-size: 0.72rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+    .welcome-footer {
+      padding: 0 28px 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .welcome-btn-login {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      color: #0a0a12;
+      background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+      box-shadow: 0 4px 20px rgba(245,158,11,0.3);
+      transition: transform .15s, box-shadow .15s;
+    }
+    .welcome-btn-login:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 28px rgba(245,158,11,0.4);
+    }
+    .welcome-btn-skip {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      cursor: pointer;
+      padding: 8px 16px;
+      transition: color .15s;
+    }
+    .welcome-btn-skip:hover { color: var(--text-secondary); }
+
     /* ===== Toast 通知 ===== */
     .toast {
       position: fixed;
@@ -1970,6 +2132,74 @@
     </form>
     <div style="text-align:center; margin-top:16px; cursor:pointer; color: var(--text-muted);" onclick="switchAuthMode()">还没有账号？点击注册</div>
     <button class="btn btn-ghost" style="width:100%; margin-top:12px;" onclick="closeAuthModal()">取消</button>
+  </div>
+</div>
+
+<!-- 欢迎引导弹窗 -->
+<div id="welcomeModal" class="welcome-overlay" style="display:none;">
+  <div class="welcome-panel">
+    <div class="welcome-glow"></div>
+    <div class="welcome-header">
+      <div class="welcome-icon-ring">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6-4.8-6 4.8 2.4-7.2-6-4.8h7.6z"/>
+        </svg>
+      </div>
+      <div class="welcome-title">欢迎来到梦工厂</div>
+      <div class="welcome-subtitle">DREAM FACTORY · 王者荣耀训练赛生态平台</div>
+      <div class="welcome-divider"></div>
+    </div>
+    <div class="welcome-features">
+      <div class="welcome-feature">
+        <div class="welcome-feat-icon recruit">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/><path d="M17 12h.01"/><path d="M7 12h.01"/></svg>
+        </div>
+        <div>
+          <div class="welcome-feat-label">招募大厅</div>
+          <div class="welcome-feat-desc">散人自由组队，凑齐10人全员确认成局，自动创建腾讯会议开打</div>
+        </div>
+      </div>
+      <div class="welcome-feature">
+        <div class="welcome-feat-icon market">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+        </div>
+        <div>
+          <div class="welcome-feat-label">转会市场</div>
+          <div class="welcome-feat-desc">认证实力，巅峰分+段位自动生成身价，等待俱乐部老板签约带走</div>
+        </div>
+      </div>
+      <div class="welcome-feature">
+        <div class="welcome-feat-icon club">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div>
+          <div class="welcome-feat-label">俱乐部</div>
+          <div class="welcome-feat-desc">老板创建专属战队，浏览转会市场签约心仪选手，管理自己的电竞军团</div>
+        </div>
+      </div>
+      <div class="welcome-feature">
+        <div class="welcome-feat-icon comp">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>
+        </div>
+        <div>
+          <div class="welcome-feat-label">赛事系统</div>
+          <div class="welcome-feat-desc">参与奖金赛事，赢取梦币奖励，查看历史战绩与获奖公示</div>
+        </div>
+      </div>
+      <div class="welcome-feature">
+        <div class="welcome-feat-icon coin">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><path d="M12 22V8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>
+        </div>
+        <div>
+          <div class="welcome-feat-label">经济系统</div>
+          <div class="welcome-feat-desc">赛事奖金、转会签约费，全部通过梦币流转，兑换实体奖励或采买选手</div>
+        </div>
+      </div>
+    </div>
+    <div class="welcome-footer">
+      <button class="welcome-btn-login" onclick="closeWelcomeAndLogin()">立即登录，开启征程</button>
+      <button class="welcome-btn-skip" onclick="closeWelcome()">先逛逛，稍后再说</button>
+    </div>
   </div>
 </div>
 
@@ -4984,11 +5214,29 @@ function dialogChoices(options) {
 
 function closeModal() { switchTab(currentTab); }
 
+// ==================== 欢迎引导弹窗 ====================
+function showWelcome() {
+  if (localStorage.getItem('welcome_seen') === '1') return;
+  const modal = document.getElementById('welcomeModal');
+  if (modal) modal.style.display = 'flex';
+  localStorage.setItem('welcome_seen', '1');
+}
+function closeWelcome() {
+  const modal = document.getElementById('welcomeModal');
+  if (modal) modal.remove();
+}
+function closeWelcomeAndLogin() {
+  const modal = document.getElementById('welcomeModal');
+  if (modal) modal.remove();
+  openAuthModal('login');
+}
+
 // 启动
 (async () => {
   if (authToken) await fetchUserInfo();
   updateUI();
   switchTab('recruit');
+  setTimeout(showWelcome, 800);
 })();
 </script>
 </body>
