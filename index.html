@@ -1958,6 +1958,17 @@
       .lane-label { font-size: 0.72rem; margin-bottom: 6px; }
       .lane-input { padding: 8px 4px; font-size: 0.75rem; }
       body::before { opacity: 0.6; }
+      .welcome-panel { max-width: 92vw; border-radius: 14px; }
+      .welcome-header { padding: 24px 18px 0; }
+      .welcome-title { font-size: 1.25rem; }
+      .welcome-icon-ring { width: 52px; height: 52px; margin-bottom: 10px; }
+      .welcome-icon-ring svg { width: 28px; height: 28px; }
+      .welcome-features { padding: 0 14px 14px; gap: 7px; }
+      .welcome-feature { padding: 10px 12px; gap: 10px; }
+      .welcome-feat-label { font-size: 0.78rem; }
+      .welcome-feat-desc { font-size: 0.7rem; }
+      .welcome-footer { padding: 0 14px 18px; }
+      .welcome-btn-login { padding: 12px; font-size: 0.88rem; border-radius: 8px; }
     }
 
     @media (max-width: 480px) {
@@ -5218,8 +5229,13 @@ function closeModal() { switchTab(currentTab); }
 function showWelcome() {
   if (localStorage.getItem('welcome_seen') === '1') return;
   const modal = document.getElementById('welcomeModal');
-  if (modal) modal.style.display = 'flex';
+  if (!modal) return;
+  modal.style.display = 'flex';
   localStorage.setItem('welcome_seen', '1');
+  // 防御：3s后再确认一次（移动端有时渲染延迟）
+  setTimeout(() => {
+    if (modal.style.display !== 'flex') modal.style.display = 'flex';
+  }, 200);
 }
 function closeWelcome() {
   const modal = document.getElementById('welcomeModal');
