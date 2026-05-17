@@ -1238,6 +1238,17 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
   } catch(e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ message: '报名失败' }); } finally { client.release(); }
 });
 
+// 查询用户在赛事中的报名状态
+app.get('/api/competitions/:id/my-reg', authMiddleware, async (req, res) => {
+  try {
+    const regs = await pool.query(
+      'SELECT * FROM competition_registrations WHERE competition_id = $1 AND status != $2',
+      [req.params.id, 'cancelled']
+    );
+    res.json({ registrations: regs.rows });
+  } catch(e) { res.status(500).json({ message: '查询失败' }); }
+});
+
 // 队员确认入场 + 选择入场费
 app.post('/api/competitions/:id/confirm', authMiddleware, async (req, res) => {
   const { entry_fee } = req.body;

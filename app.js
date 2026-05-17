@@ -105,272 +105,141 @@ function updateUI() {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === currentTab));
 }
 
-// ==================== 比赛页面 ====================
-let compTier = 'regular'; // 当前赛事层级
+// ==================== 比赛页面（常规赛事） ====================
 async function renderCompetitionPanel() {
   const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
   const content = document.getElementById('tabContent');
-  const tierLabel = { elite: '顶级联赛', secondary: '次级联赛', regular: '常规赛事' };
   content.innerHTML = `
     <div class="card">
-      <div class="comp-page-header">
-        <div class="comp-page-title-wrap">
-          <h2 class="comp-page-title">${isAdmin ? '赛事管理' : '赛事信息'}</h2>
-          <p class="comp-page-subtitle">${isAdmin ? '创建与管理各级别赛事' : '查看所有级别的电竞赛事'}</p>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div>
+          <h2 style="font-size:1.1rem;margin:0;">常规赛事</h2>
+          <p style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 0;">消耗梦币入场，10人对战，赢方瓜分总奖池</p>
         </div>
-        ${isAdmin ? `<button class="btn btn-primary" onclick="openCreateCompetitionModal()">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          创建赛事
-        </button>` : ''}
-      </div>
-      <div class="comp-tier-tabs">
-        <button class="comp-tier-tab" id="compTierElite" onclick="switchCompTier('elite')">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="margin-bottom:3px;display:block;margin-left:auto;margin-right:auto;"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
-          顶级联赛
-        </button>
-        <button class="comp-tier-tab" id="compTierSecondary" onclick="switchCompTier('secondary')">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:3px;display:block;margin-left:auto;margin-right:auto;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          次级联赛
-        </button>
-        <button class="comp-tier-tab active-regular" id="compTierRegular" onclick="switchCompTier('regular')">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="margin-bottom:3px;display:block;margin-left:auto;margin-right:auto;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          常规赛事
-        </button>
       </div>
       <div id="competitionList"><div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div></div>
-    </div>
-  `;
+    </div>`;
   await loadCompetitionList();
 }
-async function switchCompTier(t) { compTier = t; await loadCompetitionList(); }
 async function loadCompetitionList() {
   const container = document.getElementById('competitionList');
-  const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
-  // 高亮当前tier按钮
-  document.querySelectorAll('.comp-tier-tab').forEach(b => {
-    b.classList.remove('active-elite', 'active-secondary', 'active-regular');
-  });
-  const activeBtn = document.getElementById('compTier' + compTier.charAt(0).toUpperCase() + compTier.slice(1));
-  if (activeBtn) activeBtn.classList.add('active-' + compTier);
-
-  const emptyMsg = { elite: '暂无顶级联赛赛事', secondary: '暂无次级联赛赛事', regular: '暂无常规赛事' };
-  const tierBadge = { elite: { label: '顶级联赛', cls: 'elite' }, secondary: { label: '次级联赛', cls: 'secondary' }, regular: { label: '常规赛事', cls: 'regular' } };
   try {
     const data = await api('/api/competitions');
-    const comps = (data[compTier] || []);
+    const comps = data.competitions || [];
     window._compCache = {};
-    (data.all||[]).forEach(c => { window._compCache[c.id] = c; });
+    comps.forEach(c => { window._compCache[c.id] = c; });
     if (!comps.length) {
-      container.innerHTML = `<div class="comp-empty">
-        <svg width="48" height="48" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" opacity="0.25">
-          <path d="M18 24H62M18 24V28C18 40 30 52 40 52C50 52 62 40 62 28V24M18 24C14 20 10 22 10 26C10 30 14 32 18 28M62 24C66 20 70 22 70 26C70 30 66 32 62 28" stroke="url(#neonGradE)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M20 28V52C20 58 28 64 40 64C52 64 60 58 60 52V28" stroke="url(#neonGradE2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M28 64H52M32 68H48M34 72H46" stroke="url(#neonGradE)" stroke-width="2" stroke-linecap="round"/>
-          <defs>
-            <linearGradient id="neonGradE" x1="10" y1="10" x2="70" y2="72" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#4f46e5"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient>
-            <linearGradient id="neonGradE2" x1="20" y1="28" x2="60" y2="64" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#4f46e5"/></linearGradient>
-          </defs>
-        </svg>
-        <p class="comp-empty-text">${emptyMsg[compTier]}</p>
-      </div>`;
+      container.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:40px;">暂无赛事，请管理员创建</p>';
       return;
     }
-    container.innerHTML = `<div class="comp-list-grid">` + comps.map(c => {
-      const dateStr = c.created_at ? new Date(c.created_at).toLocaleDateString('zh-CN', { year:'numeric', month:'2-digit', day:'2-digit' }) : '';
-      const tb = tierBadge[c.tier || 'regular'];
+    container.innerHTML = comps.map(c => {
+      const rs = c.reg_stats || {};
+      const statusLabel = { upcoming:'即将开始', open:'报名中', locked:'已满员', live:'比赛中', review:'审核中', finished:'已结束' }[c.comp_status] || '';
+      const statusColor = { upcoming:'var(--text-muted)', open:'#10b981', locked:'var(--warning)', live:'var(--danger)' }[c.comp_status] || 'var(--text-muted)';
       return `
-        <div class="competition-card" data-tier="${c.tier || 'regular'}" onclick="openCompetitionDetail('${c.id}')">
-          ${isAdmin ? `<button class="btn btn-sm comp-delete-btn" onclick="event.stopPropagation(); deleteCompetition('${c.id}')">删除</button>` : ''}
-          <div class="comp-card-body">
-            <div class="comp-card-top">
-              <div class="comp-card-title">${c.name}</div>
-              <span class="comp-tier-badge ${tb.cls}">${tb.label}</span>
-            </div>
-            <div class="comp-card-meta">
-              <span class="comp-meta-item">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                ${dateStr}
-              </span>
-              ${c.created_by_username ? `<span class="comp-meta-item">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-                ${c.created_by_username}
-              </span>` : ''}
-            </div>
-            <div class="comp-card-footer">
-              <span class="comp-status-badge ${c.status === 'active' ? 'active' : 'closed'}">
-                <span class="comp-status-dot ${c.status === 'active' ? 'active' : 'closed'}"></span>
-                ${c.status === 'active' ? '进行中' : '已结束'}
-              </span>
-              <span class="comp-card-arrow">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-              </span>
-            </div>
+      <div style="padding:14px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:10px;margin-bottom:8px;cursor:pointer;" onclick="openCompetitionDetail('${c.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+          <div>
+            <span style="font-weight:700;color:var(--text-primary);font-size:0.95rem;">${c.name}</span>
+            <span style="color:${statusColor};font-size:0.72rem;margin-left:8px;font-weight:600;">${statusLabel}</span>
           </div>
-        </div>`;
-    }).join('') + `</div>`;
-  } catch (err) { container.innerHTML = `<p style="color:var(--danger);padding:24px 0;text-align:center;">加载失败：${err.message}</p>`; }
+          <span style="font-size:0.75rem;color:var(--text-muted);">${c.start_time ? new Date(c.start_time).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''}</span>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap;">
+          <span style="font-size:0.78rem;color:var(--text-secondary);">&#x1F465; ${rs.count}/10人</span>
+          ${rs.prizePool > 0 ? '<span style="font-size:0.78rem;color:var(--warning);">&#x1F4B0; '+rs.prizePool+'梦币</span>' : ''}
+          <span style="font-size:0.72rem;color:var(--text-muted);">500x${rs.fee500||0} | 1000x${rs.fee1000||0} | 2000x${rs.fee2000||0}</span>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { container.innerHTML = '<p style="color:var(--danger);">加载失败</p>'; }
 }
 
-// 赛事详情弹窗
-window._compCache = {};
+// 赛事详情+报名弹窗
 function openCompetitionDetail(id) {
-  const cached = window._compCache[id];
-  if (!cached) return;
-  const c = cached;
-  const creatorName = (c.created_by_name || c.created_by_username || '').replace(/\s*\(.*?\)\s*/, '') || '未知';
-  const dateStr = c.created_at
-    ? new Date(c.created_at).toLocaleDateString('zh-CN', { year:'numeric', month:'long', day:'numeric' })
-    : '未知';
-  const tierBadge = { elite: { label: '顶级联赛', cls: 'elite' }, secondary: { label: '次级联赛', cls: 'secondary' }, regular: { label: '常规赛事', cls: 'regular' } };
-  const tb = tierBadge[c.tier || 'regular'];
+  const c = window._compCache[id];
+  if (!c) return;
+  const rs = c.reg_stats || {};
   const overlay = document.createElement('div');
   overlay.className = 'comp-detail-overlay';
-  overlay.id = 'compDetailOverlay';
-  overlay.onclick = (e) => { if (e.target === overlay) closeCompetitionDetail(); };
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  const statusLabel = { upcoming:'即将开始', open:'报名中', locked:'已满员', live:'比赛中', review:'审核中', finished:'已结束' }[c.comp_status] || '';
   overlay.innerHTML = `
-    <div class="comp-detail-panel">
-      <div class="comp-detail-header">
-        <div style="display:flex;flex-direction:column;gap:6px;flex:1;padding-right:8px;">
-          <h3 class="comp-detail-title" style="font-size:1.1rem;">${c.name}</h3>
-          <span class="comp-tier-badge ${tb.cls}">${tb.label}</span>
-        </div>
-        <button class="comp-detail-back" onclick="closeCompetitionDetail()">返回</button>
+    <div class="comp-detail-panel" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h3 style="font-size:1.05rem;margin:0;">${c.name} <span style="font-size:0.72rem;color:var(--text-muted);">BO${c.bo||1}</span></h3>
+        <button class="btn btn-sm btn-ghost" onclick="this.closest('.comp-detail-overlay').remove()">关闭</button>
       </div>
-      <div class="comp-detail-body">
-        <div class="comp-detail-section">
-          <div class="comp-detail-row">
-            <span class="comp-detail-label">赛事状态</span>
-            <span class="comp-detail-value"><span class="comp-status-badge ${c.status === 'active' ? 'active' : 'closed'}"><span class="comp-status-dot ${c.status === 'active' ? 'active' : 'closed'}"></span>${c.status === 'active' ? '进行中' : '已结束'}</span></span>
-          </div>
-          <div class="comp-detail-row">
-            <span class="comp-detail-label">创建时间</span>
-            <span class="comp-detail-value">${dateStr}</span>
-          </div>
-          <div class="comp-detail-row">
-            <span class="comp-detail-label">创建人</span>
-            <span class="comp-detail-value">${creatorName}</span>
-          </div>
-        </div>
-        <div class="comp-detail-section">
-          <div class="comp-detail-row">
-            <span class="comp-detail-label">二维码</span>
-          </div>
-          <div class="comp-detail-qr-wrap">
-            ${c.qr_code_url
-              ? `<div class="comp-detail-qr-card" onclick="openCompQrFullscreen('${c.qr_code_url.replace(/'/g, "\\'")}')"><img src="${c.qr_code_url}" alt="赛事二维码"></div>`
-              : '<span class="comp-detail-none">未上传</span>'
-            }
-          </div>
-        </div>
+      ${c.start_time ? '<div style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:12px;">开赛时间：'+new Date(c.start_time).toLocaleString('zh-CN')+'</div>' : ''}
+      <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;padding:12px;background:rgba(255,255,255,.03);border-radius:8px;">
+        <div><span style="color:var(--text-muted);font-size:0.72rem;">状态</span><div style="font-weight:700;color:#fff;">${statusLabel}</div></div>
+        <div><span style="color:var(--text-muted);font-size:0.72rem;">已报名</span><div style="font-weight:700;color:#fff;">${rs.count}/10</div></div>
+        <div><span style="color:var(--text-muted);font-size:0.72rem;">总奖池</span><div style="font-weight:700;color:var(--warning);">${rs.prizePool||0}梦币</div></div>
+        <div><span style="color:var(--text-muted);font-size:0.72rem;">500x${rs.fee500||0}</span></div>
+        <div><span style="color:var(--text-muted);font-size:0.72rem;">1000x${rs.fee1000||0}</span></div>
+        <div><span style="color:var(--text-muted);font-size:0.72rem;">2000x${rs.fee2000||0}</span></div>
       </div>
-    </div>
-  `;
+      <div id="compRegActions"></div>
+    </div>`;
   document.body.appendChild(overlay);
-  document.body.style.overflow = 'hidden';
-}
-function closeCompetitionDetail() {
-  const overlay = document.getElementById('compDetailOverlay');
-  if (overlay) overlay.remove();
-  document.body.style.overflow = '';
-}
-function openCompQrFullscreen(src) {
-  const fs = document.createElement('div');
-  fs.className = 'comp-qr-fullscreen';
-  fs.onclick = () => fs.remove();
-  fs.innerHTML = `<img src="${src}" alt="二维码大图">`;
-  document.body.appendChild(fs);
+  loadCompRegUI(id, c);
 }
 
-function openCreateCompetitionModal() {
-  const existing = document.getElementById('createCompModal');
-  if (existing) existing.remove();
-  const overlay = document.createElement('div');
-  overlay.id = 'createCompModal';
-  overlay.className = 'modal-overlay';
-  overlay.innerHTML = `
-    <div class="modal modal-sm">
-      <h3 style="margin-bottom:20px;">创建赛事</h3>
-      <form onsubmit="handleCreateCompetition(event)">
-        <div class="form-group">
-          <label>赛事名称 *</label>
-          <input class="form-input" type="text" id="compName" required placeholder="如：浅梦杯春季赛">
-        </div>
-        <div class="form-group">
-          <label>赛事等级</label>
-          <select class="form-select" id="compTierSel">
-            <option value="regular">🎮 常规赛事</option>
-            <option value="elite">🏆 顶级联赛（仅 S/A 级参赛）</option>
-            <option value="secondary">⚔️ 次级联赛（仅 B 级参赛）</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>二维码图片</label>
-          <input class="form-input" type="file" id="compQrFile" accept="image/*" onchange="previewCompQr(this)">
-          <input type="hidden" id="compQrUrl">
-          <div id="compQrPreview" style="margin-top:8px;max-width:120px;display:none;">
-            <img id="compQrPreviewImg" style="width:100%;border-radius:8px;border:1px solid var(--border);">
-          </div>
-          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">支持 jpg / png / gif，建议不超过 2MB</div>
-        </div>
-        <div style="display:flex;gap:10px;margin-top:20px;">
-          <button type="submit" class="btn btn-primary" style="flex:1;">创建</button>
-          <button type="button" class="btn btn-secondary" onclick="document.getElementById('createCompModal').remove()" style="flex:1;">取消</button>
-        </div>
-      </form>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-}
-
-function previewCompQr(input) {
-  const file = input.files[0];
-  if (!file) return;
-  if (file.size > 5 * 1024 * 1024) { showToast('图片过大，请选择5MB以内的图片', 'error'); input.value = ''; return; }
-
-  const reader = new FileReader();
-  reader.onload = (evt) => {
-    const img = new Image();
-    img.onload = () => {
-      const MAX_WIDTH = 400;
-      let w = img.width, h = img.height;
-      if (w > MAX_WIDTH) { h = Math.round(h * MAX_WIDTH / w); w = MAX_WIDTH; }
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
-      const compressed = canvas.toDataURL('image/jpeg', 0.65);
-      document.getElementById('compQrUrl').value = compressed;
-      document.getElementById('compQrPreviewImg').src = compressed;
-      document.getElementById('compQrPreview').style.display = '';
-    };
-    img.onerror = () => { showToast('图片加载失败', 'error'); };
-    img.src = evt.target.result;
-  };
-  reader.readAsDataURL(file);
-}
-
-async function handleCreateCompetition(e) {
-  e.preventDefault();
-  const name = document.getElementById('compName').value.trim();
-  const qr_code_url = document.getElementById('compQrUrl').value.trim();
-  const tier = document.getElementById('compTierSel').value;
-  if (!name) { showToast('请输入赛事名称', 'error'); return; }
+async function loadCompRegUI(compId, c) {
+  const container = document.getElementById('compRegActions');
+  if (!container) return;
+  let myTeam = null;
+  try { const td = await api('/api/teams/mine'); myTeam = td.team; } catch(e) {}
+  const isCaptain = myTeam && myTeam.captainId === currentUser.id;
+  const canRegister = c.comp_status === 'open' || c.comp_status === 'upcoming';
+  // 检查用户是否已报名
+  let myReg = null;
   try {
-    await api('/api/admin/competitions', { method: 'POST', body: JSON.stringify({ name, qr_code_url, tier }) });
-    showToast('赛事创建成功', 'success');
-    document.getElementById('createCompModal').remove();
-    await loadCompetitionList();
-  } catch (err) { showToast(err.message || '创建失败', 'error'); }
+    const regs = await api('/api/competitions/'+compId+'/my-reg');
+    const allRegs = regs.registrations || [];
+    myReg = allRegs.find(r => r.player_user_id === currentUser.id || r.status === 'reserved');
+    if (!myReg && myTeam) {
+      myReg = allRegs.find(r => r.team_id === myTeam.id && r.status === 'reserved');
+    }
+  } catch(e) {}
+  if (myReg && myReg.status === 'confirmed') {
+    container.innerHTML = '<div style="padding:12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:8px;"><span style="color:#10b981;font-weight:600;">&#x2705; 已确认入场</span><span style="color:var(--text-muted);margin-left:8px;font-size:0.78rem;">入场费：'+myReg.entry_fee+'梦币</span><button class="btn btn-xs btn-danger" onclick="cancelCompetitionEntry(\''+compId+'\')" style="margin-left:8px;">取消</button></div>';
+  } else if (myReg && myReg.status === 'reserved') {
+    container.innerHTML = '<div style="padding:12px;background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.2);border-radius:8px;"><span style="color:var(--warning);font-weight:600;">&#x23F3; 待确认入场</span><div style="display:flex;gap:8px;margin-top:8px;"><button class="btn btn-sm" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981;" onclick="confirmCompetitionEntry(\''+compId+'\',500)">500&#x1FA99;</button><button class="btn btn-sm" style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#f59e0b;" onclick="confirmCompetitionEntry(\''+compId+'\',1000)">1000&#x1FA99;</button><button class="btn btn-sm" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#ef4444;" onclick="confirmCompetitionEntry(\''+compId+'\',2000)">2000&#x1FA99;</button></div></div>';
+  } else if (canRegister && isCaptain && myTeam && myTeam.memberCount >= 5) {
+    container.innerHTML = '<button class="btn btn-primary btn-sm" onclick="registerTeamForCompetition(\''+compId+'\',\''+myTeam.id+'\')">代表【'+myTeam.name+'】报名参赛</button>';
+  } else if (canRegister && !myTeam) {
+    container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">你需要先加入或创建队伍才能参赛</p>';
+  } else if (!canRegister) {
+    container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">当前赛事不可报名</p>';
+  }
 }
 
-async function deleteCompetition(id) {
-  if (!await dialog({ title: '删除赛事', body: '确定删除该赛事吗？此操作不可恢复。', confirmText: '确定删除', cancelText: '取消', confirmBtnClass: 'btn-danger' })) return;
+async function registerTeamForCompetition(compId, teamId) {
   try {
-    await api(`/api/admin/competitions/${id}`, { method: 'DELETE' });
-    showToast('已删除', 'success');
-    await loadCompetitionList();
-  } catch (err) { showToast(err.message || '删除失败', 'error'); }
+    await api('/api/competitions/'+compId+'/register', { method:'POST', body: JSON.stringify({ team_id: teamId }) });
+    showToast('报名成功，队员请进入比赛页确认入场','success');
+    document.querySelector('.comp-detail-overlay')?.remove();
+    loadCompetitionList();
+  } catch(e) { showToast(e.message,'error'); }
+}
+async function confirmCompetitionEntry(compId, fee) {
+  if (!await dialog({ title:'确认入场', body:'确定使用 '+fee+' 梦币入场参赛吗？', confirmText:'确认', cancelText:'取消' })) return;
+  try {
+    await api('/api/competitions/'+compId+'/confirm', { method:'POST', body: JSON.stringify({ entry_fee: fee }) });
+    showToast('已确认入场！','success');
+    document.querySelector('.comp-detail-overlay')?.remove();
+    loadCompetitionList();
+  } catch(e) { showToast(e.message,'error'); }
+}
+async function cancelCompetitionEntry(compId) {
+  if (!await dialog({ title:'取消入场', body:'确定取消参赛吗？入场费将退还。', confirmText:'确认取消', cancelText:'保留', confirmBtnClass:'btn-danger' })) return;
+  try {
+    await api('/api/competitions/'+compId+'/cancel', { method:'POST' });
+    showToast('已取消入场','info');
+    document.querySelector('.comp-detail-overlay')?.remove();
+    loadCompetitionList();
+  } catch(e) { showToast(e.message,'error'); }
 }
 
 // ==================== 我的账户页面 ====================
