@@ -99,7 +99,8 @@ function updateUI() {
     ui('userInfoDisplay').style.display = 'none';
     ui('btnLoginTop').style.display = 'inline-block';
     ui('btnLogoutTop').style.display = 'none';
-    document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="competition"], #tabNav .tab-btn[data-tab="admin"], #tabNav .tab-btn[data-tab="market"], #tabNav .tab-btn[data-tab="club"]').forEach(b => b.style.display = 'none');
+    document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="admin"], #tabNav .tab-btn[data-tab="market"], #tabNav .tab-btn[data-tab="club"]').forEach(b => b.style.display = 'none');
+    ui('tabCompetition').style.display = '';
     ui('notificationBell').style.display = 'none';
   }
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === currentTab));
@@ -180,8 +181,8 @@ async function loadCompetitionList() {
   } catch(e) { container.innerHTML = '<p style="color:var(--danger);">加载失败</p>'; }
 }
 
-// 赛事详情（区分常规/联赛）
-function openCompetitionDetail(id) {
+// 赛事详情（所有人可见，显示参赛人员+操作区）
+async function openCompetitionDetail(id) {
   const c = window._compCache[id];
   if (!c) return;
   const isRegular = (c.tier || 'regular') === 'regular';
@@ -192,40 +193,78 @@ function openCompetitionDetail(id) {
   const s = c.comp_status || c.status || '';
   const statusLabel = { upcoming:'即将开始', open:'报名中', locked:'已满员', live:'比赛中', review:'审核中', finished:'已结束' }[s] || '';
   const tierLabel = TIER_CONFIG[c.tier||'regular']?.label || '';
-  // 常规赛事详情
+  const st = c.start_time ? new Date(c.start_time).toLocaleString('zh-CN') : '待定';
+
+  let infoHtml = '';
   if (isRegular) {
-    overlay.innerHTML = '<div class="comp-detail-panel" onclick="event.stopPropagation()">'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'+
-        '<h3 style="font-size:1.05rem;margin:0;">'+c.name+' <span style="font-size:0.72rem;color:var(--text-muted);">'+tierLabel+' · BO'+(c.bo||1)+'</span></h3>'+
-        '<button class="btn btn-sm btn-ghost" onclick="this.closest(\'.comp-detail-overlay\').remove()">关闭</button>'+
-      '</div>'+
-      (c.start_time?'<div style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:12px;">开赛时间：'+new Date(c.start_time).toLocaleString('zh-CN')+'</div>':'')+
+    infoHtml =
       '<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;padding:12px;background:rgba(255,255,255,.03);border-radius:8px;">'+
         '<div><span style="color:var(--text-muted);font-size:0.72rem;">状态</span><div style="font-weight:700;color:#fff;">'+statusLabel+'</div></div>'+
         '<div><span style="color:var(--text-muted);font-size:0.72rem;">已报名</span><div style="font-weight:700;color:#fff;">'+rs.count+'/10</div></div>'+
         '<div><span style="color:var(--text-muted);font-size:0.72rem;">总奖池</span><div style="font-weight:700;color:var(--warning);">'+(rs.prizePool||0)+'梦币</div></div>'+
-        '<div><span style="color:var(--text-muted);font-size:0.72rem;">500×'+(rs.fee500||0)+'</span></div>'+
-        '<div><span style="color:var(--text-muted);font-size:0.72rem;">1000×'+(rs.fee1000||0)+'</span></div>'+
-        '<div><span style="color:var(--text-muted);font-size:0.72rem;">2000×'+(rs.fee2000||0)+'</span></div>'+
-      '</div><div id="compRegActions"></div></div>';
+        '<div><span style="color:var(--text-muted);font-size:0.72rem;">500&times;'+(rs.fee500||0)+'</span></div>'+
+        '<div><span style="color:var(--text-muted);font-size:0.72rem;">1000&times;'+(rs.fee1000||0)+'</span></div>'+
+        '<div><span style="color:var(--text-muted);font-size:0.72rem;">2000&times;'+(rs.fee2000||0)+'</span></div>'+
+      '</div>';
   } else {
-    // 顶级/次级联赛详情
-    overlay.innerHTML = '<div class="comp-detail-panel" onclick="event.stopPropagation()">'+
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'+
-        '<h3 style="font-size:1.05rem;margin:0;">'+c.name+' <span style="font-size:0.72rem;color:var(--text-muted);">'+tierLabel+' · BO'+(c.bo||1)+'</span></h3>'+
-        '<button class="btn btn-sm btn-ghost" onclick="this.closest(\'.comp-detail-overlay\').remove()">关闭</button>'+
-      '</div>'+
-      (c.start_time?'<div style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:12px;">开赛时间：'+new Date(c.start_time).toLocaleString('zh-CN')+'</div>':'')+
-      '<div style="padding:12px;background:rgba(255,255,255,.03);border-radius:8px;">'+
-        '<p style="color:var(--text-muted);font-size:0.82rem;">'+tierLabel+'由俱乐部大名单选手参赛，请联系管理员安排赛程。</p>'+
-        (c.qr_code_url?'<div style="margin-top:8px;"><img src="'+c.qr_code_url+'" style="max-width:200px;border-radius:8px;"></div>':'')+
-      '</div></div>';
+    infoHtml =
+      '<div style="padding:12px;background:rgba(255,255,255,.03);border-radius:8px;margin-bottom:16px;">'+
+        '<p style="color:var(--text-muted);font-size:0.82rem;">'+(c.description || tierLabel+'由俱乐部大名单选手参赛，请联系管理员安排赛程。')+'</p>'+
+        (c.qr_code_url?'<div style="margin-top:8px;"><img src="'+c.qr_code_url+'" style="max-width:260px;border-radius:8px;"></div>':'')+
+      '</div>';
   }
+
+  overlay.innerHTML = '<div class="comp-detail-panel" onclick="event.stopPropagation()">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'+
+      '<h3 style="font-size:1.05rem;margin:0;">'+c.name+' <span style="font-size:0.72rem;color:var(--text-muted);">'+tierLabel+' &middot; BO'+(c.bo||1)+'</span></h3>'+
+      '<button class="btn btn-sm btn-ghost" onclick="this.closest(\'.comp-detail-overlay\').remove()">关闭</button>'+
+    '</div>'+
+    '<div style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:12px;">开赛时间：'+st+'</div>'+
+    infoHtml +
+    '<div id="compPlayerList" style="margin-bottom:16px;"><div style="color:var(--text-muted);font-size:0.78rem;">加载参赛人员...</div></div>'+
+    '<div id="compRegActions"></div>'+
+  '</div>';
   document.body.appendChild(overlay);
-  if (isRegular) loadCompRegUI(id, c);
+
+  await loadCompPlayerList(id, isRegular);
+  if (isRegular) await loadCompRegUI(id, c);
 }
 
-// 创建赛事弹窗（支持三级联赛）
+// 加载赛事参赛人员列表（所有人可见）
+async function loadCompPlayerList(compId, isRegular) {
+  const container = document.getElementById('compPlayerList');
+  if (!container) return;
+  try {
+    const data = await api('/api/competitions/'+compId+'/registrations');
+    const regs = data.registrations || [];
+    if (!regs.length) {
+      container.innerHTML = '<div style="padding:12px;background:rgba(255,255,255,.02);border-radius:8px;color:var(--text-muted);font-size:0.82rem;text-align:center;">暂无参赛人员</div>';
+      return;
+    }
+    const laneOrder = { '对抗路':1, '打野':2, '中路':3, '发育路':4, '游走':5 };
+    const sorted = regs.slice().sort((a,b) => (laneOrder[a.lane]||99) - (laneOrder[b.lane]||99));
+    const statusBadge = (r) => {
+      if (r.status === 'confirmed') return '<span style="font-size:0.65rem;color:#10b981;background:rgba(16,185,129,.1);padding:1px 6px;border-radius:4px;">已确认</span>';
+      if (r.status === 'reserved') return '<span style="font-size:0.65rem;color:var(--warning);background:rgba(255,215,0,.08);padding:1px 6px;border-radius:4px;">待确认</span>';
+      return '';
+    };
+    container.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px;">参赛人员</div>'+
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">'+
+      sorted.map(r => {
+        const name = r.coachname || r.username || r.player_user_id;
+        return '<div style="padding:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:8px;">'+
+          '<div style="font-size:0.82rem;color:var(--text-primary);font-weight:600;">'+name+'</div>'+
+          '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">'+(r.lane||'')+(isRegular && r.entry_fee ? ' &middot; '+r.entry_fee+'梦币' : '')+'</div>'+
+          '<div style="margin-top:4px;">'+statusBadge(r)+'</div>'+
+        '</div>';
+      }).join('')+
+      '</div>';
+  } catch(e) {
+    container.innerHTML = '<div style="color:var(--text-muted);font-size:0.78rem;">参赛人员加载失败</div>';
+  }
+}
+
+// 创建赛事弹窗（支持三级联赛，动态字段）
 function openCreateCompetitionModal() {
   const existing = document.getElementById('createCompModal');
   if (existing) existing.remove();
@@ -240,10 +279,10 @@ function openCreateCompetitionModal() {
           <input class="form-input" type="text" id="compName" required placeholder="如：5月18日黄金赛">
         </div>
         <div class="form-group"><label>赛事等级</label>
-          <select class="form-select" id="compTierSel">
+          <select class="form-select" id="compTierSel" onchange="toggleCompExtraFields()">
             <option value="regular">常规赛事（梦币入场+奖池）</option>
-            <option value="elite">顶级联赛（S/A级俱乐部）</option>
-            <option value="secondary">次级联赛（B级俱乐部）</option>
+            <option value="elite">顶级联赛（S/A级俱乐部大名单）</option>
+            <option value="secondary">次级联赛（B级俱乐部大名单）</option>
           </select>
         </div>
         <div class="form-group"><label>开赛时间</label>
@@ -254,6 +293,15 @@ function openCreateCompetitionModal() {
             <option value="1">BO1</option><option value="3">BO3</option><option value="5">BO5</option>
           </select>
         </div>
+        <div id="compExtraFields" style="display:none;">
+          <div class="form-group"><label>赛事描述</label>
+            <textarea class="form-input" id="compDesc" rows="3" placeholder="填写赛事规则、奖励说明等..."></textarea>
+          </div>
+          <div class="form-group"><label>赛事图片（QR码/宣传图）</label>
+            <input class="form-input" type="file" id="compImage" accept="image/*">
+            <div id="compImgPreview" style="display:none;margin-top:8px;"><img style="max-width:200px;border-radius:8px;" src=""></div>
+          </div>
+        </div>
         <div style="margin-top:16px;display:flex;gap:8px;">
           <button class="btn btn-primary" type="submit">创建</button>
           <button class="btn btn-ghost" type="button" onclick="this.closest('#createCompModal').remove()">取消</button>
@@ -261,6 +309,24 @@ function openCreateCompetitionModal() {
       </form>
     </div>`;
   document.body.appendChild(overlay);
+  // 图片预览
+  setTimeout(() => {
+    const input = document.getElementById('compImage');
+    if (input) input.addEventListener('change', () => {
+      const file = input.files[0];
+      const preview = document.getElementById('compImgPreview');
+      if (!file) { preview.style.display = 'none'; return; }
+      const r = new FileReader();
+      r.onload = (e) => { preview.querySelector('img').src = e.target.result; preview.style.display = 'block'; };
+      r.readAsDataURL(file);
+    });
+  }, 50);
+}
+
+function toggleCompExtraFields() {
+  const tier = document.getElementById('compTierSel').value;
+  const extra = document.getElementById('compExtraFields');
+  if (extra) extra.style.display = tier === 'regular' ? 'none' : 'block';
 }
 
 async function handleCreateCompetition(e) {
@@ -269,19 +335,52 @@ async function handleCreateCompetition(e) {
   const tier = document.getElementById('compTierSel').value;
   const start_time = document.getElementById('compStartTime').value;
   const bo = parseInt(document.getElementById('compBo').value);
+  const description = (document.getElementById('compDesc')?.value || '').trim();
   if (!name) { showToast('请输入赛事名称','error'); return; }
+  let qr_code_url = null;
+  const file = document.getElementById('compImage')?.files?.[0];
+  if (file && tier !== 'regular') {
+    try {
+      qr_code_url = await compressImageToBase64(file, 800, 0.6);
+    } catch(err) { showToast('图片处理失败','error'); return; }
+  }
   try {
-    await api('/api/admin/competitions', { method:'POST', body: JSON.stringify({ name, tier, start_time: start_time || null, bo }) });
+    await api('/api/admin/competitions', { method:'POST', body: JSON.stringify({ name, tier, start_time: start_time || null, bo, description, qr_code_url }) });
     showToast('赛事已创建','success');
     document.getElementById('createCompModal')?.remove();
     loadCompetitionList();
-  } catch(e) { showToast(e.message,'error'); }
+  } catch(err) { showToast(err.message,'error'); }
+}
+
+// 图片压缩辅助（复用认证逻辑）
+function compressImageToBase64(file, maxWidth, quality) {
+  return new Promise((resolve, reject) => {
+    if (!file) return resolve(null);
+    const img = new Image();
+    const r = new FileReader();
+    r.onload = (ev) => { img.src = ev.target.result; };
+    r.onerror = () => reject(new Error('读取图片失败'));
+    r.readAsDataURL(file);
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(c.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => reject(new Error('加载图片失败'));
+  });
 }
 
 // ==================== 赛事报名交互 ====================
 async function loadCompRegUI(compId, c) {
   const container = document.getElementById('compRegActions');
   if (!container) return;
+  // 未登录
+  if (!currentUser) {
+    container.innerHTML = '<div style="padding:12px;background:rgba(255,255,255,.03);border-radius:8px;color:var(--text-muted);font-size:0.82rem;text-align:center;">登录后可报名参赛</div>';
+    return;
+  }
   let myTeam = null;
   try { const td = await api('/api/teams/mine'); myTeam = td.team; } catch(e) {}
   const isCaptain = myTeam && myTeam.captainId === currentUser.id;
@@ -295,13 +394,15 @@ async function loadCompRegUI(compId, c) {
   } catch(e) {}
 
   if (myReg && myReg.status === 'confirmed') {
-    container.innerHTML = '<div style="padding:12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:8px;"><span style="color:#10b981;font-weight:600;">已确认入场</span><span style="color:var(--text-muted);margin-left:8px;font-size:0.78rem;">'+myReg.lane+' · 入场费：'+myReg.entry_fee+'梦币</span></div>';
+    container.innerHTML = '<div style="padding:12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:8px;"><span style="color:#10b981;font-weight:600;">已确认入场</span><span style="color:var(--text-muted);margin-left:8px;font-size:0.78rem;">'+myReg.lane+' &middot; 入场费：'+myReg.entry_fee+'梦币</span></div>';
   } else if (myReg && myReg.status === 'reserved') {
     container.innerHTML = '<div style="padding:12px;background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.2);border-radius:8px;"><span style="color:var(--warning);font-weight:600;">待确认入场</span><span style="color:var(--text-muted);margin-left:8px;">'+myReg.lane+'</span><div style="display:flex;gap:8px;margin-top:8px;"><button class="btn btn-sm" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:#10b981;" onclick="confirmCompetitionEntry(\''+compId+'\',500)">500梦币</button><button class="btn btn-sm" style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);color:#f59e0b;" onclick="confirmCompetitionEntry(\''+compId+'\',1000)">1000梦币</button><button class="btn btn-sm" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#ef4444;" onclick="confirmCompetitionEntry(\''+compId+'\',2000)">2000梦币</button></div></div>';
   } else if (canRegister && isCaptain && myTeam && myTeam.memberCount >= 5) {
     container.innerHTML = '<button class="btn btn-primary btn-sm" onclick="openTeamPlayerSelect(\''+compId+'\',\''+myTeam.id+'\',\''+myTeam.name.replace(/'/g,"\\'")+'\')">选择队员报名参赛</button>';
   } else if (canRegister && !myTeam) {
     container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">需要加入队伍后由队长报名参赛</p>';
+  } else if (canRegister && myTeam && !isCaptain) {
+    container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">等待队长选择队员报名</p>';
   }
   // 状态提示
   if (c.comp_status === 'live') {
@@ -1516,7 +1617,7 @@ async function switchTab(tab) {
 
 document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => {
   const tab = b.dataset.tab;
-  if (['publish','profile','admin','competition'].includes(tab) && !currentUser) { showToast('请先登录','info'); openAuthModal('login'); return; }
+  if (['publish','profile','admin'].includes(tab) && !currentUser) { showToast('请先登录','info'); openAuthModal('login'); return; }
   switchTab(tab);
 }));
 
@@ -2283,19 +2384,6 @@ async function loadAdminCompList() {
       </div>`;
     }).join('');
   } catch(e) { container.innerHTML = '<p style="color:var(--danger);">加载失败</p>'; }
-}
-async function openCreateCompetitionModal() {
-  const result = await dialogPrompt({ title: '创建常规赛事', body: '请输入赛事名称和开赛时间', placeholder: '如：5月17日黄金赛|2026-05-17 20:00', defaultValue: '', confirmText: '创建', cancelText: '取消' });
-  if (!result) return;
-  const parts = result.split('|');
-  const name = parts[0]?.trim();
-  const startTime = parts[1]?.trim();
-  if (!name) { showToast('请输入赛事名称', 'error'); return; }
-  try {
-    await api('/api/admin/competitions', { method:'POST', body: JSON.stringify({ name, start_time: startTime || null, tier: 'regular', bo: 1 }) });
-    showToast('赛事已创建', 'success');
-    loadAdminCompList();
-  } catch(e) { showToast(e.message, 'error'); }
 }
 async function adminDeleteCompetition(id) {
   if (!await dialog({ title: '删除赛事', body: '确定删除该赛事？', confirmText: '删除', cancelText: '取消', confirmBtnClass: 'btn-danger' })) return;

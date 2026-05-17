@@ -164,6 +164,7 @@ async function initDB() {
     `);
     // 赛事分级
     await client.query("ALTER TABLE competitions ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'regular'");
+    await client.query("ALTER TABLE competitions ADD COLUMN IF NOT EXISTS description TEXT DEFAULT NULL");
     // 选手等级 + 解约
     await client.query('ALTER TABLE players ADD COLUMN IF NOT EXISTS grade TEXT DEFAULT NULL');
     await client.query('ALTER TABLE players ADD COLUMN IF NOT EXISTS buyout_fee INTEGER DEFAULT NULL');
@@ -1122,7 +1123,7 @@ app.delete('/api/admin/teams/:id/members/:userId', authMiddleware, adminMiddlewa
 
 
 // ==================== 赛事管理 ====================
-app.get('/api/competitions', authMiddleware, async (req, res) => {
+app.get('/api/competitions', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT c.*, u.coachName AS created_by_name, u.username AS created_by_username
@@ -1163,13 +1164,13 @@ app.get('/api/competitions', authMiddleware, async (req, res) => {
 });
 
 app.post('/api/admin/competitions', authMiddleware, adminMiddleware, async (req, res) => {
-  const { name, qr_code_url, tier, start_time, bo } = req.body;
+  const { name, qr_code_url, tier, start_time, bo, description } = req.body;
   if (!name) return res.status(400).json({ message: '请填写赛事名称' });
   const id = 'comp_' + Date.now();
   try {
     await pool.query(
-      'INSERT INTO competitions (id, name, qr_code_url, tier, created_by, start_time, bo, comp_status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-      [id, name, qr_code_url || null, tier || 'regular', req.userId, start_time || null, bo || 1, 'upcoming']
+      'INSERT INTO competitions (id, name, qr_code_url, tier, created_by, start_time, bo, comp_status, description) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+      [id, name, qr_code_url || null, tier || 'regular', req.userId, start_time || null, bo || 1, 'upcoming', description || null]
     );
     res.json({ success: true, id });
   } catch(e) { console.error(e); res.status(500).json({ message: '创建失败' }); }
@@ -1256,6 +1257,20 @@ app.get('/api/competitions/:id/my-reg', authMiddleware, async (req, res) => {
       'SELECT * FROM competition_registrations WHERE competition_id = $1 AND status != $2',
       [req.params.id, 'cancelled']
     );
+    res.json({ registrations: regs.rows });
+  } catch(e) { res.status(500).json({ message: '查询失败' }); }
+});
+
+// 查询赛事所有报名人员（带用户信息，公开可见）
+app.get('/api/competitions/:id/registrations', async (req, res) => {
+  try {
+    const regs = await pool.query(`
+      SELECT r.*, u.coachName, u.username, u.teamName
+      FROM competition_registrations r
+      LEFT JOIN users u ON u.id = r.player_user_id
+      WHERE r.competition_id = $1 AND r.status != 'cancelled'
+      ORDER BY r.lane
+    `, [req.params.id]);
     res.json({ registrations: regs.rows });
   } catch(e) { res.status(500).json({ message: '查询失败' }); }
 });
