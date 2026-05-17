@@ -402,38 +402,19 @@ app.put('/api/recruitment/:id/meeting', authMiddleware, async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ message: '设置失败' }); }
 });
 
-// 创建腾讯会议（POST方法，调用tmeet CLI）
+// 请求创建腾讯会议（标记等待自动监控创建）
 app.post('/api/recruitment/:id/meeting', authMiddleware, async (req, res) => {
   try {
     const mRes = await pool.query('SELECT * FROM recruitment_matches WHERE id = $1', [req.params.id]);
     if (mRes.rows.length === 0) return res.status(404).json({ message: '对局不存在' });
     if (mRes.rows[0].organizerid !== req.userId) return res.status(403).json({ message: '仅发起人可创建会议' });
     const m = mRes.rows[0];
-    // 调用 tmeet CLI 创建预约会议
-    const { execSync } = require('child_process');
-    // 会议时长2小时
-    const startTime = m.starttime;
-    const [datePart, timePart] = startTime.split(' ');
-    const endHour = parseInt(timePart.split(':')[0]) + 2;
-    const endTime = `${datePart} ${String(endHour).padStart(2,'0')}:${timePart.split(':')[1]}:00`;
-    const subject = `KPL训练赛 ${startTime}`;
-    const cmd = `tmeet meeting create --subject "${subject}" --start "${startTime}:00+08:00" --end "${endTime}+08:00" --join-type 1 2>&1`;
-    let output;
-    try {
-      output = execSync(cmd, { encoding: 'utf8', timeout: 30000 });
-    } catch (e) {
-      output = e.stdout || e.stderr || e.message;
+    if (m.meetingcode) {
+      return res.json({ success: true, meetingCode: m.meetingcode, meetingLink: m.meetinglink });
     }
-    let meetingCode = '', meetingLink = '';
-    try {
-      const parsed = JSON.parse(output);
-      if (parsed.data && parsed.data.meeting_info_list && parsed.data.meeting_info_list[0]) {
-        meetingCode = parsed.data.meeting_info_list[0].meeting_code || '';
-        meetingLink = parsed.data.meeting_info_list[0].join_url || '';
-      }
-    } catch { /* JSON解析失败，忽略 */ }
-    await pool.query('UPDATE recruitment_matches SET meetingCode = $1, meetingLink = $2 WHERE id = $3', [meetingCode, meetingLink, req.params.id]);
-    res.json({ success: true, meetingCode, meetingLink });
+    // 标记为“已锁定，等待自动监控创建会议”
+    await pool.query('UPDATE recruitment_matches SET locked = true WHERE id = $1 AND locked = false', [req.params.id]);
+    res.json({ success: true, message: '会议将由系统自动创建，请 30 秒后刷新查看会议号', meetingCode: '', meetingLink: '' });
   } catch (e) { console.error(e); res.status(500).json({ message: '创建会议失败' }); }
 });
 
