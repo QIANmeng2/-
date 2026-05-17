@@ -3246,7 +3246,8 @@ async function renderMarketPanel() {
     if (!isAdmin && currentUser) {
       try {
         const clubsData = await api('/api/clubs');
-        isBoss = (clubsData.clubs || []).some(c => c.owner_id === currentUser.id);
+        const memberships = clubsData.memberships || [];
+        isBoss = (clubsData.clubs || []).some(c => c.owner_id === currentUser.id) || memberships.some(m => m.role === 'boss');
       } catch(e) { isBoss = false; }
     }
     if (isAdmin || isBoss) {
@@ -3444,7 +3445,9 @@ async function loadMarketPlayers(container) {
   if (currentUser) {
     try {
       const clubsData = await api('/api/clubs');
-      myClubs = (clubsData.clubs || []).filter(c => c.owner_id === currentUser.id);
+      const memberships = clubsData.memberships || [];
+      const myMembershipMap = new Map(memberships.map(m => [m.club_id, m.role]));
+      myClubs = (clubsData.clubs || []).filter(c => c.owner_id === currentUser.id || myMembershipMap.has(c.id));
       window._myClubs = myClubs;
       if (myClubs.length > 0) {
         const coins = currentUser.dream_coins || 0;
@@ -3776,22 +3779,28 @@ async function renderClubPanel() {
   try {
     const clubsData = await api('/api/clubs');
     const clubs = clubsData.clubs || [];
-    // 查找当前用户是老板的俱乐部
-    const myClubs = clubs.filter(c => c.owner_id === currentUser.id);
+    const memberships = clubsData.memberships || [];
+    const myMembershipMap = new Map(memberships.map(m => [m.club_id, m.role]));
+    // 查找当前用户关联的俱乐部（老板或成员）
+    const myClubs = clubs.filter(c => c.owner_id === currentUser.id || myMembershipMap.has(c.id));
 
     let html = '<div class="card"><h3>我的俱乐部</h3>';
     if (isAdmin) {
       html += `<button class="btn btn-primary btn-sm" style="margin-bottom:12px;" onclick="openCreateClubModal()">创建俱乐部</button>`;
     }
     if (myClubs.length > 0) {
-      html += myClubs.map(c => `
+      html += myClubs.map(c => {
+        const isOwner = c.owner_id === currentUser.id;
+        const roleLabel = isOwner ? '你 是老板' : (myMembershipMap.get(c.id) === 'member' ? '你 是成员' : '');
+        return `
         <div class="club-card" onclick="renderClubDetail(${c.id})" style="cursor:pointer;">
           <div><span style="font-weight:700;color:var(--text-primary);">${c.name}</span>
             <span style="font-size:0.72rem;color:var(--text-muted);margin-left:8px;">${c.member_count || 0}名队员</span>
           </div>
-          <div style="font-size:0.78rem;color:var(--warning);">你 是老板</div>
+          <div style="font-size:0.78rem;color:var(--warning);">${roleLabel}</div>
         </div>
-      `).join('');
+      `;
+      }).join('');
     } else {
       html += '<p style="color:var(--text-muted);">你还没有自己的俱乐部</p>';
     }

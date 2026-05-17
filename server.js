@@ -1933,7 +1933,11 @@ app.get('/api/clubs', authMiddleware, async (req, res) => {
       LEFT JOIN users u ON c.owner_id = u.id
       ORDER BY c.id
     `);
-    res.json({ clubs: result.rows });
+    const memberships = await pool.query(
+      'SELECT club_id, role FROM club_members WHERE user_id = $1',
+      [req.userId]
+    );
+    res.json({ clubs: result.rows, memberships: memberships.rows });
   } catch(e) { res.status(500).json({ message: '查询失败' }); }
 });
 
