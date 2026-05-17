@@ -784,6 +784,10 @@
       0%, 100% { background-position: 0% 50%; }
       50%      { background-position: 100% 50%; }
     }
+    .loading-spinner.load-timeout .load-text {
+      color: var(--danger) !important;
+      font-size: 0.88rem;
+    }
 
     /* ===== 对话框 ===== */
     .dialog-overlay {

@@ -3600,16 +3600,38 @@ function closeWelcomeAndLogin() {
   openAuthModal('login');
 }
 
-// ==================== 假进度：CSS 动画驱动宽度，JS 读取并更新百分比 ====================
+// ==================== 假进度：CSS 动画驱动宽度，JS 读取百分比 + 超时重试 ====================
+const LOAD_TIMEOUT = 8000; // 8秒超时
+const _spinnerTimestamps = new WeakMap();
+
 setInterval(() => {
-  document.querySelectorAll('.loading-spinner .load-fill').forEach(fill => {
-    const bar = fill.parentElement;
-    const text = fill.closest('.loading-spinner')?.querySelector('.load-text');
-    if (!text || !bar) return;
-    const fillW = fill.getBoundingClientRect().width || 0;
-    const barW = bar.getBoundingClientRect().width || 280;
-    const pct = Math.min(Math.round((fillW / barW) * 100), 99);
-    text.textContent = `加载中… ${pct}%`;
+  const now = Date.now();
+  document.querySelectorAll('.loading-spinner:not(.load-timeout)').forEach(spinner => {
+    // 记录首次出现时间
+    if (!_spinnerTimestamps.has(spinner)) _spinnerTimestamps.set(spinner, now);
+
+    const fill = spinner.querySelector('.load-fill');
+    const text = spinner.querySelector('.load-text');
+    if (text && fill) {
+      const fillW = fill.getBoundingClientRect().width || 0;
+      const barW = fill.parentElement?.getBoundingClientRect().width || 280;
+      const pct = Math.min(Math.round((fillW / barW) * 100), 99);
+      text.textContent = `加载中… ${pct}%`;
+    }
+
+    // 超时检测：超过8秒未加载完成
+    const start = _spinnerTimestamps.get(spinner);
+    if (now - start > LOAD_TIMEOUT) {
+      spinner.classList.add('load-timeout');
+      // 尝试获取重试回调，默认切回当前页面
+      const retry = spinner.dataset.retry || 'switchTab(currentTab)';
+      spinner.innerHTML = `
+        <div style="text-align:center;padding:20px;">
+          <div class="load-text" style="color:var(--danger);margin-bottom:12px;">加载超时，请重试</div>
+          <button class="btn btn-sm btn-primary" onclick="${retry}" style="padding:8px 24px;">重新加载</button>
+        </div>
+      `;
+    }
   });
 }, 120);
 
