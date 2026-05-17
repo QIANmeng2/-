@@ -1847,7 +1847,7 @@ app.get('/api/market/players', authMiddleware, async (req, res) => {
   const { sort, maxValue } = req.query;
   try {
     let query = `
-      SELECT p.*, u.username, u.coachName, c.name AS club_name
+      SELECT p.*, u.username, u.coachName, u.heroPool, c.name AS club_name
       FROM players p
       LEFT JOIN users u ON p.user_id = u.id
       LEFT JOIN clubs c ON p.club_id = c.id
