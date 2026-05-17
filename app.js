@@ -3219,12 +3219,37 @@ async function loadAdminPlayers(container) {
   const approved = players.filter(p => p.status === 'approved');
   const rejected = players.filter(p => p.status === 'rejected');
 
+  // 截图缓存：user_id → { screenshot_url, screenshot_url2 }
+  window._reviewScreenshots = window._reviewScreenshots || {};
+
   function playerCard(p) {
     let positions = [];
     try { positions = JSON.parse(p.positions || '[]'); } catch(e) {}
-    const shots = [];
-    if (p.screenshot_url) shots.push({ url: p.screenshot_url, label: '巅峰分截图' });
-    if (p.screenshot_url2) shots.push({ url: p.screenshot_url2, label: '段位截图' });
+    const ss = window._reviewScreenshots[p.user_id];
+    // 截图区域：已有缓存显示缩略图，pending 且无缓存显示加载中，approved/rejected 无缓存只显示标签
+    let screenshotHtml = '';
+    if (ss) {
+      const shots = [];
+      if (ss.screenshot_url) shots.push({ url: ss.screenshot_url, label: '巅峰分截图' });
+      if (ss.screenshot_url2) shots.push({ url: ss.screenshot_url2, label: '段位截图' });
+      screenshotHtml = shots.length ? `
+        <div class="review-screenshots">
+          ${shots.map(s => `
+            <div class="review-screenshot-wrap">
+              <img src="${s.url}" class="review-screenshot-thumb" onclick="openImagePreview('${s.url}')" alt="${s.label}">
+              <div class="review-screenshot-label">${s.label}</div>
+            </div>
+          `).join('')}
+        </div>
+      ` : '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">未提交截图</div>';
+    } else if (p.status === 'pending') {
+      screenshotHtml = '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">加载截图中...</div>';
+    } else {
+      screenshotHtml = p.has_screenshots
+        ? '<div style="font-size:0.7rem;color:var(--text-secondary);margin-top:4px;">有截图（展开查看）</div>'
+        : '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">未提交截图</div>';
+    }
+
     return `
     <div style="padding:12px 16px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:10px;margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
@@ -3233,16 +3258,9 @@ async function loadAdminPlayers(container) {
           <div style="font-size:0.78rem;color:var(--text-secondary);">巅峰${p.peak_score} | ${p.game_rank}</div>
           <div style="margin-top:4px;">${positions.map(l => `<span class="pos-tag pos-tag-${l}">${l}</span>`).join(' ')}</div>
           <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">身价预估：${p.market_value}万 | ${new Date(p.created_at).toLocaleDateString('zh-CN')}</div>
-          ${shots.length ? `
-            <div class="review-screenshots">
-              ${shots.map(s => `
-                <div class="review-screenshot-wrap">
-                  <img src="${s.url}" class="review-screenshot-thumb" onclick="openImagePreview('${s.url}')" alt="${s.label}">
-                  <div class="review-screenshot-label">${s.label}</div>
-                </div>
-              `).join('')}
-            </div>
-          ` : '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">未提交截图</div>'}
+          <div class="review-screenshots-wrap" data-userid="${p.user_id}" data-status="${p.status}">
+            ${screenshotHtml}
+          </div>
         </div>
         <div style="white-space:nowrap;">
           ${p.status === 'pending' ? `
@@ -3271,7 +3289,7 @@ async function loadAdminPlayers(container) {
   if (approved.length > 0) {
     html += `
       <div style="margin-top:16px;">
-        <div onclick="toggleReviewSection(this,'approved-list')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.15);border-radius:8px;cursor:pointer;user-select:none;">
+        <div onclick="toggleReviewSection(this,'approved-list',[${approved.map(p => `'${p.user_id}'`).join(',')}])" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.15);border-radius:8px;cursor:pointer;user-select:none;">
           <div style="display:flex;align-items:center;gap:8px;">
             <span style="font-size:0.85rem;font-weight:700;color:var(--success);">已通过</span>
             <span style="font-size:0.75rem;color:var(--text-muted);">${approved.length} 条</span>
@@ -3289,7 +3307,7 @@ async function loadAdminPlayers(container) {
   if (rejected.length > 0) {
     html += `
       <div style="margin-top:12px;">
-        <div onclick="toggleReviewSection(this,'rejected-list')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:8px;cursor:pointer;user-select:none;">
+        <div onclick="toggleReviewSection(this,'rejected-list',[${rejected.map(p => `'${p.user_id}'`).join(',')}])" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:8px;cursor:pointer;user-select:none;">
           <div style="display:flex;align-items:center;gap:8px;">
             <span style="font-size:0.85rem;font-weight:700;color:var(--danger);">已拒绝</span>
             <span style="font-size:0.75rem;color:var(--text-muted);">${rejected.length} 条</span>
@@ -3308,14 +3326,54 @@ async function loadAdminPlayers(container) {
   }
 
   container.innerHTML = html;
+
+  // 待审核：自动加载截图
+  if (pending.length > 0) {
+    loadReviewScreenshots(pending.map(p => p.user_id));
+  }
 }
 
-function toggleReviewSection(header, listId) {
+// 批量加载选手截图
+async function loadReviewScreenshots(userIds) {
+  const needLoad = userIds.filter(id => !window._reviewScreenshots[id]);
+  if (needLoad.length === 0) return;
+  try {
+    const data = await api('/api/admin/player-screenshots?ids=' + needLoad.join(','));
+    (data.screenshots || []).forEach(s => {
+      window._reviewScreenshots[s.user_id] = s;
+    });
+  } catch(e) {}
+  // 刷新DOM中的截图区域
+  document.querySelectorAll('.review-screenshots-wrap').forEach(el => {
+    const uid = el.dataset.userid;
+    const ss = window._reviewScreenshots[uid];
+    if (!ss) return;
+    const shots = [];
+    if (ss.screenshot_url) shots.push({ url: ss.screenshot_url, label: '巅峰分截图' });
+    if (ss.screenshot_url2) shots.push({ url: ss.screenshot_url2, label: '段位截图' });
+    el.innerHTML = shots.length ? `
+      <div class="review-screenshots">
+        ${shots.map(s => `
+          <div class="review-screenshot-wrap">
+            <img src="${s.url}" class="review-screenshot-thumb" onclick="openImagePreview('${s.url}')" alt="${s.label}">
+            <div class="review-screenshot-label">${s.label}</div>
+          </div>
+        `).join('')}
+      </div>
+    ` : '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">未提交截图</div>';
+  });
+}
+
+function toggleReviewSection(header, listId, userIds) {
   const list = document.getElementById(listId);
   const icon = header.querySelector('.review-toggle-icon');
   if (list.style.display === 'none') {
     list.style.display = 'block';
     icon.style.transform = 'rotate(180deg)';
+    // 展开时加载截图
+    if (userIds && userIds.length > 0) {
+      loadReviewScreenshots(userIds);
+    }
   } else {
     list.style.display = 'none';
     icon.style.transform = 'rotate(0deg)';
@@ -3326,6 +3384,8 @@ async function reviewPlayer(userId, status) {
   try {
     await api('/api/admin/player-review', { method:'POST', body: JSON.stringify({ userId, status }) });
     showToast(status === 'approved' ? '已通过审核' : '已拒绝', 'success');
+    // 清除截图缓存，下次加载时重新获取
+    delete window._reviewScreenshots[userId];
     await loadAdminSubTab();
   } catch(e) { showToast(e.message, 'error'); }
 }

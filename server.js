@@ -1845,12 +1845,32 @@ app.get('/api/player/status', authMiddleware, async (req, res) => {
 // 管理员：获取所有认证申请
 app.get('/api/admin/players', authMiddleware, adminMiddleware, async (req, res) => {
   try {
+    // 明确排除截图字段，避免一次返回几MB base64数据
     const result = await pool.query(
-      `SELECT p.*, u.username, u.coachName FROM players p
+      `SELECT p.id, p.user_id, p.game_id, p.positions, p.peak_score, p.game_rank,
+              p.status, p.market_value, p.grade, p.club_id, p.created_at, p.reviewed_at,
+              (p.screenshot_url IS NOT NULL OR p.screenshot_url2 IS NOT NULL) AS has_screenshots,
+              u.username, u.coachName
+       FROM players p
        LEFT JOIN users u ON p.user_id = u.id
        ORDER BY p.status ASC, p.created_at DESC`
     );
     res.json({ players: result.rows });
+  } catch(e) { res.status(500).json({ message: '查询失败' }); }
+});
+
+// 管理员：获取指定选手的截图（按需加载）
+app.get('/api/admin/player-screenshots', authMiddleware, adminMiddleware, async (req, res) => {
+  const { ids } = req.query; // 逗号分隔的 user_id
+  if (!ids) return res.status(400).json({ message: '请提供选手ID' });
+  try {
+    const idList = ids.split(',').map(s => s.trim()).filter(Boolean);
+    if (idList.length === 0 || idList.length > 20) return res.status(400).json({ message: '参数错误' });
+    const result = await pool.query(
+      `SELECT user_id, screenshot_url, screenshot_url2 FROM players WHERE user_id = ANY($1)`,
+      [idList]
+    );
+    res.json({ screenshots: result.rows });
   } catch(e) { res.status(500).json({ message: '查询失败' }); }
 });
 
