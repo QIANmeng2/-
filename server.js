@@ -1953,6 +1953,18 @@ app.post('/api/club/create', authMiddleware, adminMiddleware, async (req, res) =
   } catch(e) { res.status(500).json({ message: '创建失败' }); }
 });
 
+// 管理员修改俱乐部名称
+app.put('/api/admin/clubs/:id', authMiddleware, adminMiddleware, async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ message: '俱乐部名称不能为空' });
+  try {
+    const existing = await pool.query('SELECT * FROM clubs WHERE name = $1 AND id != $2', [name.trim(), req.params.id]);
+    if (existing.rows.length > 0) return res.status(400).json({ message: '俱乐部名称已存在' });
+    await pool.query('UPDATE clubs SET name = $1 WHERE id = $2', [name.trim(), req.params.id]);
+    res.json({ success: true });
+  } catch(e) { res.status(500).json({ message: '修改失败' }); }
+});
+
 // 获取所有俱乐部列表
 app.get('/api/clubs', authMiddleware, async (req, res) => {
   try {

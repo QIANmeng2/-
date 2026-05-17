@@ -3428,15 +3428,26 @@ async function loadAdminClubs(container) {
   container.innerHTML = `
     <button class="btn btn-primary btn-sm" onclick="openCreateClubModal()" style="margin-bottom:12px;">创建俱乐部</button>
     ${clubs.map(c => `
-      <div class="club-card" onclick="renderClubDetail(${c.id})" style="cursor:pointer;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:10px;margin-bottom:8px;cursor:pointer;" onclick="renderClubDetail(${c.id})">
         <div>
           <span style="font-weight:600;color:var(--text-primary);">${c.name}</span>
           <span style="font-size:0.72rem;color:var(--text-muted);margin-left:8px;">${c.member_count || 0}名队员</span>
+          <div style="font-size:0.78rem;color:var(--text-secondary);margin-top:2px;">老板：${c.owner_name || c.owner_username || c.owner_id}</div>
         </div>
-        <div style="font-size:0.78rem;color:var(--text-secondary);">老板：${c.owner_name || c.owner_username || c.owner_id}</div>
+        <button class="btn btn-xs btn-ghost" onclick="event.stopPropagation();editClubName(${c.id},'${c.name.replace(/'/g,"\\'")}')" style="flex-shrink:0;">改名</button>
       </div>
     `).join('')}
   `;
+}
+
+async function editClubName(clubId, currentName) {
+  const result = await dialogPrompt({ title: '修改俱乐部名称', body: '', placeholder: currentName, defaultValue: currentName, confirmText: '保存', cancelText: '取消' });
+  if (!result) return;
+  try {
+    await api('/api/admin/clubs/' + clubId, { method:'PUT', body: JSON.stringify({ name: result }) });
+    showToast('名称已更新', 'success');
+    loadAdminSubTab();
+  } catch(e) { showToast(e.message, 'error'); }
 }
 
 async function adminDeleteSchedule(id) {
