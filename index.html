@@ -1841,6 +1841,47 @@
       text-align: left;
     }
 
+    /* 审核截图 */
+    .review-screenshots {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+    .review-screenshot-thumb {
+      width: 72px;
+      height: 72px;
+      border-radius: 8px;
+      object-fit: cover;
+      border: 1px solid rgba(255,255,255,.1);
+      cursor: pointer;
+      transition: transform .2s, box-shadow .2s;
+    }
+    .review-screenshot-thumb:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 12px rgba(123,47,253,.3);
+      border-color: rgba(123,47,253,.5);
+    }
+    .review-screenshot-label {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      text-align: center;
+      margin-top: 2px;
+    }
+    .review-screenshot-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* 图片预览弹窗 */
+    #imagePreviewModal img {
+      max-width: 90vw;
+      max-height: 80vh;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.6);
+    }
+
     /* 空状态 */
     .empty-state {
       text-align: center;
@@ -5454,16 +5495,29 @@ async function loadAdminPlayers(container) {
     ${players.map(p => {
       let positions = [];
       try { positions = JSON.parse(p.positions || '[]'); } catch(e) {}
+      const shots = [];
+      if (p.screenshot_url) shots.push({ url: p.screenshot_url, label: '巅峰分截图' });
+      if (p.screenshot_url2) shots.push({ url: p.screenshot_url2, label: '段位截图' });
       return `
       <div style="padding:12px 16px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:10px;margin-bottom:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-          <div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+          <div style="flex:1;min-width:200px;">
             <div style="font-weight:600;color:var(--text-primary);">${p.game_id} <span style="font-size:0.72rem;color:var(--text-muted);">(${p.coachname || p.username})</span></div>
             <div style="font-size:0.78rem;color:var(--text-secondary);">巅峰${p.peak_score} | ${p.game_rank}</div>
             <div style="margin-top:4px;">${positions.map(l => `<span class="pos-tag pos-tag-${l}">${l}</span>`).join(' ')}</div>
             <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">身价预估：${p.market_value}万 | ${new Date(p.created_at).toLocaleDateString('zh-CN')}</div>
+            ${shots.length ? `
+              <div class="review-screenshots">
+                ${shots.map(s => `
+                  <div class="review-screenshot-wrap">
+                    <img src="${s.url}" class="review-screenshot-thumb" onclick="openImagePreview('${s.url}')" alt="${s.label}">
+                    <div class="review-screenshot-label">${s.label}</div>
+                  </div>
+                `).join('')}
+              </div>
+            ` : '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">未提交截图</div>'}
           </div>
-          <div>
+          <div style="white-space:nowrap;">
             ${p.status === 'pending' ? `
               <button class="btn btn-sm" style="background:rgba(16,185,129,.1);color:#10b981;border:1px solid rgba(16,185,129,.3);" onclick="reviewPlayer('${p.user_id}','approved')">通过</button>
               <button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3);margin-left:4px;" onclick="reviewPlayer('${p.user_id}','rejected')">拒绝</button>
@@ -5524,6 +5578,34 @@ async function adminDeleteUser(id) {
   await api(`/api/admin/users/${id}`, { method:'DELETE' });
   showToast('已删除','info');
   loadAdminSubTab();
+}
+
+// 图片预览弹窗
+function openImagePreview(url) {
+  let overlay = document.getElementById('imagePreviewModal');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'imagePreviewModal';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;max-width:95vw;max-height:95vh;">
+        <img id="imagePreviewImg" src="" alt="截图预览" style="max-width:90vw;max-height:80vh;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.6);object-fit:contain;">
+        <button class="btn btn-sm" onclick="closeImagePreview()" style="margin-top:16px;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);">关闭预览</button>
+      </div>
+    `;
+    overlay.onclick = function(e) {
+      if (e.target === overlay) closeImagePreview();
+    };
+    document.body.appendChild(overlay);
+  }
+  document.getElementById('imagePreviewImg').src = url;
+  overlay.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeImagePreview() {
+  const overlay = document.getElementById('imagePreviewModal');
+  if (overlay) overlay.style.display = 'none';
+  document.body.style.overflow = '';
 }
 
 // ---------- 使用说明 ----------
