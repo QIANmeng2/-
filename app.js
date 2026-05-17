@@ -396,16 +396,17 @@ async function loadAdminTeamPicker(compId) {
 async function loadCompRegUI(compId, c) {
   const container = document.getElementById('compRegActions');
   if (!container) return;
-  // 未登录
   if (!currentUser) {
     container.innerHTML = '<div style="padding:12px;background:rgba(255,255,255,.03);border-radius:8px;color:var(--text-muted);font-size:0.82rem;text-align:center;">登录后可报名参赛</div>';
     return;
   }
+  const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
   let myTeam = null;
   try { const td = await api('/api/teams/mine'); myTeam = td.team; } catch(e) {}
   const isCaptain = myTeam && myTeam.captainId === currentUser.id;
   const canRegister = c.comp_status === 'open' || c.comp_status === 'upcoming';
-  // 检查当前用户报名状态
+  const statusMap = { upcoming:'即将开始', open:'报名中', locked:'已满员', live:'比赛中', review:'审核中', finished:'已结束' };
+  const statusCN = statusMap[c.comp_status || c.status] || '未知';
   let myReg = null;
   try {
     const data = await api('/api/competitions/'+compId+'/my-reg');
@@ -413,23 +414,43 @@ async function loadCompRegUI(compId, c) {
     myReg = allRegs.find(r => r.player_user_id === currentUser.id);
   } catch(e) {}
 
+  // 已报名状态
   if (myReg && myReg.status === 'confirmed') {
     container.innerHTML = '<div style="padding:12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:8px;"><span style="color:#10b981;font-weight:600;">已确认入场</span><span style="color:var(--text-muted);margin-left:8px;font-size:0.78rem;">'+myReg.lane+' &middot; 入场费：'+myReg.entry_fee+'梦币</span></div>';
   } else if (myReg && myReg.status === 'reserved') {
     container.innerHTML = '<div style="padding:12px;background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.2);border-radius:8px;"><span style="color:var(--warning);font-weight:600;">待确认入场</span><span style="color:var(--text-muted);margin-left:8px;">'+myReg.lane+'</span><div style="display:flex;gap:8px;margin-top:8px;"><button class="btn btn-sm" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:#10b981;" onclick="confirmCompetitionEntry(\''+compId+'\',500)">500梦币</button><button class="btn btn-sm" style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);color:#f59e0b;" onclick="confirmCompetitionEntry(\''+compId+'\',1000)">1000梦币</button><button class="btn btn-sm" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#ef4444;" onclick="confirmCompetitionEntry(\''+compId+'\',2000)">2000梦币</button></div></div>';
-  } else if (canRegister && isCaptain && myTeam && (myTeam.memberCount >= 5 || (currentUser && currentUser.id === 'mp4hmya7ad15v6'))) {
+  }
+  // 不可报名：状态不是open/upcoming
+  else if (!canRegister) {
+    container.innerHTML = '<div style="padding:12px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:8px;color:var(--text-muted);font-size:0.82rem;">当前赛事状态为 <b style="color:var(--text-primary);">'+statusCN+'</b>，不可报名（仅"即将开始"和"报名中"可报名）</div>';
+  }
+  // 可报名：队长、队伍人数>=5（管理员不限）
+  else if (isCaptain && myTeam && (myTeam.memberCount >= 5 || isAdmin)) {
     container.innerHTML = '<button class="btn btn-primary btn-sm" onclick="openTeamPlayerSelect(\''+compId+'\',\''+myTeam.id+'\',\''+myTeam.name.replace(/'/g,"\\'")+'\')">选择队员报名参赛</button>';
-  } else if (canRegister && !myTeam && currentUser && currentUser.id === 'mp4hmya7ad15v6') {
+  }
+  // 可报名：队长、但队伍人数不足5人且非管理员
+  else if (isCaptain && myTeam && myTeam.memberCount < 5) {
+    container.innerHTML = '<div style="padding:12px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:8px;color:var(--text-muted);font-size:0.8rem;">您的队伍 <b style="color:var(--text-primary);">'+myTeam.name+'</b> 人数不足5人（当前'+myTeam.memberCount+'人），无法报名</div>';
+  }
+  // 管理员无队伍 → 显示全部队伍选择器
+  else if (!myTeam && isAdmin) {
     loadAdminTeamPicker(compId);
     return;
-  } else if (canRegister && !myTeam) {
-    container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">需要加入队伍后由队长报名参赛</p>';
-  } else if (canRegister && myTeam && !isCaptain) {
-    container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">等待队长选择队员报名</p>';
-  } else if (canRegister) {
-    container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">当前状态不可报名</p>';
   }
-  // 状态提示
+  // 普通用户无队伍
+  else if (!myTeam) {
+    container.innerHTML = '<div style="padding:12px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:8px;color:var(--text-muted);font-size:0.8rem;">您尚未加入任何队伍，需队长操作报名<br><span style="font-size:0.72rem;">（俱乐部成员请联系俱乐部老板操作）</span></div>';
+  }
+  // 有队伍但不是队长
+  else if (myTeam && !isCaptain) {
+    container.innerHTML = '<div style="padding:12px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:8px;color:var(--text-muted);font-size:0.8rem;">等待队长 <b style="color:var(--text-primary);">（队伍：'+myTeam.name+'）</b> 选择队员报名</div>';
+  }
+  // 完全未知情况
+  else {
+    container.innerHTML = '<div style="padding:12px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:8px;color:var(--text-muted);font-size:0.8rem;">当前无法报名</div>';
+  }
+
+  // 状态提示（叠加显示）
   if (c.comp_status === 'live') {
     container.innerHTML += '<div style="margin-top:8px;padding:10px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:6px;color:var(--danger);font-size:0.78rem;">比赛进行中，开赛20分钟后可提交结果</div>';
   } else if (c.comp_status === 'review') {
