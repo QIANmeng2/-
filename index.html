@@ -3352,10 +3352,35 @@ async function loadMarketPlayers(container) {
   const data = await api('/api/market/players');
   const players = data.players || [];
   const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
+
+  // 检测是否为俱乐部老板并获取余额
+  let myClubs = [];
+  let balanceHtml = '';
+  if (currentUser) {
+    try {
+      const clubsData = await api('/api/clubs');
+      myClubs = (clubsData.clubs || []).filter(c => c.owner_id === currentUser.id);
+      window._myClubs = myClubs;
+      if (myClubs.length > 0) {
+        const coins = currentUser.dream_coins || 0;
+        const wan = (coins / 10000).toFixed(1);
+        balanceHtml = `
+          <div class="market-balance-bar">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              <span>我的余额：<strong style="color:#fbbf24;">${wan}万</strong> 梦币</span>
+            </div>
+            <span style="font-size:0.7rem;color:var(--text-muted);">所属俱乐部：${myClubs.map(c => c.name).join('、')}</span>
+          </div>`;
+      }
+    } catch(e) { window._myClubs = []; }
+  }
+
   container.innerHTML = `
     <div class="card">
       <h3>转会市场</h3>
       <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;">俱乐部老板可联系选手签约</p>
+      ${balanceHtml}
       <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
         <button class="btn btn-sm ${marketSort==='time'?'btn-primary':'btn-secondary'}" onclick="changeMarketSort('time')">最新</button>
         <button class="btn btn-sm ${marketSort==='value'?'btn-primary':'btn-secondary'}" onclick="changeMarketSort('value')">按身价</button>
@@ -3379,6 +3404,8 @@ let marketSort = 'time';
 function renderMarketPlayerList() {
   const container = document.getElementById('marketPlayerList');
   const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
+  const myClubs = window._myClubs || [];
+  const isBoss = myClubs.length > 0;
   let list = window._marketPlayers || [];
   const maxVal = document.getElementById('marketMaxValue')?.value;
   if (maxVal) list = list.filter(p => p.market_value <= parseInt(maxVal));
@@ -3389,8 +3416,10 @@ function renderMarketPlayerList() {
   container.innerHTML = list.map(p => {
     let positions = [];
     try { positions = JSON.parse(p.positions || '[]'); } catch(e) {}
+    const isFree = !p.club_id;
+    const canBuy = isBoss && isFree && (isAdmin || myClubs.some(c => c.owner_id === currentUser.id));
     return `
-    <div class="market-player-card">
+    <div class="market-player-card" onclick="openPlayerDetailModal('${p.user_id}')">
       <div class="market-player-info">
         <div class="market-player-name">${p.game_id} <span style="font-size:0.72rem;color:var(--text-muted);">(${p.coachname || p.username})</span></div>
         <div class="market-player-detail">巅峰${p.peak_score} | ${p.game_rank}</div>
@@ -3403,6 +3432,7 @@ function renderMarketPlayerList() {
         ${p.grade ? `<span class="grade-badge grade-${p.grade.toLowerCase()}">${p.grade}级</span>` : ''}
         <span style="font-size:1.2rem;font-weight:700;color:var(--warning);">${p.market_value}万</span>
         <span style="font-size:0.7rem;color:var(--text-muted);">${p.club_name ? '已签约: '+p.club_name : '自由选手'}</span>
+        ${canBuy ? `<button class="market-buy-btn" onclick="event.stopPropagation();buyPlayer('${p.user_id}',${p.market_value})">采买</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -3422,13 +3452,194 @@ posTagStyle.textContent = `
   .grade-a { color:#a78bfa;background:rgba(123,47,253,.12);border:1px solid rgba(123,47,253,.3); }
   .grade-b { color:#60a5fa;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3); }
   .grade-c { color:var(--text-muted);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1); }
-  .market-player-card { display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px;margin-bottom:8px;gap:12px; }
+  .market-player-card { display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px;margin-bottom:8px;gap:12px;cursor:pointer;transition:all .2s; }
+  .market-player-card:hover { background:rgba(255,255,255,.04);border-color:rgba(79,70,229,.2);box-shadow:0 4px 20px rgba(79,70,229,.08); }
   .market-player-info { flex:1;min-width:0; }
   .market-player-name { font-size:0.92rem;font-weight:600;color:var(--text-primary);margin-bottom:2px; }
   .market-player-detail { font-size:0.78rem;color:var(--text-secondary); }
-  .market-player-value { text-align:right;flex-shrink:0; }
+  .market-player-value { text-align:right;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:4px; }
+  .market-balance-bar { display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:linear-gradient(135deg,rgba(245,158,11,.08) 0%,rgba(245,158,11,.03) 100%);border:1px solid rgba(245,158,11,.15);border-radius:8px;margin-bottom:16px;flex-wrap:wrap;gap:6px; }
+  .market-buy-btn { padding:4px 14px;border-radius:6px;border:none;background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:#fff;font-size:0.75rem;font-weight:700;cursor:pointer;transition:all .2s;margin-top:4px; }
+  .market-buy-btn:hover { transform:translateY(-1px);box-shadow:0 4px 12px rgba(16,185,129,.3); }
+  .market-buy-btn:disabled { opacity:.5;cursor:not-allowed;transform:none;box-shadow:none; }
+  .player-detail-section { margin-bottom:14px; }
+  .player-detail-section h4 { font-size:0.82rem;color:var(--text-secondary);margin-bottom:8px;font-weight:600; }
+  .player-detail-grid { display:grid;grid-template-columns:repeat(2,1fr);gap:8px; }
+  .player-detail-item { background:rgba(255,255,255,.03);padding:8px 10px;border-radius:6px;font-size:0.8rem; }
+  .player-detail-item label { color:var(--text-muted);font-size:0.7rem;display:block;margin-bottom:2px; }
+  .player-detail-item span { color:var(--text-primary);font-weight:600; }
+  .lane-stat-bar { display:flex;align-items:center;gap:8px;font-size:0.78rem;margin-bottom:4px; }
+  .lane-stat-bar .lane-name { width:48px;color:var(--text-muted); }
+  .lane-stat-bar .lane-bar { flex:1;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden; }
+  .lane-stat-bar .lane-fill { height:100%;background:var(--gradient-primary);border-radius:3px; }
+  .lane-stat-bar .lane-val { width:32px;text-align:right;color:var(--text-secondary); }
 `;
 document.head.appendChild(posTagStyle);
+
+// 选手详情弹窗
+async function openPlayerDetailModal(userId) {
+  const overlay = document.createElement('div');
+  overlay.id = 'playerDetailModal';
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:520px;" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h3 style="margin:0;">选手名片</h3>
+        <button class="btn btn-ghost btn-sm" onclick="closePlayerDetailModal()" style="padding:4px 10px;">关闭</button>
+      </div>
+      <div id="playerDetailContent"><div class="loading-spinner"></div></div>
+    </div>`;
+  overlay.onclick = (e) => { if (e.target === overlay) closePlayerDetailModal(); };
+  document.body.appendChild(overlay);
+  document.body.style.overflow = 'hidden';
+
+  try {
+    // 从转会市场缓存中获取选手数据
+    const mp = (window._marketPlayers || []).find(p => p.user_id === userId) || {};
+    let positions = [];
+    try { positions = JSON.parse(mp.positions || '[]'); } catch(e) {}
+
+    const userRes = await api('/api/users/' + userId);
+    const u = userRes.user || {};
+    let laneStats = {};
+    try { laneStats = JSON.parse(u.laneStats || '{}'); } catch(e) {}
+    const maxLaneVal = Math.max(1, ...Object.values(laneStats).map(v => parseInt(v) || 0));
+
+    const detailHtml = `
+      <div class="player-detail-section">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <div style="width:48px;height:48px;border-radius:50%;background:var(--gradient-primary);display:flex;align-items:center;justify-content:center;font-size:1.2rem;font-weight:700;color:#fff;">${(u.coachName || u.username || '?').charAt(0)}</div>
+          <div>
+            <div style="font-size:1rem;font-weight:700;color:var(--text-primary);">${u.gameId || '未设置游戏ID'} <span style="font-size:0.75rem;color:var(--text-muted);font-weight:400;">(${u.coachName || u.username})</span></div>
+            <div style="font-size:0.78rem;color:var(--text-secondary);">${u.gameRank || '星耀'} | 巅峰${u.peakScore || 0}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="player-detail-section">
+        <h4>游戏信息</h4>
+        <div class="player-detail-grid">
+          <div class="player-detail-item"><label>游戏ID</label><span>${u.gameId || '-'}</span></div>
+          <div class="player-detail-item"><label>游戏大区</label><span>${u.gameServer || '-'}</span></div>
+          <div class="player-detail-item"><label>当前段位</label><span>${u.gameRank || '-'}</span></div>
+          <div class="player-detail-item"><label>巅峰分数</label><span>${u.peakScore || 0}</span></div>
+          <div class="player-detail-item"><label>身价</label><span style="color:var(--warning);">${mp.market_value || '-'}万</span></div>
+          <div class="player-detail-item"><label>等级</label><span>${mp.grade || '-'}</span></div>
+        </div>
+      </div>
+
+      <div class="player-detail-section">
+        <h4>擅长位置</h4>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${positions.length ? positions.map(l => `<span class="pos-tag pos-tag-${l}">${l}</span>`).join('') : '<span style="color:var(--text-muted);font-size:0.8rem;">未设置</span>'}
+        </div>
+      </div>
+
+      <div class="player-detail-section">
+        <h4>分路胜场</h4>
+        ${['对抗路','打野','中路','发育路','游走'].map(lane => {
+          const val = parseInt(laneStats[lane]) || 0;
+          const pct = maxLaneVal > 0 ? Math.round(val / maxLaneVal * 100) : 0;
+          return `<div class="lane-stat-bar">
+            <span class="lane-name">${lane}</span>
+            <div class="lane-bar"><div class="lane-fill" style="width:${pct}%"></div></div>
+            <span class="lane-val">${val}</span>
+          </div>`;
+        }).join('')}
+      </div>
+
+      ${u.heroPool ? `<div class="player-detail-section"><h4>擅长英雄</h4><div style="font-size:0.85rem;color:var(--text-primary);line-height:1.6;">${u.heroPool}</div></div>` : ''}
+      ${u.bio ? `<div class="player-detail-section"><h4>个人简介</h4><div style="font-size:0.82rem;color:var(--text-secondary);line-height:1.6;">${u.bio}</div></div>` : ''}
+
+      ${mp.screenshot_url || mp.screenshot_url2 ? `
+      <div class="player-detail-section">
+        <h4>审核截图</h4>
+        <div class="review-screenshots">
+          ${mp.screenshot_url ? `<div class="review-screenshot-wrap"><img src="${mp.screenshot_url}" class="review-screenshot-thumb" onclick="openImagePreview('${mp.screenshot_url}')"><div class="review-screenshot-label">巅峰分截图</div></div>` : ''}
+          ${mp.screenshot_url2 ? `<div class="review-screenshot-wrap"><img src="${mp.screenshot_url2}" class="review-screenshot-thumb" onclick="openImagePreview('${mp.screenshot_url2}')"><div class="review-screenshot-label">段位截图</div></div>` : ''}
+        </div>
+      </div>` : ''}
+
+      <div class="player-detail-section">
+        <h4>联系方式</h4>
+        <div class="player-detail-item" style="display:flex;align-items:center;gap:8px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <span style="color:#10b981;font-weight:700;">${u.wechat || '未填写'}</span>
+        </div>
+      </div>
+    `;
+    document.getElementById('playerDetailContent').innerHTML = detailHtml;
+  } catch(e) {
+    document.getElementById('playerDetailContent').innerHTML = `<p style="color:var(--danger);">加载失败：${e.message}</p>`;
+  }
+}
+
+function closePlayerDetailModal() {
+  const el = document.getElementById('playerDetailModal');
+  if (el) el.remove();
+  document.body.style.overflow = '';
+}
+
+// 采买选手
+async function buyPlayer(playerUserId, marketValue) {
+  const myClubs = window._myClubs || [];
+  if (!myClubs.length) { showToast('你不是俱乐部老板','error'); return; }
+
+  let clubId;
+  if (myClubs.length === 1) {
+    clubId = myClubs[0].id;
+  } else {
+    clubId = await new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.innerHTML = `
+        <div class="modal" style="max-width:400px;" onclick="event.stopPropagation()">
+          <h3 style="margin-bottom:16px;">选择俱乐部</h3>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+            ${myClubs.map(c => `
+              <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').dataset.clubId='${c.id}';this.closest('.modal-overlay').click();" style="justify-content:flex-start;">
+                <span style="font-weight:700;">${c.name}</span>
+                <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted);">${c.member_count || 0}人</span>
+              </button>
+            `).join('')}
+          </div>
+          <button class="btn btn-ghost" onclick="this.closest('.modal-overlay').dataset.clubId='';this.closest('.modal-overlay').click();" style="width:100%;">取消</button>
+        </div>`;
+      overlay.onclick = (e) => {
+        if (e.target === overlay) {
+          const cid = overlay.dataset.clubId;
+          overlay.remove();
+          resolve(cid || null);
+        }
+      };
+      document.body.appendChild(overlay);
+    });
+    if (!clubId) return;
+  }
+
+  const coins = currentUser.dream_coins || 0;
+  const fee = marketValue * 10000;
+  if (coins < fee) {
+    showToast(`余额不足，签约需 ${marketValue}万梦币`, 'error');
+    return;
+  }
+
+  if (!confirm(`确认花费 ${marketValue}万梦币 签约该选手？\n签约后选手将加入你的俱乐部。`)) return;
+
+  try {
+    const res = await api('/api/club/sign', {
+      method: 'POST',
+      body: JSON.stringify({ playerUserId, clubId: parseInt(clubId) })
+    });
+    showToast(res.message || '签约成功！', 'success');
+    // 扣除本地余额显示
+    currentUser.dream_coins = (currentUser.dream_coins || 0) - fee;
+    // 刷新转会市场
+    await renderMarketPanel();
+  } catch(e) {
+    showToast(e.message || '签约失败', 'error');
+  }
+}
 
 // ==================== 俱乐部页面 ====================
 async function renderClubPanel() {

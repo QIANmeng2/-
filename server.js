@@ -785,7 +785,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
     const result = await pool.query('SELECT * FROM users WHERE id = $1', [req.userId]);
     if (result.rows.length === 0) return res.status(404).json({ message: '用户不存在' });
     const u = result.rows[0];
-    res.json({ user: { id: u.id, teamName: u.teamname, coachName: u.coachname, wechat: u.wechat, level: u.level, bio: u.bio, disabledDates: u.disableddates || [], gameId: u.gameid || '', gameServer: u.gameserver || '手Q区', gameRank: u.gamerank || '星耀', peakScore: u.peakscore || 0, laneStats: u.lanestats || '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}', heroPool: u.heropool || '' } });
+    res.json({ user: { id: u.id, teamName: u.teamname, coachName: u.coachname, wechat: u.wechat, level: u.level, bio: u.bio, disabledDates: u.disableddates || [], gameId: u.gameid || '', gameServer: u.gameserver || '手Q区', gameRank: u.gamerank || '星耀', peakScore: u.peakscore || 0, laneStats: u.lanestats || '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}', heroPool: u.heropool || '', dream_coins: u.dream_coins || 0 } });
   } catch (e) { res.status(500).json({ message: '获取失败' }); }
 });
 
@@ -817,10 +817,10 @@ app.get('/api/users/:id', authMiddleware, async (req, res) => {
     if (result.rows.length === 0) return res.status(404).json({ message: '用户不存在' });
     const u = result.rows[0];
     res.json({ user: {
-      id: u.id, teamName: u.teamname, coachName: u.coachname, level: u.level, bio: u.bio || '',
+      id: u.id, username: u.username, teamName: u.teamname, coachName: u.coachname, level: u.level, bio: u.bio || '',
       gameId: u.gameid || '', gameServer: u.gameserver || '手Q区', gameRank: u.gamerank || '星耀',
       peakScore: u.peakscore || 0, laneStats: u.lanestats || '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}',
-      heroPool: u.heropool || ''
+      heroPool: u.heropool || '', wechat: u.wechat || ''
     }});
   } catch (e) { res.status(500).json({ message: '获取失败' }); }
 });
