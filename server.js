@@ -1316,6 +1316,17 @@ app.post('/api/competitions/:id/cancel', authMiddleware, async (req, res) => {
   } catch(e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ message: '取消失败' }); } finally { client.release(); }
 });
 
+// 查询赛事结果（用于管理员审核）
+app.get('/api/competitions/:id/results', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM competition_results WHERE competition_id = $1 ORDER BY created_at DESC LIMIT 1',
+      [req.params.id]
+    );
+    res.json({ result: result.rows[0] || null });
+  } catch(e) { res.status(500).json({ message: '查询失败' }); }
+});
+
 // 提交赛后截图
 app.post('/api/competitions/:id/submit-result', authMiddleware, async (req, res) => {
   const { winner, screenshots, players } = req.body;
@@ -1981,6 +1992,45 @@ async function startServer() {
     console.log(`🚀 服务运行在端口 ${PORT}`);
   });
 
-  // 确认阶段超时检查：每分钟运行一次
+  // 赛事状态自动转换：每分钟检查
+  setInterval(async () => {
+    try {
+      const now = new Date();
+      // 即将开始的赛事 → 如果报名<10人，取消；否则进入 live
+      const upcoming = await pool.query("SELECT * FROM competitions WHERE comp_status IN ('upcoming','open','locked')");
+      for (const c of upcoming.rows) {
+        if (!c.start_time) continue;
+        const startAt = new Date(c.start_time);
+        if (startAt <= now) {
+          const regs = await pool.query("SELECT COUNT(*) FROM competition_registrations WHERE competition_id = $1 AND status = 'confirmed'", [c.id]);
+          const count = parseInt(regs.rows[0].count);
+          if (count < 10) {
+            // 取消赛事，退费
+            await pool.query("UPDATE competitions SET comp_status = 'cancelled' WHERE id = $1", [c.id]);
+            const paid = await pool.query("SELECT player_user_id, entry_fee FROM competition_registrations WHERE competition_id = $1 AND entry_fee > 0 AND status = 'confirmed'", [c.id]);
+            for (const p of paid.rows) {
+              await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id = $2', [p.entry_fee, p.player_user_id]);
+              await pool.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'refund','赛事报名不足10人取消退费')", [p.player_user_id, p.entry_fee]);
+            }
+            console.log(`[赛事] ${c.id} 报名不足10人，已取消并退费`);
+          } else {
+            await pool.query("UPDATE competitions SET comp_status = 'live' WHERE id = $1", [c.id]);
+            console.log(`[赛事] ${c.id} 已开始`);
+          }
+        }
+      }
+      // 开赛20分钟后的赛事 → 可上传截图
+      const live = await pool.query("SELECT * FROM competitions WHERE comp_status = 'live'");
+      for (const c of live.rows) {
+        if (!c.start_time) continue;
+        const startAt = new Date(c.start_time);
+        const reviewTime = new Date(startAt.getTime() + 20 * 60 * 1000);
+        if (now >= reviewTime) {
+          await pool.query("UPDATE competitions SET comp_status = 'review' WHERE id = $1", [c.id]);
+          console.log(`[赛事] ${c.id} 进入赛后审核阶段`);
+        }
+      }
+    } catch(e) { console.error('[赛事自动转换]', e.message); }
+  }, 60 * 1000);
 
 startServer();

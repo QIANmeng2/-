@@ -203,15 +203,21 @@ async function loadCompRegUI(compId, c) {
     }
   } catch(e) {}
   if (myReg && myReg.status === 'confirmed') {
-    container.innerHTML = '<div style="padding:12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:8px;"><span style="color:#10b981;font-weight:600;">&#x2705; 已确认入场</span><span style="color:var(--text-muted);margin-left:8px;font-size:0.78rem;">入场费：'+myReg.entry_fee+'梦币</span><button class="btn btn-xs btn-danger" onclick="cancelCompetitionEntry(\''+compId+'\')" style="margin-left:8px;">取消</button></div>';
+    container.innerHTML = '<div style="padding:12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:8px;"><span style="color:#10b981;font-weight:600;">&#x2705; 已确认入场</span><span style="color:var(--text-muted);margin-left:8px;font-size:0.78rem;">入场费：'+myReg.entry_fee+'梦币</span>'+'</div>';
   } else if (myReg && myReg.status === 'reserved') {
     container.innerHTML = '<div style="padding:12px;background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.2);border-radius:8px;"><span style="color:var(--warning);font-weight:600;">&#x23F3; 待确认入场</span><div style="display:flex;gap:8px;margin-top:8px;"><button class="btn btn-sm" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:#10b981;" onclick="confirmCompetitionEntry(\''+compId+'\',500)">500&#x1FA99;</button><button class="btn btn-sm" style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#f59e0b;" onclick="confirmCompetitionEntry(\''+compId+'\',1000)">1000&#x1FA99;</button><button class="btn btn-sm" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#ef4444;" onclick="confirmCompetitionEntry(\''+compId+'\',2000)">2000&#x1FA99;</button></div></div>';
   } else if (canRegister && isCaptain && myTeam && myTeam.memberCount >= 5) {
     container.innerHTML = '<button class="btn btn-primary btn-sm" onclick="registerTeamForCompetition(\''+compId+'\',\''+myTeam.id+'\')">代表【'+myTeam.name+'】报名参赛</button>';
   } else if (canRegister && !myTeam) {
     container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">你需要先加入或创建队伍才能参赛</p>';
-  } else if (!canRegister) {
-    container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">当前赛事不可报名</p>';
+  }
+  // 赛事状态显示
+  if (c.comp_status === 'live') {
+    container.innerHTML += '<div style="margin-top:8px;padding:10px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:6px;"><span style="color:var(--danger);font-size:0.78rem;">&#x26A0; 比赛进行中，开赛20分钟后可提交结果</span></div>';
+  } else if (c.comp_status === 'review') {
+    container.innerHTML += '<button class="btn btn-primary btn-sm" onclick="submitCompetitionResult(\''+compId+'\')" style="margin-top:8px;">&#x1F4F7; 提交比赛结果</button>';
+  } else if (c.comp_status === 'finished') {
+    container.innerHTML += '<div style="margin-top:8px;padding:10px;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.15);border-radius:6px;"><span style="color:var(--success);font-size:0.78rem;">&#x2705; 比赛已结束</span></div>';
   }
 }
 
@@ -237,6 +243,43 @@ async function cancelCompetitionEntry(compId) {
   try {
     await api('/api/competitions/'+compId+'/cancel', { method:'POST' });
     showToast('已取消入场','info');
+    document.querySelector('.comp-detail-overlay')?.remove();
+    loadCompetitionList();
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+// 赛后提交结果（截图+胜负）
+async function submitCompetitionResult(compId) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal modal-md" style="max-width:500px;">
+      <h3 style="margin-bottom:16px;">提交比赛结果</h3>
+      <div class="form-group"><label>胜负方</label>
+        <select id="subWinner" class="form-select"><option value="blue">蓝方胜利</option><option value="red">红方胜利</option></select>
+      </div>
+      <div class="form-group"><label>截图链接（可多个，逗号分隔）</label>
+        <input id="subScreenshots" class="form-input" placeholder="https://... , https://...">
+      </div>
+      <div class="form-group"><label>玩家数据（JSON格式）</label>
+        <textarea id="subPlayers" class="form-input" style="height:120px;font-size:0.72rem;" placeholder='[{"player_user_id":"mp...","team":"blue","lane":"对抗路","kda":"5/2/8","win":true}]'></textarea>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;">
+        <button class="btn btn-primary btn-sm" onclick="doSubmitCompResult('${compId}')">提交审核</button>
+        <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-overlay').remove()">取消</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+async function doSubmitCompResult(compId) {
+  const winner = document.getElementById('subWinner').value;
+  const screenshots = document.getElementById('subScreenshots').value.split(',').map(s=>s.trim()).filter(Boolean);
+  let players = [];
+  try { players = JSON.parse(document.getElementById('subPlayers').value); } catch(e) { showToast('玩家数据格式错误','error'); return; }
+  try {
+    await api('/api/competitions/'+compId+'/submit-result', { method:'POST', body: JSON.stringify({ winner, screenshots, players }) });
+    showToast('结果已提交，等待管理员审核','success');
+    document.querySelector('.modal-overlay')?.remove();
     document.querySelector('.comp-detail-overlay')?.remove();
     loadCompetitionList();
   } catch(e) { showToast(e.message,'error'); }
@@ -2142,15 +2185,21 @@ async function loadAdminCompList() {
     const data = await api('/api/competitions');
     const comps = data.competitions || [];
     if (!comps.length) { container.innerHTML = '<p style="color:var(--text-muted);">暂无赛事</p>'; return; }
-    container.innerHTML = comps.map(c => `
-      <div style="padding:12px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:8px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+    container.innerHTML = comps.map(c => {
+      const statusLabel = { upcoming:'未开始', open:'报名中', locked:'已满员', live:'比赛中', review:'待审核', finished:'已结束', cancelled:'已取消' }[c.comp_status] || '';
+      const statusColor = { review:'var(--warning)', live:'var(--danger)', finished:'var(--success)' }[c.comp_status] || 'var(--text-muted)';
+      return `
+      <div style="padding:12px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:8px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
         <div>
           <span style="font-weight:600;color:var(--text-primary);">${c.name}</span>
-          <span style="font-size:0.72rem;color:var(--text-muted);margin-left:8px;">${c.comp_status || c.status || ''}</span>
+          <span style="font-size:0.72rem;color:${statusColor};margin-left:8px;font-weight:600;">${statusLabel}</span>
         </div>
-        <button class="btn btn-xs btn-danger" onclick="adminDeleteCompetition('${c.id}')">删除</button>
-      </div>
-    `).join('');
+        <div style="display:flex;gap:6px;">
+          ${c.comp_status === 'review' ? '<button class="btn btn-xs btn-primary" onclick="adminReviewCompetition(\''+c.id+'\')">审核结算</button>' : ''}
+          <button class="btn btn-xs btn-danger" onclick="adminDeleteCompetition(\''+c.id+'\')">删除</button>
+        </div>
+      </div>`;
+    }).join('');
   } catch(e) { container.innerHTML = '<p style="color:var(--danger);">加载失败</p>'; }
 }
 async function openCreateCompetitionModal() {
@@ -2173,6 +2222,40 @@ async function adminDeleteCompetition(id) {
     showToast('已删除', 'info');
     loadAdminCompList();
   } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function adminReviewCompetition(compId) {
+  try {
+    const results = await api('/api/competitions/'+compId+'/results');
+    const r = results.result;
+    if (!r) { showToast('暂无待审核结果','info'); return; }
+    const winnerLabel = r.winner === 'blue' ? '蓝方胜' : '红方胜';
+    const players = r.player_data || [];
+    const screenshots = r.screenshot_urls || [];
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal modal-md" style="max-width:550px;">
+        <h3 style="margin-bottom:12px;">比赛结果审核</h3>
+        <p style="color:var(--warning);font-weight:600;">胜方：${winnerLabel}</p>
+        ${screenshots.length ? '<p style="font-size:0.78rem;">截图：'+screenshots.map((s,i)=>'<a href="'+s+'" target="_blank" style="color:var(--accent);">#'+(i+1)+'</a>').join(' ')+'</p>' : ''}
+        ${players.length ? '<div style="margin-top:8px;max-height:200px;overflow-y:auto;background:rgba(255,255,255,.02);padding:8px;border-radius:6px;"><table style="width:100%;font-size:0.72rem;">'+players.map(p=>'<tr><td style="padding:2px 4px;">'+(p.win?'&#x2705;':'&#x274C;')+'</td><td>'+p.lane+'</td><td>'+p.kda+'</td></tr>').join('')+'</table></div>' : ''}
+        <div style="margin-top:16px;display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" onclick="adminConfirmCompResult('${compId}')">&#x2705; 确认发放奖池</button>
+          <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-overlay').remove()">关闭</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+  } catch(e) { showToast(e.message,'error'); }
+}
+async function adminConfirmCompResult(compId) {
+  if (!await dialog({ title:'确认结算', body:'确定发放奖池梦币吗？此操作不可撤销。', confirmText:'确认发放', cancelText:'取消' })) return;
+  try {
+    const res = await api('/api/admin/competitions/'+compId+'/confirm-result', { method:'POST' });
+    showToast('奖池已发放！胜方'+res.winnerCount+'人','success');
+    document.querySelector('.modal-overlay')?.remove();
+    loadAdminCompList();
+  } catch(e) { showToast(e.message,'error'); }
 }
 
 async function loadAdminSchedules(container) {
