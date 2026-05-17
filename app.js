@@ -375,6 +375,24 @@ function compressImageToBase64(file, maxWidth, quality) {
 }
 
 // ==================== 赛事报名交互 ====================
+// 管理员无队伍时，从所有队伍中选一队报名
+async function loadAdminTeamPicker(compId) {
+  const container = document.getElementById('compRegActions');
+  if (!container) return;
+  try {
+    const data = await api('/api/admin/teams');
+    const teams = data.teams || [];
+    if (!teams.length) {
+      container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">暂无可用队伍，请先创建队伍</p>';
+      return;
+    }
+    container.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px;">管理员选择队伍报名</div>'+
+      teams.map(t => '<button class="btn btn-sm btn-ghost" style="display:block;width:100%;margin-bottom:6px;text-align:left;color:var(--text-primary);" onclick="openTeamPlayerSelect(\''+compId+'\',\''+t.id+'\',\''+(t.name||'').replace(/'/g,"\\'")+'\')">'+t.name+' ('+(t.memberCount||0)+'人)</button>').join('');
+  } catch(e) {
+    container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">加载队伍失败</p>';
+  }
+}
+
 async function loadCompRegUI(compId, c) {
   const container = document.getElementById('compRegActions');
   if (!container) return;
@@ -402,7 +420,8 @@ async function loadCompRegUI(compId, c) {
   } else if (canRegister && isCaptain && myTeam && (myTeam.memberCount >= 5 || (currentUser && currentUser.id === 'mp4hmya7ad15v6'))) {
     container.innerHTML = '<button class="btn btn-primary btn-sm" onclick="openTeamPlayerSelect(\''+compId+'\',\''+myTeam.id+'\',\''+myTeam.name.replace(/'/g,"\\'")+'\')">选择队员报名参赛</button>';
   } else if (canRegister && !myTeam && currentUser && currentUser.id === 'mp4hmya7ad15v6') {
-    container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">管理员请先加入一支队伍</p>';
+    loadAdminTeamPicker(compId);
+    return;
   } else if (canRegister && !myTeam) {
     container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">需要加入队伍后由队长报名参赛</p>';
   } else if (canRegister && myTeam && !isCaptain) {
