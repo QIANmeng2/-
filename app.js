@@ -141,7 +141,7 @@ async function renderCompetitionPanel() {
           常规赛事
         </button>
       </div>
-      <div id="competitionList"><div class="loading-spinner"></div></div>
+      <div id="competitionList"><div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div></div>
     </div>
   `;
   await loadCompetitionList();
@@ -391,7 +391,7 @@ async function renderAccountPanel(targetEl) {
       ${currentUser && currentUser.id === 'mp4hmya7ad15v6' ? '<button class="recruit-tab" id="coinTabAward" onclick="switchCoinTab(\'award\')">发放梦币</button>' : ''}
       ${currentUser && currentUser.id === 'mp4hmya7ad15v6' ? '<button class="recruit-tab" id="coinTabLog" onclick="switchCoinTab(\'log\')">全部流水</button>' : ''}
     </div>
-    <div id="coinSubContent"><div class="loading-spinner"></div></div>
+    <div id="coinSubContent"><div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div></div>
   `;
   currentCoinSubTab = 'history';
   await loadCoinSubTab();
@@ -521,7 +521,7 @@ async function handleAwardCoins(e) {
 // ==================== 转会市场 ====================
 async function renderMarketPanel() {
   const content = document.getElementById('tabContent');
-  content.innerHTML = '<div class="loading-spinner"></div>';
+  content.innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
   try {
     // 管理员或俱乐部老板跳过选手认证，直接进入转会市场
     const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
@@ -930,7 +930,7 @@ async function openPlayerDetailModal(userId) {
         <h3 style="margin:0;">选手名片</h3>
         <button class="btn btn-ghost btn-sm" onclick="closePlayerDetailModal()" style="padding:4px 10px;">关闭</button>
       </div>
-      <div id="playerDetailContent"><div class="loading-spinner"></div></div>
+      <div id="playerDetailContent"><div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div></div>
     </div>`;
   overlay.onclick = (e) => { if (e.target === overlay) closePlayerDetailModal(); };
   document.body.appendChild(overlay);
@@ -1129,7 +1129,7 @@ async function buyPlayer(playerUserId, marketValue) {
 // ==================== 俱乐部页面 ====================
 async function renderClubPanel() {
   const content = document.getElementById('tabContent');
-  content.innerHTML = '<div class="loading-spinner"></div>';
+  content.innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
   const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
   try {
     const clubsData = await api('/api/clubs');
@@ -1183,7 +1183,7 @@ async function renderClubPanel() {
 
 async function renderClubDetail(clubId) {
   const content = document.getElementById('tabContent');
-  content.innerHTML = '<div class="loading-spinner"></div>';
+  content.innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
   const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
   try {
     const data = await api('/api/club/' + clubId);
@@ -1528,7 +1528,7 @@ async function switchTab(tab) {
     else if (tab === 'team') cacheStore.delete('/api/teams/mine');
     else if (tab === 'profile') cacheStore.delete('/api/schedules/mine');
   const content = document.getElementById('tabContent');
-  content.innerHTML = '<div class="loading-spinner"></div>';
+  content.innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
   try {
     if (tab === 'public') await loadPublicSchedules();
     else if (tab === 'profile') await renderProfileCenter();
@@ -1566,7 +1566,7 @@ async function loadRecruitHall() {
       </div>
       ${currentUser ? '<button class="btn btn-primary btn-sm" onclick="openCreateRecruitModal()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" style="margin-right:4px;vertical-align:middle;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>新建招募</button>' : ''}
     </div>
-    <div id="recruitListContainer"><div class="loading-spinner"></div></div>
+    <div id="recruitListContainer"><div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div></div>
   `;
   await loadRecruitList();
 }
@@ -1576,7 +1576,7 @@ async function switchRecruitSubTab(sub) {
   cacheStore.delete('/api/recruitment/active');
   cacheStore.delete('/api/recruitment/full');
   document.querySelectorAll('.recruit-tab').forEach(t => t.classList.toggle('active', t.textContent.includes(sub==='active'?'招募中':'已满')));
-  document.getElementById('recruitListContainer').innerHTML = '<div class="loading-spinner"></div>';
+  document.getElementById('recruitListContainer').innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
   await loadRecruitList();
 }
 
@@ -2383,7 +2383,7 @@ async function renderProfileCenter() {
           我的账户
         </button>
       </div>
-      <div id="profileCenterContent" style="padding:20px;"><div class="loading-spinner"></div></div>
+      <div id="profileCenterContent" style="padding:20px;"><div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div></div>
     </div>
   `;
   await loadProfileCenterTab();
@@ -2545,7 +2545,7 @@ async function handleUpdateGameProfile(e) {
 
 async function renderTeamPanel() {
   const content = document.getElementById('tabContent');
-  content.innerHTML = '<div class="loading-spinner"></div>';
+  content.innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
   try {
     const data = await api('/api/teams/mine', { skipCache: true });
     renderMyTeam(data.team);
@@ -2639,7 +2639,7 @@ function renderMyTeam(team) {
 async function renderTeamList() {
   const container = document.getElementById('teamListContainer') || document.getElementById('allTeamsContainer');
   if (container) {
-    container.innerHTML = '<div class="loading-spinner"></div>';
+    container.innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
     try {
       const data = await api('/api/teams', { skipCache: true });
       if (!data.teams.length) { container.innerHTML = '<p style="color:var(--text-light);text-align:center;padding:20px;">暂无招募中的队伍</p>'; return; }
@@ -2771,7 +2771,7 @@ async function renderAdminPanel() {
         <button class="recruit-tab ${currentAdminSubTab==='players'?'active':''}" onclick="switchAdminSubTab('players')">选手审核</button>
         <button class="recruit-tab ${currentAdminSubTab==='clubs'?'active':''}" onclick="switchAdminSubTab('clubs')">俱乐部管理</button>
       </div>
-      <div id="adminSubContent"><div class="loading-spinner"></div></div>
+      <div id="adminSubContent"><div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div></div>
     </div>
   `;
   await loadAdminSubTab();
@@ -2786,7 +2786,7 @@ async function switchAdminSubTab(tab) {
       players: '选手审核', clubs: '俱乐部管理'
     }[tab]));
   });
-  document.getElementById('adminSubContent').innerHTML = '<div class="loading-spinner"></div>';
+  document.getElementById('adminSubContent').innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
   await loadAdminSubTab();
 }
 
@@ -3599,6 +3599,19 @@ function closeWelcomeAndLogin() {
   if (modal) modal.remove();
   openAuthModal('login');
 }
+
+// ==================== 假进度：CSS 动画驱动宽度，JS 读取并更新百分比 ====================
+setInterval(() => {
+  document.querySelectorAll('.loading-spinner .load-fill').forEach(fill => {
+    const bar = fill.parentElement;
+    const text = fill.closest('.loading-spinner')?.querySelector('.load-text');
+    if (!text || !bar) return;
+    const fillW = fill.getBoundingClientRect().width || 0;
+    const barW = bar.getBoundingClientRect().width || 280;
+    const pct = Math.min(Math.round((fillW / barW) * 100), 99);
+    text.textContent = `加载中… ${pct}%`;
+  });
+}, 120);
 
 // 启动
 (async () => {
