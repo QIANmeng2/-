@@ -3448,11 +3448,19 @@ async function renderClubDetail(clubId) {
     const transfers = data.transfers || [];
     const isOwner = c.owner_id === currentUser.id;
 
+    // 获取大名单
+    let rosters = { elite: [], secondary: [] };
+    try { rosters = await api('/api/club/' + clubId + '/roster'); } catch(e) {}
+    const eliteIds = new Set((rosters.elite || []).map(r => r.player_user_id));
+    const secondaryIds = new Set((rosters.secondary || []).map(r => r.player_user_id));
+
     // 获取转会市场选手列表（老板专用）
     let marketPlayers = [];
     if (isOwner || isAdmin) {
       try { const mp = await api('/api/market/players'); marketPlayers = (mp.players || []).filter(p => !p.club_id); } catch(e) {}
     }
+
+    const gradeCls = { S: 'grade-s', A: 'grade-a', B: 'grade-b', C: 'grade-c', D: 'grade-c' };
 
     let html = `
       <div class="card">
@@ -3465,19 +3473,70 @@ async function renderClubDetail(clubId) {
         </div>
 
         <h4 style="margin-bottom:8px;font-size:0.9rem;">队员名单 (${members.length}人)</h4>
-        ${members.length === 0 ? '<p style="color:var(--text-muted);">暂无队员</p>' : members.map(m => `
+        ${members.length === 0 ? '<p style="color:var(--text-muted);">暂无队员</p>' : members.map(m => {
+          const g = m.grade;
+          const gCls = gradeCls[g] || 'grade-c';
+          const mv = m.market_value;
+          return `
           <div class="club-member-row">
-            <div>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
               <span style="font-weight:600;">${m.coachname || m.username}</span>
-              ${m.gameid ? `<span style="font-size:0.72rem;color:var(--text-muted);margin-left:4px;">${m.gameid}</span>` : ''}
+              ${m.gameid ? `<span style="font-size:0.72rem;color:var(--text-muted);">${m.gameid}</span>` : ''}
               <span class="pos-tag club-role-${m.role}">${m.role === 'boss' ? '老板' : m.role === 'player' ? '选手' : '队员'}</span>
+              ${g ? `<span class="grade-badge ${gCls}">${g}</span>` : ''}
+              ${mv ? `<span style="font-size:0.72rem;color:var(--warning);font-weight:700;">${mv}万</span>` : ''}
             </div>
             <div style="font-size:0.78rem;color:var(--text-secondary);">${m.gamerank || ''} ${m.peakscore ? '巅峰'+m.peakscore : ''}</div>
             ${(isOwner || isAdmin) && m.role !== 'boss' ? `<button class="btn btn-sm btn-ghost" onclick="removeClubMember(${clubId},'${m.user_id}')" style="color:var(--danger);padding:2px 8px;font-size:0.7rem;">移除</button>` : ''}
-          </div>
-        `).join('')}
+          </div>`;
+        }).join('')}
 
         ${isOwner || isAdmin ? `
+        <h4 style="margin-top:24px;margin-bottom:10px;font-size:0.9rem;">大名单管理</h4>
+        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;padding:16px;margin-bottom:16px;">
+          <div style="font-size:0.82rem;font-weight:700;color:#fbbf24;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+            顶级联赛 (${eliteIds.size}/5)
+          </div>
+          ${members.filter(m => m.role !== 'boss').length === 0 ? '<p style="font-size:0.76rem;color:var(--text-muted);">无可用队员</p>' : `
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
+            ${members.filter(m => m.role !== 'boss').map(m => {
+              const g = m.grade;
+              const gCls = gradeCls[g] || 'grade-c';
+              return `<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer;padding:6px 8px;border-radius:6px;transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                <input type="checkbox" class="roster-elite-check" value="${m.user_id}" ${eliteIds.has(m.user_id) ? 'checked' : ''} style="accent-color:#fbbf24;width:14px;height:14px;cursor:pointer;">
+                <span style="font-weight:600;color:var(--text-primary);">${m.coachname || m.username}</span>
+                ${m.gameid ? `<span style="font-size:0.7rem;color:var(--text-muted);">${m.gameid}</span>` : ''}
+                ${g ? `<span class="grade-badge ${gCls}">${g}</span>` : ''}
+                ${m.market_value ? `<span style="font-size:0.7rem;color:var(--warning);font-weight:700;">${m.market_value}万</span>` : ''}
+              </label>`;
+            }).join('')}
+          </div>
+          <button class="btn btn-sm" onclick="saveClubRoster(${clubId},'elite')" style="background:rgba(245,158,11,0.12);color:#fbbf24;border:1px solid rgba(245,158,11,0.25);">保存顶级联赛名单</button>`}
+        </div>
+
+        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;padding:16px;margin-bottom:16px;">
+          <div style="font-size:0.82rem;font-weight:700;color:#a78bfa;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            次级联赛 (${secondaryIds.size}/5)
+          </div>
+          ${members.filter(m => m.role !== 'boss').length === 0 ? '<p style="font-size:0.76rem;color:var(--text-muted);">无可用队员</p>' : `
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
+            ${members.filter(m => m.role !== 'boss').map(m => {
+              const g = m.grade;
+              const gCls = gradeCls[g] || 'grade-c';
+              return `<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer;padding:6px 8px;border-radius:6px;transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                <input type="checkbox" class="roster-secondary-check" value="${m.user_id}" ${secondaryIds.has(m.user_id) ? 'checked' : ''} style="accent-color:#a78bfa;width:14px;height:14px;cursor:pointer;">
+                <span style="font-weight:600;color:var(--text-primary);">${m.coachname || m.username}</span>
+                ${m.gameid ? `<span style="font-size:0.7rem;color:var(--text-muted);">${m.gameid}</span>` : ''}
+                ${g ? `<span class="grade-badge ${gCls}">${g}</span>` : ''}
+                ${m.market_value ? `<span style="font-size:0.7rem;color:var(--warning);font-weight:700;">${m.market_value}万</span>` : ''}
+              </label>`;
+            }).join('')}
+          </div>
+          <button class="btn btn-sm" onclick="saveClubRoster(${clubId},'secondary')" style="background:rgba(123,47,253,0.12);color:#c4b5fd;border:1px solid rgba(123,47,253,0.25);">保存次级联赛名单</button>`}
+        </div>
+
         <h4 style="margin-top:20px;margin-bottom:8px;font-size:0.9rem;">签约自由选手</h4>
         <select class="form-input" id="signPlayerId" style="margin-bottom:8px;">
           <option value="">选择要签约的选手...</option>
@@ -3516,6 +3575,17 @@ async function removeClubMember(clubId, userId) {
   try {
     await api('/api/club/' + clubId + '/manage', { method:'POST', body: JSON.stringify({ action:'remove', userId }) });
     showToast('队员已移除','success');
+    await renderClubDetail(clubId);
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+async function saveClubRoster(clubId, tier) {
+  const cls = tier === 'elite' ? '.roster-elite-check' : '.roster-secondary-check';
+  const checked = Array.from(document.querySelectorAll(cls + ':checked')).map(cb => cb.value);
+  if (checked.length > 5) { showToast('大名单最多5人','error'); return; }
+  try {
+    await api('/api/club/' + clubId + '/roster', { method:'PUT', body: JSON.stringify({ tier, players: checked }) });
+    showToast('大名单已保存','success');
     await renderClubDetail(clubId);
   } catch(e) { showToast(e.message,'error'); }
 }

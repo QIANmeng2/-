@@ -1890,9 +1890,11 @@ app.get('/api/club/:id', authMiddleware, async (req, res) => {
     if (club.rows.length === 0) return res.status(404).json({ message: '俱乐部不存在' });
 
     const members = await pool.query(`
-      SELECT cm.*, u.username, u.coachName, u.gameId, u.gameRank, u.peakScore
+      SELECT cm.*, u.username, u.coachName, u.gameId, u.gameRank, u.peakScore,
+        p.market_value, p.grade
       FROM club_members cm
       LEFT JOIN users u ON cm.user_id = u.id
+      LEFT JOIN players p ON cm.user_id = p.user_id
       WHERE cm.club_id = $1
       ORDER BY cm.role, cm.joined_at
     `, [id]);
