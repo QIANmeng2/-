@@ -881,18 +881,22 @@ posTagStyle.textContent = `
   .lane-stat-bar .lane-bar { flex:1;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden; }
   .lane-stat-bar .lane-fill { height:100%;background:var(--gradient-primary);border-radius:3px; }
   .lane-stat-bar .lane-val { width:32px;text-align:right;color:var(--text-secondary); }
-  .market-chip { display:inline-flex;align-items:center;padding:3px 10px;border-radius:14px;font-size:0.72rem;font-weight:600;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:var(--text-muted);cursor:pointer;transition:all .15s;user-select:none; }
-  .market-chip:hover { border-color:rgba(255,255,255,.2);color:var(--text-primary); }
-  .market-chip.active { border-color:var(--accent);background:rgba(123,47,253,.15);color:var(--accent); }
-  .market-chip-free { color:#10b981;border-color:rgba(16,185,129,.2); }
-  .market-chip-free.active { background:rgba(16,185,129,.15);border-color:#10b981;color:#10b981; }
-  .market-chip-free:hover { border-color:rgba(16,185,129,.4); }
-  .market-chip-signed { color:#f59e0b;border-color:rgba(245,158,11,.2); }
-  .market-chip-signed.active { background:rgba(245,158,11,.15);border-color:#f59e0b;color:#f59e0b; }
-  .market-chip-signed:hover { border-color:rgba(245,158,11,.4); }
-  .market-chip-pos { color:var(--text-muted); }
-  .market-chip-pos.active { background:rgba(139,92,246,.15);border-color:#8b5cf6;color:#8b5cf6; }
-  .market-chip-pos:hover { border-color:rgba(139,92,246,.4); }
+  .market-chip { display:inline-flex;align-items:center;gap:3px;padding:4px 12px;border-radius:14px;font-size:0.72rem;font-weight:600;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:rgba(255,255,255,.35);cursor:pointer;transition:all .15s;user-select:none; }
+  .market-chip:hover { border-color:rgba(255,255,255,.18);color:var(--text-primary); }
+  .market-chip.active { border-color:var(--accent);background:rgba(123,47,253,.2);color:#fff;box-shadow:0 0 8px rgba(123,47,253,.25); }
+  .market-chip.active::before { content:'✓';font-size:0.6rem;font-weight:700; }
+  .market-chip-free { color:rgba(16,185,129,.5);border-color:rgba(16,185,129,.15); }
+  .market-chip-free.active { background:rgba(16,185,129,.22);border-color:#10b981;color:#fff;box-shadow:0 0 8px rgba(16,185,129,.25); }
+  .market-chip-free.active::before { content:'✓';font-size:0.6rem;font-weight:700; }
+  .market-chip-free:hover { border-color:rgba(16,185,129,.35); }
+  .market-chip-signed { color:rgba(245,158,11,.5);border-color:rgba(245,158,11,.15); }
+  .market-chip-signed.active { background:rgba(245,158,11,.22);border-color:#f59e0b;color:#fff;box-shadow:0 0 8px rgba(245,158,11,.25); }
+  .market-chip-signed.active::before { content:'✓';font-size:0.6rem;font-weight:700; }
+  .market-chip-signed:hover { border-color:rgba(245,158,11,.35); }
+  .market-chip-pos { color:rgba(255,255,255,.35); }
+  .market-chip-pos.active { background:rgba(139,92,246,.22);border-color:#8b5cf6;color:#fff;box-shadow:0 0 8px rgba(139,92,246,.3); }
+  .market-chip-pos.active::before { content:'✓';font-size:0.6rem;font-weight:700; }
+  .market-chip-pos:hover { border-color:rgba(139,92,246,.35); }
 `;
 document.head.appendChild(posTagStyle);
 
