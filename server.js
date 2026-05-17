@@ -1711,10 +1711,12 @@ app.post('/api/admin/award-coins', authMiddleware, adminMiddleware, async (req, 
       await client.query('ROLLBACK');
       return res.status(404).json({ message: '用户不存在，请检查用户ID是否正确' });
     }
-    await client.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'reward',$3)", [userId, amount, note || '赛事奖励']);
+    await client.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,$3,$4)", [userId, amount, amount > 0 ? 'award' : 'deduct', note || (amount > 0 ? '赛事奖励' : '梦币扣除')]);
     await client.query('COMMIT');
     try {
-      const notifMsg = '你获得了 ' + amount + ' 梦币！' + (note ? '备注：' + note : '');
+      const notifMsg = amount > 0
+        ? '你获得了 ' + amount + ' 梦币！' + (note ? '备注：' + note : '')
+        : '你被扣除 ' + Math.abs(amount) + ' 梦币！' + (note ? '备注：' + note : '');
       await pool.query("INSERT INTO notifications (userId, type, content) VALUES ($1,'coin_reward',$2)", [userId, notifMsg]);
     } catch(e) {}
     res.json({ success: true });

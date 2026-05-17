@@ -3152,7 +3152,7 @@ async function loadCoinSubTab() {
           </div>
           <div class="form-group">
             <label>奖励数量</label>
-            <input class="form-input" type="number" id="awardAmount" required placeholder="正数发放，负数扣除" min="1">
+            <input class="form-input" type="number" id="awardAmount" required placeholder="正数发放，负数扣除">
           </div>
           <div class="form-group">
             <label>备注</label>
@@ -3194,16 +3194,16 @@ async function handleAwardCoins(e) {
   const userId = document.getElementById('awardUserId').value.trim();
   const amount = parseInt(document.getElementById('awardAmount').value);
   const note = document.getElementById('awardNote').value.trim();
-  if (!userId || !amount) { showToast('请填写完整信息', 'error'); return; }
+  if (!userId || amount === 0 || isNaN(amount)) { showToast('请填写完整信息（数量不能为0）', 'error'); return; }
   try {
     await api('/api/admin/award-coins', { method: 'POST', body: JSON.stringify({ userId, amount, note }) });
-    showToast('发放成功', 'success');
+    showToast(amount > 0 ? '发放成功' : '扣除成功', 'success');
     e.target.reset();
     // 刷新余额
     try { const d = await api('/api/me/coins'); document.getElementById('coinBalance').textContent = d.balance + ' 梦币'; } catch(e) {}
     // 如果当前在全部流水tab，刷新列表
     if (currentCoinSubTab === 'log') await loadCoinSubTab();
-  } catch (err) { showToast(err.message || '发放失败', 'error'); }
+  } catch (err) { showToast(err.message || '操作失败', 'error'); }
 }
 
 // ==================== 转会市场 ====================
