@@ -157,11 +157,13 @@ async function loadCompetitionList() {
       const s = c.comp_status || c.status || '';
       const statusLabel = { upcoming:'即将开始', open:'报名中', locked:'已满员', live:'比赛中', review:'审核中', finished:'已结束' }[s] || '';
       const statusColor = { upcoming:'var(--text-muted)', open:'#10b981', locked:'var(--warning)', live:'var(--danger)' }[s] || 'var(--text-muted)';
+      const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
+      const adminBtn = isAdmin ? '<button class="btn btn-xs btn-danger" style="margin-left:8px;" onclick="event.stopPropagation();adminDeleteCompetition(\''+c.id+'\')">删除</button>' : '';
       // 常规赛事卡片
       if (isRegular) {
         return '<div style="padding:14px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:10px;margin-bottom:8px;cursor:pointer;" onclick="openCompetitionDetail(\''+c.id+'\')">'+
           '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">'+
-            '<div><span style="font-weight:700;color:var(--text-primary);font-size:0.95rem;">'+c.name+'</span><span style="color:'+statusColor+';font-size:0.72rem;margin-left:8px;font-weight:600;">'+statusLabel+'</span></div>'+
+            '<div><span style="font-weight:700;color:var(--text-primary);font-size:0.95rem;">'+c.name+'</span><span style="color:'+statusColor+';font-size:0.72rem;margin-left:8px;font-weight:600;">'+statusLabel+'</span>'+adminBtn+'</div>'+
             '<span style="font-size:0.75rem;color:var(--text-muted);">'+(c.start_time?new Date(c.start_time).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'')+'</span>'+
           '</div>'+
           '<div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap;">'+
@@ -174,7 +176,7 @@ async function loadCompetitionList() {
       return '<div style="padding:14px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:10px;margin-bottom:8px;cursor:pointer;" onclick="openCompetitionDetail(\''+c.id+'\')">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'+
           '<div><span style="font-weight:700;color:var(--text-primary);">'+c.name+'</span>'+
-          '<span style="font-size:0.72rem;color:var(--text-muted);margin-left:8px;">BO'+(c.bo||1)+'</span></div>'+
+          '<span style="font-size:0.72rem;color:var(--text-muted);margin-left:8px;">BO'+(c.bo||1)+'</span>'+adminBtn+'</div>'+
           '<span style="font-size:0.72rem;color:var(--text-muted);">'+(c.start_time?new Date(c.start_time).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit'}):'')+'</span>'+
         '</div></div>';
     }).join('');
@@ -397,14 +399,14 @@ async function loadCompRegUI(compId, c) {
     container.innerHTML = '<div style="padding:12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:8px;"><span style="color:#10b981;font-weight:600;">已确认入场</span><span style="color:var(--text-muted);margin-left:8px;font-size:0.78rem;">'+myReg.lane+' &middot; 入场费：'+myReg.entry_fee+'梦币</span></div>';
   } else if (myReg && myReg.status === 'reserved') {
     container.innerHTML = '<div style="padding:12px;background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.2);border-radius:8px;"><span style="color:var(--warning);font-weight:600;">待确认入场</span><span style="color:var(--text-muted);margin-left:8px;">'+myReg.lane+'</span><div style="display:flex;gap:8px;margin-top:8px;"><button class="btn btn-sm" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:#10b981;" onclick="confirmCompetitionEntry(\''+compId+'\',500)">500梦币</button><button class="btn btn-sm" style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);color:#f59e0b;" onclick="confirmCompetitionEntry(\''+compId+'\',1000)">1000梦币</button><button class="btn btn-sm" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#ef4444;" onclick="confirmCompetitionEntry(\''+compId+'\',2000)">2000梦币</button></div></div>';
-  } else if (canRegister && isCaptain && myTeam && myTeam.memberCount >= 5) {
+  } else if (canRegister && isCaptain && myTeam && (myTeam.memberCount >= 5 || (currentUser && currentUser.id === 'mp4hmya7ad15v6'))) {
     container.innerHTML = '<button class="btn btn-primary btn-sm" onclick="openTeamPlayerSelect(\''+compId+'\',\''+myTeam.id+'\',\''+myTeam.name.replace(/'/g,"\\'")+'\')">选择队员报名参赛</button>';
+  } else if (canRegister && !myTeam && currentUser && currentUser.id === 'mp4hmya7ad15v6') {
+    container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">管理员请先加入一支队伍</p>';
   } else if (canRegister && !myTeam) {
     container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">需要加入队伍后由队长报名参赛</p>';
   } else if (canRegister && myTeam && !isCaptain) {
     container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">等待队长选择队员报名</p>';
-  } else if (canRegister && isCaptain && myTeam && myTeam.memberCount < 5) {
-    container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">队伍人数不足5人，无法报名</p>';
   } else if (canRegister) {
     container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">当前状态不可报名</p>';
   }
@@ -422,7 +424,8 @@ function openTeamPlayerSelect(compId, teamId, teamName) {
     const team = data.team;
     if (!team) return showToast('队伍不存在','error');
     const members = team.members || [];
-    if (members.length < 5) return showToast('队伍不足5人','error');
+    const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
+    if (members.length < 5 && !isAdmin) return showToast('队伍不足5人','error');
     const lanes = ['对抗路','打野','中路','发育路','游走'];
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -453,7 +456,9 @@ async function submitTeamPlayers(compId, teamId) {
       players.push({ user_id: uid, lane: lane });
     }
   });
-  if (players.length !== 5) { showToast('请为5个位置各选1名不同队员','error'); return; }
+  const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
+  if (players.length !== 5 && !isAdmin) { showToast('请为5个位置各选1名不同队员','error'); return; }
+  if (players.length < 1) { showToast('至少选择1名队员','error'); return; }
   try {
     await api('/api/competitions/'+compId+'/register', { method:'POST', body: JSON.stringify({ team_id: teamId, players }) });
     showToast('报名成功','success');
