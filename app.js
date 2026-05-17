@@ -108,9 +108,9 @@ function updateUI() {
 // ==================== 比赛页面（三级联赛） ====================
 let compTier = 'regular';
 const TIER_CONFIG = {
-  elite: { label: '顶级联赛', icon: '⭐', desc: 'S/A级俱乐部大名单参赛' },
-  secondary: { label: '次级联赛', icon: '⚔️', desc: 'B级俱乐部大名单参赛' },
-  regular: { label: '常规赛事', icon: '🎮', desc: '消耗梦币入场，10人对战，赢方瓜分奖池' }
+  elite: { label: '顶级联赛', desc: 'S/A级俱乐部大名单参赛' },
+  secondary: { label: '次级联赛', desc: 'B级俱乐部大名单参赛' },
+  regular: { label: '常规赛事', desc: '消耗梦币入场，10人对战，赢方瓜分奖池' }
 };
 
 async function renderCompetitionPanel() {
@@ -121,7 +121,7 @@ async function renderCompetitionPanel() {
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
         <div>
-          <h2 style="font-size:1.1rem;margin:0;">${tc.icon} ${tc.label}</h2>
+          <h2 style="font-size:1.1rem;margin:0;">${tc.label}</h2>
           <p style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 0;">${tc.desc}</p>
         </div>
         ${isAdmin ? '<button class="btn btn-primary btn-sm" onclick="openCreateCompetitionModal()">+ 创建赛事</button>' : ''}
@@ -129,7 +129,7 @@ async function renderCompetitionPanel() {
       <div class="comp-tier-tabs" style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
         ${['elite','secondary','regular'].map(t => {
           const cfg = TIER_CONFIG[t];
-          return '<button class="comp-tier-tab '+(compTier===t?'active-'+t:'')+'" onclick="switchCompTier(\''+t+'\')">'+cfg.icon+' '+cfg.label+'</button>';
+          return '<button class="comp-tier-tab '+(compTier===t?'active-'+t:'')+'" onclick="switchCompTier(\''+t+'\')">'+cfg.label+'</button>';
         }).join('')}
       </div>
       <div id="competitionList"><div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div></div>
@@ -241,9 +241,9 @@ function openCreateCompetitionModal() {
         </div>
         <div class="form-group"><label>赛事等级</label>
           <select class="form-select" id="compTierSel">
-            <option value="regular">🎮 常规赛事（梦币入场+奖池）</option>
-            <option value="elite">⭐ 顶级联赛（S/A级俱乐部）</option>
-            <option value="secondary">⚔️ 次级联赛（B级俱乐部）</option>
+            <option value="regular">常规赛事（梦币入场+奖池）</option>
+            <option value="elite">顶级联赛（S/A级俱乐部）</option>
+            <option value="secondary">次级联赛（B级俱乐部）</option>
           </select>
         </div>
         <div class="form-group"><label>开赛时间</label>
@@ -2233,7 +2233,7 @@ async function adminReviewCompetition(compId) {
         ${screenshots.length ? '<p style="font-size:0.78rem;">截图：'+screenshots.map((s,i)=>'<a href="'+s+'" target="_blank" style="color:var(--accent);">#'+(i+1)+'</a>').join(' ')+'</p>' : ''}
         ${players.length ? '<div style="margin-top:8px;max-height:200px;overflow-y:auto;background:rgba(255,255,255,.02);padding:8px;border-radius:6px;"><table style="width:100%;font-size:0.72rem;">'+players.map(p=>'<tr><td style="padding:2px 4px;">'+(p.win?'&#x2705;':'&#x274C;')+'</td><td>'+p.lane+'</td><td>'+p.kda+'</td></tr>').join('')+'</table></div>' : ''}
         <div style="margin-top:16px;display:flex;gap:8px;">
-          <button class="btn btn-primary btn-sm" onclick="adminConfirmCompResult('${compId}')">&#x2705; 确认发放奖池</button>
+          <button class="btn btn-primary btn-sm" onclick="adminConfirmCompResult('${compId}')">确认发放奖池</button>
           <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-overlay').remove()">关闭</button>
         </div>
       </div>`;

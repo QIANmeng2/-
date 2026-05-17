@@ -65,7 +65,6 @@
 <div class="main-container">
   <div class="tab-nav" id="tabNav">
     <button class="tab-btn" data-tab="competition" id="tabCompetition" style="display:none;">比赛</button>
-    <button class="tab-btn" data-tab="recruit" id="tabRecruit">招募大厅</button>
     <button class="tab-btn" data-tab="market" id="tabMarket" style="display:none;">转会市场</button>
     <button class="tab-btn" data-tab="team" id="tabTeam" style="display:none;">我的队伍</button>
     <button class="tab-btn" data-tab="club" id="tabClub" style="display:none;">我的俱乐部</button>
@@ -110,12 +109,12 @@
     </div>
     <div class="welcome-features">
       <div class="welcome-feature">
-        <div class="welcome-feat-icon recruit">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/><path d="M17 12h.01"/><path d="M7 12h.01"/></svg>
+        <div class="welcome-feat-icon comp">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
         </div>
         <div>
-          <div class="welcome-feat-label">招募大厅</div>
-          <div class="welcome-feat-desc">散人自由组队，凑齐 10 人全员确认成局</div>
+          <div class="welcome-feat-label">常规赛事</div>
+          <div class="welcome-feat-desc">代表队伍报名，选择入场费参赛，赢方瓜分奖池</div>
         </div>
       </div>
       <div class="welcome-feature">
@@ -162,119 +161,6 @@
   </div>
 </div>
 
-<!-- 创建招募弹窗 -->
-<div id="createRecruitModal" style="display:none;" class="modal-overlay">
-  <div class="modal" style="max-width:580px;">
-    <h3 style="margin-bottom:16px;">新建5v5训练赛招募</h3>
-    <form id="createRecruitForm" onsubmit="handleCreateRecruit(event)">
-      <!-- 开赛时间 -->
-      <div class="form-group">
-        <label>开赛时间</label>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;">
-          <button type="button" class="btn btn-secondary btn-sm" id="btnNow" onclick="setNow()" style="background: rgba(0, 212, 255, 0.1); border-color: var(--primary); color: var(--primary);">即刻开打</button>
-          <input class="form-input" type="datetime-local" id="recruitStartTime" style="flex:1;min-width:160px;">
-        </div>
-      </div>
-      <!-- 段位门槛 -->
-      <div class="form-group">
-        <label>段位门槛</label>
-        <select class="form-select" id="recruitLevelReq">
-          <option value="不限">不限</option>
-          <option value="星耀">星耀及以上</option>
-          <option value="王者">王者及以上</option>
-          <option value="荣耀王者">荣耀王者及以上</option>
-        </select>
-      </div>
-      <!-- 备注 -->
-      <div class="form-group">
-        <label>自定义备注</label>
-        <textarea class="form-input" id="recruitNotes" rows="2" placeholder="可填写BP规则、开赛群号等..."></textarea>
-      </div>
-      <!-- 联系群号（模式1/3显示，模式2由系统自动建腾讯会议） -->
-      <div class="form-group" id="groupContactSection">
-        <label>联系群号 <span style="font-size:0.75rem;color:var(--text-muted);font-weight:400;">（选填，方便队员加群沟通）</span></label>
-        <input class="form-input" type="text" id="recruitGroupContact" placeholder="如：123456789" maxlength="20">
-        <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">模式2（纯组织者）将自动在赛前10分钟创建腾讯会议，无需填写</p>
-      </div>
-      <!-- 带上队伍 -->
-      <div id="teamRecruitSection" class="mode-form-section" style="display:none;">
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-          <div>
-            <h4 style="color: var(--primary); margin-bottom: 4px;">带上我的队伍</h4>
-            <p style="font-size:0.82rem;color:var(--text-muted);">为队伍成员分配分路，自动锁位不对外招募</p>
-          </div>
-          <input type="checkbox" id="useTeamRecruit" onchange="toggleTeamRecruit()" style="width:22px;height:22px;cursor:pointer;accent-color: var(--primary);">
-        </div>
-        <div id="teamMemberLanes" style="margin-top:12px;display:none;">
-          <p style="font-size:0.8rem;color:var(--text-light);margin-bottom:10px;">为每位队员分配阵营和分路（关闭=未占用，可对外报名）：</p>
-          <div id="teamMemberLaneList"></div>
-        </div>
-      </div>
-      <!-- 发起人模式 -->
-      <div class="form-group" id="modeSelectorSection">
-        <label>发起人模式</label>
-        <div class="mode-selector">
-          <div class="mode-option selected" id="mode1Option" onclick="selectMode(1)">
-            <div class="mode-option-title">模式1 · 我也要参赛</div>
-            <div class="mode-option-desc">我自己也要上场，可自选阵营+分路占位</div>
-          </div>
-          <div class="mode-option" id="mode2Option" onclick="selectMode(2)">
-            <div class="mode-option-title">模式2 · 我只组织</div>
-            <div class="mode-option-desc">我自己不参赛，纯组织者</div>
-          </div>
-          <div class="mode-option" id="mode3Option" onclick="selectMode(3)">
-            <div class="mode-option-title">模式3 · 我带部分队友</div>
-            <div class="mode-option-desc">自带队友进来，只缺外人补位，可预设已有人员位置</div>
-          </div>
-        </div>
-      </div>
-      <!-- 模式1：自选阵营分路 -->
-      <div id="mode1Section" class="mode-form-section" style="display:none;">
-        <h4>① 选择你要加入的阵营和分路</h4>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;">
-          <select class="form-select" id="mode1Team" style="flex:1;">
-            <option value="blue">蓝方</option>
-            <option value="red">红方</option>
-          </select>
-          <select class="form-select" id="mode1Lane" style="flex:1;">
-            <option value="对抗路">对抗路</option>
-            <option value="打野">打野</option>
-            <option value="中路">中路</option>
-            <option value="发育路">发育路</option>
-            <option value="游走">游走</option>
-          </select>
-        </div>
-      </div>
-      <!-- 模式3：预设人员 -->
-      <div id="mode3Section" class="mode-form-section" style="display:none;">
-        <h4>② 预设已有队友（可不填，跳过即全部对外开放）</h4>
-        <p style="font-size:0.78rem;color:var(--text-light);margin-bottom:10px;">填写已知队友的阵营+分路，占位后自动锁定不对外报名</p>
-        <div class="preset-positions">
-          <div class="preset-team-section">
-            <h5 class="blue">蓝方</h5>
-            <div id="presetBlue"></div>
-          </div>
-          <div class="preset-team-section">
-            <h5 class="red">红方</h5>
-            <div id="presetRed"></div>
-          </div>
-        </div>
-      </div>
-      <button class="btn btn-primary" type="submit" style="width:100%;margin-top:8px;font-size:1rem;padding:12px;">发布招募</button>
-      <button type="button" class="btn btn-ghost" style="width:100%;margin-top:8px;" onclick="closeCreateRecruitModal()">取消</button>
-    </form>
-  </div>
-</div>
-
-<!-- 满员成功弹窗 -->
-<div id="fullSuccessModal" style="display:none;" class="modal-overlay">
-  <div class="full-modal">
-    <div class="full-modal-icon" style="font-size:2.5rem;color:var(--primary);text-shadow:0 0 20px rgba(79,70,229,0.5);">成局</div>
-    <h3>训练赛组队成功！</h3>
-    <p>本局红蓝10人已全部凑齐，训练赛组队成功<br><br>请所有参赛人员前往官方QQ群/微信会员群<br>统一确认开赛时间、BP规则、英雄禁用、队内沟通细节<br>按约定时间准时开局即可</p>
-    <button class="btn btn-primary" onclick="closeFullModal()">知道了！</button>
-  </div>
-</div>
 
 <div id="toastContainer"></div>
 
@@ -289,30 +175,31 @@
       <h3>核心场景</h3>
       <div class="guide-box">
         <div style="margin-bottom:16px;">
-          <div style="font-weight:700; margin-bottom:8px; color: var(--secondary);">招募大厅（散人专用）</div>
+          <div style="font-weight:700; margin-bottom:8px; color: var(--accent);">常规赛事（队伍参赛）</div>
           <ul style="margin:0; padding-left:20px; color:var(--text-secondary);">
-            <li>适合：<strong>单人/带1-4个朋友</strong>，凑齐10人打训练赛</li>
-            <li>规则：红蓝双方各5人，满10人后全员确认 → 正式成局</li>
-            <li>发起招募可选三种模式：参赛/纯组织/带部分队友</li>
+            <li>适合：<strong>5人队伍代表俱乐部/自由名单参赛</strong></li>
+            <li>规则：队长报名 → 队员确认入场费 → 10人满员开赛 → 胜方瓜分奖池</li>
+            <li>入场费三档：500 / 1000 / 2000 梦币</li>
           </ul>
         </div>
       </div>
 
-      <h3>招募大厅玩法</h3>
+      <h3>参赛流程</h3>
       <ol style="margin:0 0 16px; padding-left:24px; color:var(--text-secondary);">
-        <li><strong>加入对局</strong>：选红蓝方+分路 → 报名</li>
-        <li><strong>发起招募</strong>：设置时间、段位、模式 → 发布</li>
-        <li><strong>满员确认</strong>：10人凑齐后，所有人需点击"能参加"确认</li>
-        <li><strong>正式成局</strong>：全员确认后锁定，自动创建腾讯会议</li>
+        <li><strong>队长报名</strong>：进入常规赛事 → 选择代表队伍 → 报名，队伍5人收到通知</li>
+        <li><strong>队员确认</strong>：进入赛事详情 → 选入场费档位 → 确认入场，扣除梦币</li>
+        <li><strong>开赛</strong>：10人满员后自动锁定，到达开赛时间正式开始</li>
+        <li><strong>提交结果</strong>：开赛20分钟后可上传截图 + 胜方 + KDA数据</li>
+        <li><strong>管理员结算</strong>：审核无误后发放奖池，胜方按入场费占比瓜分</li>
       </ol>
 
-      <h3>确认阶段规则</h3>
+      <h3>奖池规则</h3>
       <div class="guide-box" style="border-color: rgba(245,158,11,0.3);">
         <ul style="margin:0; padding-left:20px; color:var(--text-secondary);">
-          <li>满10人后进入<span style="color:var(--warning);">待确认</span>状态，所有人会收到确认通知</li>
-          <li>点击<strong>"能参加"</strong> → 标记为已确认，全员确认后自动成局</li>
-          <li>点击<strong>"没时间"</strong> → 自动退出，招募恢复，其他人需重新确认</li>
-          <li>开赛前10分钟若还有人未确认，自动清理未确认者并恢复招募</li>
+          <li>总奖池 = 10人入场费之和</li>
+          <li><span style="color:var(--success);">胜方5人</span>按个人入场费占比瓜分总奖池</li>
+          <li><span style="color:var(--danger);">败方5人</span>入场费全损，无返还</li>
+          <li>报名不足10人 → 自动取消 → 全额退费</li>
         </ul>
       </div>
 
