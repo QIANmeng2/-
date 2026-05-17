@@ -5887,43 +5887,111 @@ async function loadAdminPlayers(container) {
     container.innerHTML = '<p style="color:var(--text-muted);">暂无选手认证申请</p>';
     return;
   }
-  container.innerHTML = `
-    <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;">共 ${players.length} 条记录</div>
-    ${players.map(p => {
-      let positions = [];
-      try { positions = JSON.parse(p.positions || '[]'); } catch(e) {}
-      const shots = [];
-      if (p.screenshot_url) shots.push({ url: p.screenshot_url, label: '巅峰分截图' });
-      if (p.screenshot_url2) shots.push({ url: p.screenshot_url2, label: '段位截图' });
-      return `
-      <div style="padding:12px 16px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:10px;margin-bottom:8px;">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
-          <div style="flex:1;min-width:200px;">
-            <div style="font-weight:600;color:var(--text-primary);">${p.game_id} <span style="font-size:0.72rem;color:var(--text-muted);">(${p.coachname || p.username})</span></div>
-            <div style="font-size:0.78rem;color:var(--text-secondary);">巅峰${p.peak_score} | ${p.game_rank}</div>
-            <div style="margin-top:4px;">${positions.map(l => `<span class="pos-tag pos-tag-${l}">${l}</span>`).join(' ')}</div>
-            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">身价预估：${p.market_value}万 | ${new Date(p.created_at).toLocaleDateString('zh-CN')}</div>
-            ${shots.length ? `
-              <div class="review-screenshots">
-                ${shots.map(s => `
-                  <div class="review-screenshot-wrap">
-                    <img src="${s.url}" class="review-screenshot-thumb" onclick="openImagePreview('${s.url}')" alt="${s.label}">
-                    <div class="review-screenshot-label">${s.label}</div>
-                  </div>
-                `).join('')}
-              </div>
-            ` : '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">未提交截图</div>'}
-          </div>
-          <div style="white-space:nowrap;">
-            ${p.status === 'pending' ? `
-              <button class="btn btn-sm" style="background:rgba(16,185,129,.1);color:#10b981;border:1px solid rgba(16,185,129,.3);" onclick="reviewPlayer('${p.user_id}','approved')">通过</button>
-              <button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3);margin-left:4px;" onclick="reviewPlayer('${p.user_id}','rejected')">拒绝</button>
-            ` : `<span style="color:${p.status==='approved'?'var(--success)':'var(--danger)'};">${p.status==='approved'?'已通过':'已拒绝'}</span>`}
-          </div>
+  const pending = players.filter(p => p.status === 'pending');
+  const approved = players.filter(p => p.status === 'approved');
+  const rejected = players.filter(p => p.status === 'rejected');
+
+  function playerCard(p) {
+    let positions = [];
+    try { positions = JSON.parse(p.positions || '[]'); } catch(e) {}
+    const shots = [];
+    if (p.screenshot_url) shots.push({ url: p.screenshot_url, label: '巅峰分截图' });
+    if (p.screenshot_url2) shots.push({ url: p.screenshot_url2, label: '段位截图' });
+    return `
+    <div style="padding:12px 16px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:10px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+        <div style="flex:1;min-width:200px;">
+          <div style="font-weight:600;color:var(--text-primary);">${p.game_id} <span style="font-size:0.72rem;color:var(--text-muted);">(${p.coachname || p.username})</span></div>
+          <div style="font-size:0.78rem;color:var(--text-secondary);">巅峰${p.peak_score} | ${p.game_rank}</div>
+          <div style="margin-top:4px;">${positions.map(l => `<span class="pos-tag pos-tag-${l}">${l}</span>`).join(' ')}</div>
+          <div style="font-size:0.7rem;color:var(--text-muted);margin-top:2px;">身价预估：${p.market_value}万 | ${new Date(p.created_at).toLocaleDateString('zh-CN')}</div>
+          ${shots.length ? `
+            <div class="review-screenshots">
+              ${shots.map(s => `
+                <div class="review-screenshot-wrap">
+                  <img src="${s.url}" class="review-screenshot-thumb" onclick="openImagePreview('${s.url}')" alt="${s.label}">
+                  <div class="review-screenshot-label">${s.label}</div>
+                </div>
+              `).join('')}
+            </div>
+          ` : '<div style="font-size:0.7rem;color:var(--text-muted);margin-top:4px;">未提交截图</div>'}
         </div>
-      </div>`;
-    }).join('')}
-  `;
+        <div style="white-space:nowrap;">
+          ${p.status === 'pending' ? `
+            <button class="btn btn-sm" style="background:rgba(16,185,129,.1);color:#10b981;border:1px solid rgba(16,185,129,.3);" onclick="reviewPlayer('${p.user_id}','approved')">通过</button>
+            <button class="btn btn-sm" style="background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.3);margin-left:4px;" onclick="reviewPlayer('${p.user_id}','rejected')">拒绝</button>
+          ` : `<span style="color:${p.status==='approved'?'var(--success)':'var(--danger)'}">${p.status==='approved'?'已通过':'已拒绝'}</span>`}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  let html = '';
+
+  // 待审核（置顶展开）
+  if (pending.length > 0) {
+    html += `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <span style="font-size:0.85rem;font-weight:700;color:var(--warning);">待审核</span>
+        <span style="font-size:0.75rem;color:var(--text-muted);">${pending.length} 条</span>
+      </div>
+      ${pending.map(p => playerCard(p)).join('')}
+    `;
+  }
+
+  // 已通过（折叠）
+  if (approved.length > 0) {
+    html += `
+      <div style="margin-top:16px;">
+        <div onclick="toggleReviewSection(this,'approved-list')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.15);border-radius:8px;cursor:pointer;user-select:none;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:0.85rem;font-weight:700;color:var(--success);">已通过</span>
+            <span style="font-size:0.75rem;color:var(--text-muted);">${approved.length} 条</span>
+          </div>
+          <svg class="review-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-muted);transition:transform .2s;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </div>
+        <div id="approved-list" style="display:none;margin-top:8px;">
+          ${approved.map(p => playerCard(p)).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // 已拒绝（折叠）
+  if (rejected.length > 0) {
+    html += `
+      <div style="margin-top:12px;">
+        <div onclick="toggleReviewSection(this,'rejected-list')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:8px;cursor:pointer;user-select:none;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:0.85rem;font-weight:700;color:var(--danger);">已拒绝</span>
+            <span style="font-size:0.75rem;color:var(--text-muted);">${rejected.length} 条</span>
+          </div>
+          <svg class="review-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--text-muted);transition:transform .2s;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </div>
+        <div id="rejected-list" style="display:none;margin-top:8px;">
+          ${rejected.map(p => playerCard(p)).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  if (!pending.length && !approved.length && !rejected.length) {
+    html = '<p style="color:var(--text-muted);">暂无选手认证申请</p>';
+  }
+
+  container.innerHTML = html;
+}
+
+function toggleReviewSection(header, listId) {
+  const list = document.getElementById(listId);
+  const icon = header.querySelector('.review-toggle-icon');
+  if (list.style.display === 'none') {
+    list.style.display = 'block';
+    icon.style.transform = 'rotate(180deg)';
+  } else {
+    list.style.display = 'none';
+    icon.style.transform = 'rotate(0deg)';
+  }
 }
 
 async function reviewPlayer(userId, status) {
