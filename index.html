@@ -3550,23 +3550,28 @@ async function openPlayerDetailModal(userId) {
   document.body.style.overflow = 'hidden';
 
   try {
-    // 从转会市场缓存中获取选手数据
-    const mp = (window._marketPlayers || []).find(p => p.user_id === userId) || {};
-    let positions = [];
-    try { positions = JSON.parse(mp.positions || '[]'); } catch(e) {}
-
     const userRes = await api('/api/users/' + userId);
     const u = userRes.user || {};
+    const p = userRes.player || {};
+    let positions = [];
+    try { positions = JSON.parse(p.positions || '[]'); } catch(e) {}
     let laneStats = {};
     try { laneStats = JSON.parse(u.laneStats || '{}'); } catch(e) {}
     const maxLaneVal = Math.max(1, ...Object.values(laneStats).map(v => parseInt(v) || 0));
 
-    const detailHtml = `
+    const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
+    const isClubBoss = p.club_owner_id === currentUser.id;
+    const canEdit = (isClubBoss || isAdmin) && p.club_id;
+    const salaryDisplay = p.weekly_salary !== undefined && p.weekly_salary !== null
+      ? p.weekly_salary.toLocaleString() + ' 梦币/周'
+      : '-';
+
+    let detailHtml = `
       <div class="player-detail-section">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
           <div style="width:48px;height:48px;border-radius:50%;background:var(--gradient-primary);display:flex;align-items:center;justify-content:center;font-size:1.2rem;font-weight:700;color:#fff;">${(u.coachName || u.username || '?').charAt(0)}</div>
           <div>
-            <div style="font-size:1rem;font-weight:700;color:var(--text-primary);">${u.gameId || '未设置游戏ID'} <span style="font-size:0.75rem;color:var(--text-muted);font-weight:400;">(${u.coachName || u.username})</span></div>
+            <div style="font-size:1rem;font-weight:700;color:var(--text-primary);">${p.game_id || u.gameId || '未设置游戏ID'} <span style="font-size:0.75rem;color:var(--text-muted);font-weight:400;">(${u.coachName || u.username})</span></div>
             <div style="font-size:0.78rem;color:var(--text-secondary);">${u.gameRank || '星耀'} | 巅峰${u.peakScore || 0}</div>
           </div>
         </div>
@@ -3579,10 +3584,20 @@ async function openPlayerDetailModal(userId) {
           <div class="player-detail-item"><label>游戏大区</label><span>${u.gameServer || '-'}</span></div>
           <div class="player-detail-item"><label>当前段位</label><span>${u.gameRank || '-'}</span></div>
           <div class="player-detail-item"><label>巅峰分数</label><span>${u.peakScore || 0}</span></div>
-          <div class="player-detail-item"><label>身价</label><span style="color:var(--warning);">${mp.market_value || '-'}万</span></div>
-          <div class="player-detail-item"><label>等级</label><span>${mp.grade || '-'}</span></div>
+          <div class="player-detail-item"><label>身价</label><span style="color:var(--warning);">${p.market_value || '-'}万</span></div>
+          <div class="player-detail-item"><label>等级</label><span>${p.grade || '-'}</span></div>
         </div>
       </div>
+
+      ${p.club_id ? `
+      <div class="player-detail-section">
+        <h4>俱乐部信息</h4>
+        <div class="player-detail-grid">
+          <div class="player-detail-item"><label>所属俱乐部</label><span>${p.club_name || '-'}</span></div>
+          <div class="player-detail-item"><label>周薪</label><span style="color:var(--success);">${salaryDisplay}</span></div>
+        </div>
+      </div>
+      ` : ''}
 
       <div class="player-detail-section">
         <h4>擅长位置</h4>
@@ -3607,15 +3622,6 @@ async function openPlayerDetailModal(userId) {
       ${u.heroPool ? `<div class="player-detail-section"><h4>擅长英雄</h4><div style="font-size:0.85rem;color:var(--text-primary);line-height:1.6;">${u.heroPool}</div></div>` : ''}
       ${u.bio ? `<div class="player-detail-section"><h4>个人简介</h4><div style="font-size:0.82rem;color:var(--text-secondary);line-height:1.6;">${u.bio}</div></div>` : ''}
 
-      ${mp.screenshot_url || mp.screenshot_url2 ? `
-      <div class="player-detail-section">
-        <h4>审核截图</h4>
-        <div class="review-screenshots">
-          ${mp.screenshot_url ? `<div class="review-screenshot-wrap"><img src="${mp.screenshot_url}" class="review-screenshot-thumb" onclick="openImagePreview('${mp.screenshot_url}')"><div class="review-screenshot-label">巅峰分截图</div></div>` : ''}
-          ${mp.screenshot_url2 ? `<div class="review-screenshot-wrap"><img src="${mp.screenshot_url2}" class="review-screenshot-thumb" onclick="openImagePreview('${mp.screenshot_url2}')"><div class="review-screenshot-label">段位截图</div></div>` : ''}
-        </div>
-      </div>` : ''}
-
       <div class="player-detail-section">
         <h4>联系方式</h4>
         <div class="player-detail-item" style="display:flex;align-items:center;gap:8px;">
@@ -3624,10 +3630,46 @@ async function openPlayerDetailModal(userId) {
         </div>
       </div>
     `;
+
+    if (canEdit) {
+      detailHtml += `
+      <div class="player-detail-section" style="border-top:1px solid rgba(255,255,255,0.06);padding-top:14px;">
+        <h4>调整选手信息（老板）</h4>
+        <form onsubmit="handleUpdatePlayerInfo(event, '${userId}', ${p.club_id})" style="display:flex;flex-direction:column;gap:10px;">
+          <div>
+            <label style="font-size:0.75rem;color:var(--text-muted);display:block;margin-bottom:4px;">身价（万梦币）</label>
+            <input class="form-input" type="number" id="editMarketValue" value="${p.market_value || ''}" min="1" style="font-size:0.85rem;">
+          </div>
+          <div>
+            <label style="font-size:0.75rem;color:var(--text-muted);display:block;margin-bottom:4px;">自定义周薪（梦币，留空则按等级标准）</label>
+            <input class="form-input" type="number" id="editCustomSalary" value="${p.custom_salary !== null && p.custom_salary !== undefined ? p.custom_salary : ''}" min="0" style="font-size:0.85rem;">
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">保存调整</button>
+        </form>
+      </div>`;
+    }
+
     document.getElementById('playerDetailContent').innerHTML = detailHtml;
   } catch(e) {
     document.getElementById('playerDetailContent').innerHTML = `<p style="color:var(--danger);">加载失败：${e.message}</p>`;
   }
+}
+
+async function handleUpdatePlayerInfo(e, userId, clubId) {
+  e.preventDefault();
+  const marketValue = document.getElementById('editMarketValue').value;
+  const customSalary = document.getElementById('editCustomSalary').value;
+  try {
+    await api('/api/club/' + clubId + '/player/' + userId + '/update', {
+      method: 'POST',
+      body: JSON.stringify({
+        marketValue: marketValue ? parseInt(marketValue) : undefined,
+        customSalary: customSalary !== '' ? parseInt(customSalary) : undefined
+      })
+    });
+    showToast('选手信息已更新', 'success');
+    closePlayerDetailModal();
+  } catch(err) { showToast(err.message, 'error'); }
 }
 
 function closePlayerDetailModal() {
@@ -3787,7 +3829,7 @@ async function renderClubDetail(clubId) {
           const gCls = gradeCls[g] || 'grade-c';
           const mv = m.market_value;
           return `
-          <div class="club-member-row">
+          <div class="club-member-row" style="cursor:pointer;" onclick="openPlayerDetailModal('${m.user_id}')">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
               <span style="font-weight:600;">${m.coachname || m.username}</span>
               ${m.gameid ? `<span style="font-size:0.72rem;color:var(--text-muted);">${m.gameid}</span>` : ''}
@@ -3796,7 +3838,7 @@ async function renderClubDetail(clubId) {
               ${mv ? `<span style="font-size:0.72rem;color:var(--warning);font-weight:700;">${mv}万</span>` : ''}
             </div>
             <div style="font-size:0.78rem;color:var(--text-secondary);">${m.gamerank || ''} ${m.peakscore ? '巅峰'+m.peakscore : ''}</div>
-            ${(isOwner || isAdmin) && m.role !== 'boss' ? `<button class="btn btn-sm btn-ghost" onclick="removeClubMember(${clubId},'${m.user_id}')" style="color:var(--danger);padding:2px 8px;font-size:0.7rem;">移除</button>` : ''}
+            ${(isOwner || isAdmin) && m.role !== 'boss' ? `<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation(); removeClubMember(${clubId},'${m.user_id}')" style="color:var(--danger);padding:2px 8px;font-size:0.7rem;">移除</button>` : ''}
           </div>`;
         }).join('')}
 
@@ -3805,19 +3847,25 @@ async function renderClubDetail(clubId) {
         <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;padding:16px;margin-bottom:16px;">
           <div style="font-size:0.82rem;font-weight:700;color:#fbbf24;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
-            顶级联赛 (${eliteIds.size}/5)
+            顶级联赛 (${eliteIds.size}/5) <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;margin-left:4px;">限S/A级选手，老板不受限</span>
           </div>
-          ${members.filter(m => m.role !== 'boss').length === 0 ? '<p style="font-size:0.76rem;color:var(--text-muted);">无可用队员</p>' : `
+          ${members.length === 0 ? '<p style="font-size:0.76rem;color:var(--text-muted);">无可用队员</p>' : `
           <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
-            ${members.filter(m => m.role !== 'boss').map(m => {
+            ${members.map(m => {
               const g = m.grade;
               const gCls = gradeCls[g] || 'grade-c';
-              return `<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer;padding:6px 8px;border-radius:6px;transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
-                <input type="checkbox" class="roster-elite-check" value="${m.user_id}" ${eliteIds.has(m.user_id) ? 'checked' : ''} style="accent-color:#fbbf24;width:14px;height:14px;cursor:pointer;">
+              const isBoss = m.role === 'boss';
+              const allowed = isBoss || ['S','A'].includes(g);
+              const disabledAttr = allowed ? '' : 'disabled';
+              const opacityStyle = allowed ? '' : 'opacity:0.45;';
+              return `<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer;padding:6px 8px;border-radius:6px;transition:background 0.15s;${opacityStyle}" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                <input type="checkbox" class="roster-elite-check" value="${m.user_id}" ${eliteIds.has(m.user_id) ? 'checked' : ''} ${disabledAttr} style="accent-color:#fbbf24;width:14px;height:14px;cursor:pointer;">
                 <span style="font-weight:600;color:var(--text-primary);">${m.coachname || m.username}</span>
                 ${m.gameid ? `<span style="font-size:0.7rem;color:var(--text-muted);">${m.gameid}</span>` : ''}
                 ${g ? `<span class="grade-badge ${gCls}">${g}</span>` : ''}
                 ${m.market_value ? `<span style="font-size:0.7rem;color:var(--warning);font-weight:700;">${m.market_value}万</span>` : ''}
+                ${isBoss ? '<span class="pos-tag club-role-boss" style="font-size:0.65rem;">老板</span>' : ''}
+                ${!allowed && !isBoss ? '<span style="font-size:0.65rem;color:var(--danger);">需S/A级</span>' : ''}
               </label>`;
             }).join('')}
           </div>
@@ -3827,19 +3875,25 @@ async function renderClubDetail(clubId) {
         <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;padding:16px;margin-bottom:16px;">
           <div style="font-size:0.82rem;font-weight:700;color:#a78bfa;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-            次级联赛 (${secondaryIds.size}/5)
+            次级联赛 (${secondaryIds.size}/5) <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;margin-left:4px;">限B级选手，老板不受限</span>
           </div>
-          ${members.filter(m => m.role !== 'boss').length === 0 ? '<p style="font-size:0.76rem;color:var(--text-muted);">无可用队员</p>' : `
+          ${members.length === 0 ? '<p style="font-size:0.76rem;color:var(--text-muted);">无可用队员</p>' : `
           <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
-            ${members.filter(m => m.role !== 'boss').map(m => {
+            ${members.map(m => {
               const g = m.grade;
               const gCls = gradeCls[g] || 'grade-c';
-              return `<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer;padding:6px 8px;border-radius:6px;transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
-                <input type="checkbox" class="roster-secondary-check" value="${m.user_id}" ${secondaryIds.has(m.user_id) ? 'checked' : ''} style="accent-color:#a78bfa;width:14px;height:14px;cursor:pointer;">
+              const isBoss = m.role === 'boss';
+              const allowed = isBoss || g === 'B';
+              const disabledAttr = allowed ? '' : 'disabled';
+              const opacityStyle = allowed ? '' : 'opacity:0.45;';
+              return `<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer;padding:6px 8px;border-radius:6px;transition:background 0.15s;${opacityStyle}" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                <input type="checkbox" class="roster-secondary-check" value="${m.user_id}" ${secondaryIds.has(m.user_id) ? 'checked' : ''} ${disabledAttr} style="accent-color:#a78bfa;width:14px;height:14px;cursor:pointer;">
                 <span style="font-weight:600;color:var(--text-primary);">${m.coachname || m.username}</span>
                 ${m.gameid ? `<span style="font-size:0.7rem;color:var(--text-muted);">${m.gameid}</span>` : ''}
                 ${g ? `<span class="grade-badge ${gCls}">${g}</span>` : ''}
                 ${m.market_value ? `<span style="font-size:0.7rem;color:var(--warning);font-weight:700;">${m.market_value}万</span>` : ''}
+                ${isBoss ? '<span class="pos-tag club-role-boss" style="font-size:0.65rem;">老板</span>' : ''}
+                ${!allowed && !isBoss ? '<span style="font-size:0.65rem;color:var(--danger);">需B级</span>' : ''}
               </label>`;
             }).join('')}
           </div>
@@ -4059,7 +4113,7 @@ async function switchTab(tab) {
   try {
     if (tab === 'public') await loadPublicSchedules();
     else if (tab === 'mine') await loadCalendar();
-    else if (tab === 'profile') renderProfileForm();
+    else if (tab === 'profile') await renderProfileForm();
     else if (tab === 'admin') await renderAdminPanel();
     else if (tab === 'team') await renderTeamPanel();
     else if (tab === 'recruit') { currentRecruitSubTab = 'active'; await loadRecruitHall(); startRecruitPolling(); }
@@ -4874,13 +4928,43 @@ async function toggleDisableDate(date) {
 }
 
 // ---------- 个人信息 ----------
-function renderProfileForm() {
+async function renderProfileForm() {
   const gameId = currentUser.gameId || '';
   const gameServer = currentUser.gameServer || '手Q区';
   const gameRank = currentUser.gameRank || '星耀';
   const peakScore = currentUser.peakScore || 0;
   const heroPool = currentUser.heroPool || '';
   const laneStats = currentUser.laneStats || { '对抗路':'0','打野':'0','中路':'0','发育路':'0','游走':'0' };
+
+  let playerHtml = '';
+  try {
+    const pd = await api('/api/player/status');
+    const p = pd.player;
+    if (p && p.status === 'approved') {
+      const salary = p.weekly_salary !== undefined ? p.weekly_salary.toLocaleString() + ' 梦币/周' : '-';
+      const gCls = { S: 'grade-s', A: 'grade-a', B: 'grade-b', C: 'grade-c', D: 'grade-c' }[p.grade] || 'grade-c';
+      playerHtml = `
+        <div class="card" style="border-left:3px solid var(--success);margin-top:16px;">
+          <div class="section-header" style="display:flex;align-items:center;gap:8px;">
+            <div class="section-icon" style="background:var(--gradient-success);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+            </div>
+            <div><div class="section-title">选手档案</div><div class="section-desc">你的认证信息与俱乐部归属</div></div>
+          </div>
+          <div class="player-detail-grid" style="margin-top:10px;">
+            <div class="player-detail-item"><label>认证状态</label><span style="color:var(--success);">已通过</span></div>
+            <div class="player-detail-item"><label>所属俱乐部</label><span>${p.club_name || '自由选手'}</span></div>
+            <div class="player-detail-item"><label>身价</label><span style="color:var(--warning);">${p.market_value || '-'}万</span></div>
+            <div class="player-detail-item"><label>等级</label><span class="grade-badge ${gCls}">${p.grade || '-'}</span></div>
+            <div class="player-detail-item"><label>周薪</label><span style="color:var(--success);">${salary}</span></div>
+            <div class="player-detail-item"><label>游戏ID</label><span>${p.game_id || '-'}</span></div>
+          </div>
+        </div>`;
+    } else if (p && p.status === 'pending') {
+      playerHtml = `<div class="card" style="border-left:3px solid var(--warning);margin-top:16px;"><p style="color:var(--warning);">选手认证审核中，请耐心等待管理员审核...</p></div>`;
+    }
+  } catch(e) {}
+
   document.getElementById('tabContent').innerHTML = `
     <div class="card">
       <div class="section-header">
@@ -4942,7 +5026,8 @@ function renderProfileForm() {
         <div class="form-group"><label>擅长英雄（选填）</label><input class="form-input" id="profileHeroPool" value="${heroPool}" placeholder="如：马可波罗、公孙离、大乔"></div>
         <button class="btn btn-primary" type="submit" style="width:100%;">保存游戏档案</button>
       </form>
-    </div>`;
+    </div>
+    ${playerHtml}`;
 }
 async function handleUpdateProfile(e) {
   e.preventDefault();

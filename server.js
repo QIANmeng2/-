@@ -194,6 +194,7 @@ async function initDB() {
     // 选手等级 + 解约
     await client.query('ALTER TABLE players ADD COLUMN IF NOT EXISTS grade TEXT DEFAULT NULL');
     await client.query('ALTER TABLE players ADD COLUMN IF NOT EXISTS buyout_fee INTEGER DEFAULT NULL');
+    await client.query('ALTER TABLE players ADD COLUMN IF NOT EXISTS custom_salary INTEGER DEFAULT NULL');
     // 薪资记录
     await client.query(`
       CREATE TABLE IF NOT EXISTS salary_records (
@@ -816,12 +817,38 @@ app.get('/api/users/:id', authMiddleware, async (req, res) => {
     const result = await pool.query('SELECT * FROM users WHERE id = $1', [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ message: '用户不存在' });
     const u = result.rows[0];
-    res.json({ user: {
-      id: u.id, username: u.username, teamName: u.teamname, coachName: u.coachname, level: u.level, bio: u.bio || '',
-      gameId: u.gameid || '', gameServer: u.gameserver || '手Q区', gameRank: u.gamerank || '星耀',
-      peakScore: u.peakscore || 0, laneStats: u.lanestats || '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}',
-      heroPool: u.heropool || '', wechat: u.wechat || ''
-    }});
+
+    const playerRes = await pool.query(
+      `SELECT p.*, c.name AS club_name, c.owner_id AS club_owner_id
+       FROM players p LEFT JOIN clubs c ON p.club_id = c.id WHERE p.user_id = $1`,
+      [req.params.id]
+    );
+    const p = playerRes.rows[0] || {};
+    const grade = p.grade;
+    const weeklySalary = p.custom_salary !== null && p.custom_salary !== undefined
+      ? p.custom_salary
+      : (GRADE_SALARY[grade] || 0);
+
+    res.json({
+      user: {
+        id: u.id, username: u.username, teamName: u.teamname, coachName: u.coachname, level: u.level, bio: u.bio || '',
+        gameId: u.gameid || '', gameServer: u.gameserver || '手Q区', gameRank: u.gamerank || '星耀',
+        peakScore: u.peakscore || 0, laneStats: u.lanestats || '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}',
+        heroPool: u.heropool || '', wechat: u.wechat || ''
+      },
+      player: {
+        status: p.status || null,
+        market_value: p.market_value || null,
+        grade: p.grade || null,
+        club_id: p.club_id || null,
+        club_name: p.club_name || null,
+        club_owner_id: p.club_owner_id || null,
+        custom_salary: p.custom_salary,
+        weekly_salary: weeklySalary,
+        positions: p.positions || '[]',
+        game_id: p.game_id || null
+      }
+    });
   } catch (e) { res.status(500).json({ message: '获取失败' }); }
 });
 
@@ -1804,7 +1831,14 @@ app.get('/api/player/status', authMiddleware, async (req, res) => {
       `SELECT p.*, c.name AS club_name FROM players p LEFT JOIN clubs c ON p.club_id = c.id WHERE p.user_id = $1`,
       [req.userId]
     );
-    res.json({ player: result.rows[0] || null });
+    const p = result.rows[0] || null;
+    if (p) {
+      const grade = p.grade;
+      p.weekly_salary = p.custom_salary !== null && p.custom_salary !== undefined
+        ? p.custom_salary
+        : (GRADE_SALARY[grade] || 0);
+    }
+    res.json({ player: p });
   } catch(e) { res.status(500).json({ message: '查询失败' }); }
 });
 
@@ -2131,14 +2165,20 @@ app.put('/api/club/:id/roster', authMiddleware, async (req, res) => {
   try {
     if (!['elite','secondary'].includes(tier)) return res.status(400).json({ message: '无效联赛等级' });
     if (!Array.isArray(players) || players.length > 5) return res.status(400).json({ message: '大名单最多5人' });
-    // 校验选手已签约该俱乐部
+    const allowedGrades = tier === 'elite' ? ['S','A'] : ['B'];
     for (const uid of players) {
       const cm = await pool.query('SELECT * FROM club_members WHERE club_id=$1 AND user_id=$2', [req.params.id, uid]);
       if (cm.rows.length === 0) return res.status(400).json({ message: '选手' + uid + '未签约该俱乐部' });
+      const role = cm.rows[0].role;
+      if (role !== 'boss') {
+        const p = await pool.query('SELECT grade FROM players WHERE user_id=$1 AND status=$2', [uid, 'approved']);
+        const grade = p.rows[0]?.grade;
+        if (!allowedGrades.includes(grade)) {
+          return res.status(400).json({ message: '选手' + uid + '等级' + (grade || '无') + '不满足' + tier + '联赛条件（需' + allowedGrades.join('/') + '级）' });
+        }
+      }
     }
-    // 清空旧名单
     await pool.query('DELETE FROM club_rosters WHERE club_id=$1 AND tier=$2', [req.params.id, tier]);
-    // 插入新名单
     for (const uid of players) {
       await pool.query('INSERT INTO club_rosters (club_id, tier, player_user_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [req.params.id, tier, uid]);
     }
@@ -2168,6 +2208,44 @@ app.post('/api/competition/:id/register', authMiddleware, async (req, res) => {
     }
     res.json({ success: true, message: '报名成功' });
   } catch(e) { console.error(e); res.status(500).json({ message: '报名失败' }); }
+});
+
+// ====================== 老板调整选手身价/周薪 ======================
+app.post('/api/club/:id/player/:userId/update', authMiddleware, async (req, res) => {
+  const { id, userId } = req.params;
+  const { marketValue, customSalary } = req.body;
+  try {
+    const club = await pool.query('SELECT * FROM clubs WHERE id = $1', [id]);
+    if (club.rows.length === 0) return res.status(404).json({ message: '俱乐部不存在' });
+    if (club.rows[0].owner_id !== req.userId && req.userId !== ADMIN_USER_ID) {
+      return res.status(403).json({ message: '仅俱乐部老板可调整' });
+    }
+    const cm = await pool.query('SELECT * FROM club_members WHERE club_id=$1 AND user_id=$2', [id, userId]);
+    if (cm.rows.length === 0) return res.status(400).json({ message: '该选手未签约本俱乐部' });
+
+    const updates = [];
+    const params = [];
+    let paramIdx = 1;
+
+    if (marketValue !== undefined && marketValue !== null) {
+      const mv = parseInt(marketValue);
+      if (isNaN(mv) || mv < 1) return res.status(400).json({ message: '身价需为正整数' });
+      const newGrade = calcGrade(mv);
+      updates.push(`market_value = $${paramIdx++}, grade = $${paramIdx++}`);
+      params.push(mv, newGrade);
+    }
+    if (customSalary !== undefined && customSalary !== null) {
+      const cs = parseInt(customSalary);
+      if (isNaN(cs) || cs < 0) return res.status(400).json({ message: '周薪不能为负数' });
+      updates.push(`custom_salary = $${paramIdx++}`);
+      params.push(cs);
+    }
+
+    if (updates.length === 0) return res.status(400).json({ message: '无有效更新字段' });
+    params.push(userId);
+    await pool.query(`UPDATE players SET ${updates.join(', ')} WHERE user_id = $${paramIdx}`, params);
+    res.json({ success: true, message: '选手信息已更新' });
+  } catch(e) { console.error(e); res.status(500).json({ message: '更新失败' }); }
 });
 
 // ====================== 解约/身价调整 ======================
