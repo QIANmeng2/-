@@ -747,6 +747,12 @@ async function loadMarketPlayers(container) {
     } catch(e) { window._myClubs = []; }
   }
 
+  window._marketPlayers = players;
+  window._marketSort = 'time';
+  // 必须在 innerHTML 赋值之前初始化，模板求值时会访问这些变量
+  if (window._marketContract === undefined) window._marketContract = 'all';
+  if (!window._marketPosFilters) window._marketPosFilters = new Set();
+
   container.innerHTML = `
     <div class="card">
       <h3>转会市场</h3>
@@ -778,8 +784,6 @@ async function loadMarketPlayers(container) {
   `;
   window._marketPlayers = players;
   window._marketSort = 'time';
-  if (window._marketContract === undefined) window._marketContract = 'all';
-  if (!window._marketPosFilters) window._marketPosFilters = new Set();
   window.changeMarketSort = (s) => { window._marketSort = s; renderMarketPlayerList(); };
   window.filterMarketContract = (v) => { window._marketContract = v; renderMarketPlayerList(); };
   window.toggleMarketPos = (pos) => {
