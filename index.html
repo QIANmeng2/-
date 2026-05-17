@@ -2545,35 +2545,41 @@ function updateUI() {
 }
 
 // ==================== 比赛页面 ====================
+let compTier = 'regular'; // 当前赛事层级
 async function renderCompetitionPanel() {
   const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
   const content = document.getElementById('tabContent');
   content.innerHTML = `
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px;">
         <h3>${isAdmin ? '赛事管理' : '赛事信息'}</h3>
-        ${isAdmin ? `<button class="btn btn-primary" onclick="openCreateCompetitionModal()" style="padding:10px 20px;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          创建赛事
-        </button>` : ''}
+        ${isAdmin ? `<button class="btn btn-primary" onclick="openCreateCompetitionModal()">创建赛事</button>` : ''}
+      </div>
+      <div class="comp-tier-tabs" style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
+        <button class="btn btn-sm" id="compTierElite" onclick="switchCompTier('elite')" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);">🏆 顶级联赛</button>
+        <button class="btn btn-sm" id="compTierSecondary" onclick="switchCompTier('secondary')" style="background:rgba(123,47,253,0.1);border:1px solid rgba(123,47,253,0.25);">⚔️ 次级联赛</button>
+        <button class="btn btn-sm btn-secondary" id="compTierRegular" onclick="switchCompTier('regular')">🎮 常规赛事</button>
       </div>
       <div id="competitionList"><div class="loading-spinner"></div></div>
     </div>
   `;
   await loadCompetitionList();
 }
-
+async function switchCompTier(t) { compTier = t; await loadCompetitionList(); }
 async function loadCompetitionList() {
   const container = document.getElementById('competitionList');
   const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
+  // 高亮当前tier按钮
+  document.querySelectorAll('.comp-tier-tabs .btn').forEach(b => b.classList.remove('btn-primary'));
+  const activeBtn = document.getElementById('compTier' + compTier.charAt(0).toUpperCase() + compTier.slice(1));
+  if (activeBtn) activeBtn.classList.add('btn-primary');
   try {
     const data = await api('/api/competitions');
-    const comps = data.competitions || [];
-    // 缓存数据供详情页使用
+    const comps = (data[compTier] || []);
     window._compCache = {};
-    comps.forEach(c => { window._compCache[c.id] = c; });
+    (data.all||[]).forEach(c => { window._compCache[c.id] = c; });
     if (!comps.length) {
-      container.innerHTML = `<p style="text-align:center;color:var(--text-muted);padding:40px 0;">${isAdmin ? '暂无赛事，立即创建一个吧' : '暂无赛事信息'}</p>`;
+      container.innerHTML = `<p style="text-align:center;color:var(--text-muted);padding:40px 0;">${compTier==='elite'?'暂无顶级联赛赛事':compTier==='secondary'?'暂无次级联赛赛事':'暂无常规赛事'}</p>`;
       return;
     }
     container.innerHTML = comps.map(c => `
@@ -2581,43 +2587,24 @@ async function loadCompetitionList() {
         <div class="comp-name">${c.name}</div>
         <span class="comp-status">${c.status === 'active' ? '进行中' : '已结束'}</span>
         <svg class="comp-trophy" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <!-- 杯口 -->
           <path d="M18 24H62M18 24V28C18 40 30 52 40 52C50 52 62 40 62 28V24M18 24C14 20 10 22 10 26C10 30 14 32 18 28M62 24C66 20 70 22 70 26C70 30 66 32 62 28" stroke="url(#neonGrad)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" filter="url(#neonGlow)"/>
-          <!-- 杯身 -->
           <path d="M20 28V52C20 58 28 64 40 64C52 64 60 58 60 52V28" stroke="url(#neonGrad2)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" filter="url(#neonGlow)"/>
-          <!-- 杯柄 L -->
           <path d="M24 36C18 44 18 56 22 60" stroke="url(#neonGrad3)" stroke-width="2" stroke-linecap="round" filter="url(#neonGlow)"/>
-          <!-- 杯柄 R -->
           <path d="M56 36C62 44 62 56 58 60" stroke="url(#neonGrad3)" stroke-width="2" stroke-linecap="round" filter="url(#neonGlow)"/>
-          <!-- 底座 -->
           <path d="M28 64H52M32 68H48M34 72H46" stroke="url(#neonGrad)" stroke-width="1.8" stroke-linecap="round" filter="url(#neonGlow)"/>
-          <!-- 中心星芒 -->
           <path d="M40 40L43 46H49L44 50L46 56L40 52L34 56L36 50L31 46H37Z" stroke="url(#neonStar)" stroke-width="1.3" stroke-linejoin="round" filter="url(#neonGlow)" opacity="0.7"/>
           <defs>
-            <filter id="neonGlow">
-              <feGaussianBlur stdDeviation="3" result="blur"/>
-              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-            </filter>
-            <linearGradient id="neonGrad" x1="10" y1="10" x2="70" y2="72" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="#7B2FFD"/><stop offset="50%" stop-color="#00D4FF"/><stop offset="100%" stop-color="#FFD700"/>
-            </linearGradient>
-            <linearGradient id="neonGrad2" x1="20" y1="28" x2="60" y2="64" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="#7B2FFD"/><stop offset="60%" stop-color="#00D4FF"/><stop offset="100%" stop-color="#FFD700"/>
-            </linearGradient>
-            <linearGradient id="neonGrad3" x1="18" y1="36" x2="24" y2="60" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="#FFD700"/><stop offset="100%" stop-color="#7B2FFD"/>
-            </linearGradient>
-            <linearGradient id="neonStar" x1="31" y1="46" x2="49" y2="46" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="#00D4FF"/><stop offset="100%" stop-color="#FFD700"/>
-            </linearGradient>
+            <filter id="neonGlow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <linearGradient id="neonGrad" x1="10" y1="10" x2="70" y2="72" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#7B2FFD"/><stop offset="50%" stop-color="#00D4FF"/><stop offset="100%" stop-color="#FFD700"/></linearGradient>
+            <linearGradient id="neonGrad2" x1="20" y1="28" x2="60" y2="64" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#7B2FFD"/><stop offset="60%" stop-color="#00D4FF"/><stop offset="100%" stop-color="#FFD700"/></linearGradient>
+            <linearGradient id="neonGrad3" x1="18" y1="36" x2="24" y2="60" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#FFD700"/><stop offset="100%" stop-color="#7B2FFD"/></linearGradient>
+            <linearGradient id="neonStar" x1="31" y1="46" x2="49" y2="46" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#00D4FF"/><stop offset="100%" stop-color="#FFD700"/></linearGradient>
           </defs>
         </svg>
         ${isAdmin ? `<button class="btn btn-sm comp-delete-btn" onclick="event.stopPropagation(); deleteCompetition('${c.id}')" style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.25);">删除</button>` : ''}
       </div>
     `).join('');
-  } catch (err) {
-    container.innerHTML = `<p style="color:var(--danger);">加载失败：${err.message}</p>`;
-  }
+  } catch (err) { container.innerHTML = `<p style="color:var(--danger);">加载失败：${err.message}</p>`; }
 }
 
 // 赛事详情弹窗
@@ -2700,6 +2687,14 @@ function openCreateCompetitionModal() {
           <input class="form-input" type="text" id="compName" required placeholder="如：浅梦杯春季赛">
         </div>
         <div class="form-group">
+          <label>赛事等级</label>
+          <select class="form-select" id="compTierSel">
+            <option value="regular">🎮 常规赛事</option>
+            <option value="elite">🏆 顶级联赛（仅 S/A 级参赛）</option>
+            <option value="secondary">⚔️ 次级联赛（仅 B 级参赛）</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label>二维码图片</label>
           <input class="form-input" type="file" id="compQrFile" accept="image/*" onchange="previewCompQr(this)">
           <input type="hidden" id="compQrUrl">
@@ -2750,9 +2745,10 @@ async function handleCreateCompetition(e) {
   e.preventDefault();
   const name = document.getElementById('compName').value.trim();
   const qr_code_url = document.getElementById('compQrUrl').value.trim();
+  const tier = document.getElementById('compTierSel').value;
   if (!name) { showToast('请输入赛事名称', 'error'); return; }
   try {
-    await api('/api/admin/competitions', { method: 'POST', body: JSON.stringify({ name, qr_code_url }) });
+    await api('/api/admin/competitions', { method: 'POST', body: JSON.stringify({ name, qr_code_url, tier }) });
     showToast('赛事创建成功', 'success');
     document.getElementById('createCompModal').remove();
     await loadCompetitionList();
@@ -3160,6 +3156,7 @@ function renderMarketPlayerList() {
         </div>
       </div>
       <div class="market-player-value">
+        ${p.grade ? `<span class="grade-badge grade-${p.grade.toLowerCase()}">${p.grade}级</span>` : ''}
         <span style="font-size:1.2rem;font-weight:700;color:var(--warning);">${p.market_value}万</span>
         <span style="font-size:0.7rem;color:var(--text-muted);">${p.club_name ? '已签约: '+p.club_name : '自由选手'}</span>
       </div>
@@ -3176,6 +3173,11 @@ posTagStyle.textContent = `
   .pos-tag-中路 { color:#8b5cf6;border-color:rgba(139,92,246,.3);background:rgba(139,92,246,.08); }
   .pos-tag-发育路 { color:#f59e0b;border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.08); }
   .pos-tag-游走 { color:#06b6d4;border-color:rgba(6,182,212,.3);background:rgba(6,182,212,.08); }
+  .grade-badge { display:inline-block;padding:1px 7px;border-radius:4px;font-size:0.72rem;font-weight:700;margin-right:6px; }
+  .grade-s { color:#FFD700;background:rgba(255,215,0,.12);border:1px solid rgba(255,215,0,.3); }
+  .grade-a { color:#a78bfa;background:rgba(123,47,253,.12);border:1px solid rgba(123,47,253,.3); }
+  .grade-b { color:#60a5fa;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.3); }
+  .grade-c { color:var(--text-muted);background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1); }
   .market-player-card { display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);border-radius:10px;margin-bottom:8px;gap:12px; }
   .market-player-info { flex:1;min-width:0; }
   .market-player-name { font-size:0.92rem;font-weight:600;color:var(--text-primary);margin-bottom:2px; }
