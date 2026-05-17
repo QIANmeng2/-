@@ -1232,6 +1232,7 @@
       align-items: center;
       justify-content: center;
       padding: 16px;
+      padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
       backdrop-filter: blur(6px);
       -webkit-backdrop-filter: blur(6px);
     }
@@ -1241,10 +1242,11 @@
       border-radius: 12px;
       width: 100%;
       max-width: 480px;
-      max-height: 90vh;
+      max-height: calc(100dvh - 32px);
       overflow-y: auto;
       box-shadow: 0 12px 48px rgba(0,0,0,0.7), 0 0 40px rgba(245,158,11,0.06);
       animation: compDetailFadeIn 0.2s ease;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
     }
     @keyframes compDetailFadeIn {
       from { opacity: 0; transform: translateY(12px) scale(0.97); }

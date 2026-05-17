@@ -214,7 +214,7 @@ async function openCompetitionDetail(id) {
       '</div>';
   }
 
-  overlay.innerHTML = '<div class="comp-detail-panel" onclick="event.stopPropagation()">'+
+  overlay.innerHTML = '<div class="comp-detail-panel" onclick="event.stopPropagation()" style="padding:20px 24px 24px;">'+
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">'+
       '<h3 style="font-size:1.05rem;margin:0;">'+c.name+' <span style="font-size:0.72rem;color:var(--text-muted);">'+tierLabel+' &middot; BO'+(c.bo||1)+'</span></h3>'+
       '<button class="btn btn-sm btn-ghost" onclick="this.closest(\'.comp-detail-overlay\').remove()">关闭</button>'+
@@ -403,6 +403,10 @@ async function loadCompRegUI(compId, c) {
     container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">需要加入队伍后由队长报名参赛</p>';
   } else if (canRegister && myTeam && !isCaptain) {
     container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">等待队长选择队员报名</p>';
+  } else if (canRegister && isCaptain && myTeam && myTeam.memberCount < 5) {
+    container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">队伍人数不足5人，无法报名</p>';
+  } else if (canRegister) {
+    container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">当前状态不可报名</p>';
   }
   // 状态提示
   if (c.comp_status === 'live') {
