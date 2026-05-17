@@ -2156,21 +2156,24 @@ app.get('/api/club/:id/roster', authMiddleware, async (req, res) => {
   try {
     const elite = await pool.query("SELECT cr.*, p.game_id, p.grade, p.market_value FROM club_rosters cr JOIN players p ON cr.player_user_id=p.user_id WHERE cr.club_id=$1 AND cr.tier='elite'", [req.params.id]);
     const secondary = await pool.query("SELECT cr.*, p.game_id, p.grade, p.market_value FROM club_rosters cr JOIN players p ON cr.player_user_id=p.user_id WHERE cr.club_id=$1 AND cr.tier='secondary'", [req.params.id]);
-    res.json({ elite: elite.rows, secondary: secondary.rows });
+    const free = await pool.query("SELECT cr.*, p.game_id, p.grade, p.market_value FROM club_rosters cr JOIN players p ON cr.player_user_id=p.user_id WHERE cr.club_id=$1 AND cr.tier='free'", [req.params.id]);
+    res.json({ elite: elite.rows, secondary: secondary.rows, free: free.rows });
   } catch(e) { res.status(500).json({ message: '查询失败' }); }
 });
 
 app.put('/api/club/:id/roster', authMiddleware, async (req, res) => {
-  const { tier, players } = req.body; // tier: 'elite'|'secondary', players: [userId,...]
+  const { tier, players } = req.body; // tier: 'elite'|'secondary'|'free', players: [userId,...]
   try {
-    if (!['elite','secondary'].includes(tier)) return res.status(400).json({ message: '无效联赛等级' });
+    if (!['elite','secondary','free'].includes(tier)) return res.status(400).json({ message: '无效联赛等级' });
     if (!Array.isArray(players) || players.length > 5) return res.status(400).json({ message: '大名单最多5人' });
-    const allowedGrades = tier === 'elite' ? ['S','A'] : ['B'];
+    // elite: S/A级，secondary: B/C/D级，free: 不限等级（老板不受限）
+    const gradeMap = { elite: ['S','A'], secondary: ['B','C','D'], free: [] };
+    const allowedGrades = gradeMap[tier];
     for (const uid of players) {
       const cm = await pool.query('SELECT * FROM club_members WHERE club_id=$1 AND user_id=$2', [req.params.id, uid]);
       if (cm.rows.length === 0) return res.status(400).json({ message: '选手' + uid + '未签约该俱乐部' });
       const role = cm.rows[0].role;
-      if (role !== 'boss') {
+      if (role !== 'boss' && allowedGrades.length > 0) {
         const p = await pool.query('SELECT grade FROM players WHERE user_id=$1 AND status=$2', [uid, 'approved']);
         const grade = p.rows[0]?.grade;
         if (!allowedGrades.includes(grade)) {
@@ -2180,7 +2183,7 @@ app.put('/api/club/:id/roster', authMiddleware, async (req, res) => {
     }
     await pool.query('DELETE FROM club_rosters WHERE club_id=$1 AND tier=$2', [req.params.id, tier]);
     for (const uid of players) {
-      await pool.query('INSERT INTO club_rosters (club_id, tier, player_user_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [req.params.id, tier, uid]);
+      await pool.query('INSERT INTO club_rosters (club_id, tier, player_user_id) VALUES ($1,$2,$3) ON CONFLICT (club_id, tier, player_user_id) DO UPDATE SET player_user_id=EXCLUDED.player_user_id', [req.params.id, tier, uid]);
     }
     res.json({ success: true });
   } catch(e) { console.error(e); res.status(500).json({ message: '设置失败' }); }
@@ -2194,10 +2197,16 @@ app.post('/api/competition/:id/register', authMiddleware, async (req, res) => {
     const c = comp.rows[0];
     const { clubId, playerIds } = req.body; // playerIds: 报名选手列表
     if (!clubId) return res.status(400).json({ message: '请选择俱乐部' });
-    // 常规赛事无限制
-    if (c.tier === 'regular') return res.json({ success: true, message: '报名成功' });
+    // 常规赛事：需在自由大名单中
+    if (c.tier === 'regular') {
+      for (const uid of playerIds) {
+        const roster = await pool.query("SELECT * FROM club_rosters WHERE club_id=$1 AND tier='free' AND player_user_id=$2", [clubId, uid]);
+        if (roster.rows.length === 0) return res.status(400).json({ message: '选手' + uid + '不在俱乐部自由名单中（自由名单选手方可参加常规赛事）' });
+      }
+      return res.json({ success: true, message: '报名成功' });
+    }
     // 顶级/次级联赛校验
-    const allowedGrades = c.tier === 'elite' ? ['S','A'] : ['B'];
+    const allowedGrades = c.tier === 'elite' ? ['S','A'] : ['B','C','D'];
     const rosterTier = c.tier;
     for (const uid of playerIds) {
       const p = await pool.query('SELECT * FROM players WHERE user_id=$1 AND status=$2', [uid, 'approved']);

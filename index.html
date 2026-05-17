@@ -1426,6 +1426,39 @@
       gap: 16px;
     }
 
+    /* ===== 个人中心 tabs ===== */
+    .profile-center-tabs {
+      display: flex;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      background: rgba(0,0,0,0.15);
+    }
+    .profile-center-tab {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px 16px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s ease;
+      margin-bottom: -1px;
+    }
+    .profile-center-tab:hover {
+      color: var(--text-primary);
+      background: rgba(255,255,255,0.03);
+    }
+    .profile-center-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      background: rgba(123, 47, 253, 0.08);
+    }
+
     /* 招募卡片 */
     .match-card {
       background: var(--gradient-card);
@@ -2408,9 +2441,7 @@
     <button class="tab-btn" data-tab="market" id="tabMarket" style="display:none;">转会市场</button>
     <button class="tab-btn" data-tab="team" id="tabTeam" style="display:none;">我的队伍</button>
     <button class="tab-btn" data-tab="club" id="tabClub" style="display:none;">我的俱乐部</button>
-    <button class="tab-btn" data-tab="mine" style="display:none;">我的日程</button>
-    <button class="tab-btn" data-tab="profile" style="display:none;">个人信息</button>
-    <button class="tab-btn" data-tab="account" id="tabAccount" style="display:none;">我的账户</button>
+    <button class="tab-btn" data-tab="profile" id="tabProfile" style="display:none;">个人中心</button>
     <button class="tab-btn" data-tab="admin" id="tabAdmin" style="display:none;">管理</button>
   </div>
   <div id="tabContent"></div>
@@ -2781,7 +2812,7 @@ function updateUI() {
     ui('btnLogoutTop').style.display = 'inline-block';
     ui('displayName').textContent = currentUser.coachName;
     ui('displayTeam').textContent = currentUser.teamName;
-    document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="mine"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="account"], #tabNav .tab-btn[data-tab="market"], #tabNav .tab-btn[data-tab="club"]').forEach(b => b.style.display = '');
+    document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="market"], #tabNav .tab-btn[data-tab="club"]').forEach(b => b.style.display = '');
     ui('notificationBell').style.display = 'flex';
     if (currentUser.id === 'mp4hmya7ad15v6') { ui('tabAdmin').style.display = ''; }
     ui('tabCompetition').style.display = '';
@@ -2789,7 +2820,7 @@ function updateUI() {
     ui('userInfoDisplay').style.display = 'none';
     ui('btnLoginTop').style.display = 'inline-block';
     ui('btnLogoutTop').style.display = 'none';
-    document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="mine"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="account"], #tabNav .tab-btn[data-tab="competition"], #tabNav .tab-btn[data-tab="admin"], #tabNav .tab-btn[data-tab="market"], #tabNav .tab-btn[data-tab="club"]').forEach(b => b.style.display = 'none');
+    document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="competition"], #tabNav .tab-btn[data-tab="admin"], #tabNav .tab-btn[data-tab="market"], #tabNav .tab-btn[data-tab="club"]').forEach(b => b.style.display = 'none');
     ui('notificationBell').style.display = 'none';
   }
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === currentTab));
@@ -3064,22 +3095,20 @@ async function deleteCompetition(id) {
 }
 
 // ==================== 我的账户页面 ====================
-async function renderAccountPanel() {
-  const content = document.getElementById('tabContent');
+async function renderAccountPanel(targetEl) {
+  const content = targetEl || document.getElementById('tabContent');
   content.innerHTML = `
-    <div class="card">
-      <div class="dream-coin-display">
-        <div class="dream-coin-icon">梦</div>
-        <div class="dream-coin-balance" id="coinBalance">--</div>
-        <div class="dream-coin-label">梦 币 余 额</div>
-      </div>
-      <div class="recruit-tabs" style="margin-bottom:16px;">
-        <button class="recruit-tab active" id="coinTabHistory" onclick="switchCoinTab('history')">收支明细</button>
-        ${currentUser && currentUser.id === 'mp4hmya7ad15v6' ? '<button class="recruit-tab" id="coinTabAward" onclick="switchCoinTab(\'award\')">发放梦币</button>' : ''}
-        ${currentUser && currentUser.id === 'mp4hmya7ad15v6' ? '<button class="recruit-tab" id="coinTabLog" onclick="switchCoinTab(\'log\')">全部流水</button>' : ''}
-      </div>
-      <div id="coinSubContent"><div class="loading-spinner"></div></div>
+    <div class="dream-coin-display">
+      <div class="dream-coin-icon">梦</div>
+      <div class="dream-coin-balance" id="coinBalance">--</div>
+      <div class="dream-coin-label">梦 币 余 额</div>
     </div>
+    <div class="recruit-tabs" style="margin-bottom:16px;">
+      <button class="recruit-tab active" id="coinTabHistory" onclick="switchCoinTab('history')">收支明细</button>
+      ${currentUser && currentUser.id === 'mp4hmya7ad15v6' ? '<button class="recruit-tab" id="coinTabAward" onclick="switchCoinTab(\'award\')">发放梦币</button>' : ''}
+      ${currentUser && currentUser.id === 'mp4hmya7ad15v6' ? '<button class="recruit-tab" id="coinTabLog" onclick="switchCoinTab(\'log\')">全部流水</button>' : ''}
+    </div>
+    <div id="coinSubContent"><div class="loading-spinner"></div></div>
   `;
   currentCoinSubTab = 'history';
   await loadCoinSubTab();
@@ -3800,10 +3829,11 @@ async function renderClubDetail(clubId) {
     const isOwner = c.owner_id === currentUser.id;
 
     // 获取大名单
-    let rosters = { elite: [], secondary: [] };
+    let rosters = { elite: [], secondary: [], free: [] };
     try { rosters = await api('/api/club/' + clubId + '/roster'); } catch(e) {}
     const eliteIds = new Set((rosters.elite || []).map(r => r.player_user_id));
     const secondaryIds = new Set((rosters.secondary || []).map(r => r.player_user_id));
+    const freeIds = new Set((rosters.free || []).map(r => r.player_user_id));
 
     // 获取转会市场选手列表（老板专用）
     let marketPlayers = [];
@@ -3875,7 +3905,7 @@ async function renderClubDetail(clubId) {
         <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;padding:16px;margin-bottom:16px;">
           <div style="font-size:0.82rem;font-weight:700;color:#a78bfa;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-            次级联赛 (${secondaryIds.size}/5) <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;margin-left:4px;">限B级选手，老板不受限</span>
+            次级联赛 (${secondaryIds.size}/5) <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;margin-left:4px;">限B/C/D级选手，老板不受限</span>
           </div>
           ${members.length === 0 ? '<p style="font-size:0.76rem;color:var(--text-muted);">无可用队员</p>' : `
           <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
@@ -3883,7 +3913,7 @@ async function renderClubDetail(clubId) {
               const g = m.grade;
               const gCls = gradeCls[g] || 'grade-c';
               const isBoss = m.role === 'boss';
-              const allowed = isBoss || g === 'B';
+              const allowed = isBoss || ['B','C','D'].includes(g);
               const disabledAttr = allowed ? '' : 'disabled';
               const opacityStyle = allowed ? '' : 'opacity:0.45;';
               return `<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer;padding:6px 8px;border-radius:6px;transition:background 0.15s;${opacityStyle}" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
@@ -3893,14 +3923,39 @@ async function renderClubDetail(clubId) {
                 ${g ? `<span class="grade-badge ${gCls}">${g}</span>` : ''}
                 ${m.market_value ? `<span style="font-size:0.7rem;color:var(--warning);font-weight:700;">${m.market_value}万</span>` : ''}
                 ${isBoss ? '<span class="pos-tag club-role-boss" style="font-size:0.65rem;">老板</span>' : ''}
-                ${!allowed && !isBoss ? '<span style="font-size:0.65rem;color:var(--danger);">需B级</span>' : ''}
+                ${!allowed && !isBoss ? '<span style="font-size:0.65rem;color:var(--danger);">需B/C/D级</span>' : ''}
               </label>`;
             }).join('')}
           </div>
           <button class="btn btn-sm" onclick="saveClubRoster(${clubId},'secondary')" style="background:rgba(123,47,253,0.12);color:#c4b5fd;border:1px solid rgba(123,47,253,0.25);">保存次级联赛名单</button>`}
         </div>
 
-        <h4 style="margin-top:20px;margin-bottom:8px;font-size:0.9rem;">签约自由选手</h4>
+        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;padding:16px;margin-bottom:16px;">
+          <div style="font-size:0.82rem;font-weight:700;color:#34d399;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            自由名单 (${freeIds.size}/5) <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;margin-left:4px;">不限等级，可参加常规赛事，老板可加入，1人可加入多个名单</span>
+          </div>
+          ${members.length === 0 ? '<p style="font-size:0.76rem;color:var(--text-muted);">无可用队员</p>' : `
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
+            ${members.map(m => {
+              const g = m.grade;
+              const gCls = gradeCls[g] || 'grade-c';
+              const isBoss = m.role === 'boss';
+              // 自由名单不限等级，所有人都可加入
+              return `<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer;padding:6px 8px;border-radius:6px;transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                <input type="checkbox" class="roster-free-check" value="${m.user_id}" ${freeIds.has(m.user_id) ? 'checked' : ''} style="accent-color:#34d399;width:14px;height:14px;cursor:pointer;">
+                <span style="font-weight:600;color:var(--text-primary);">${m.coachname || m.username}</span>
+                ${m.gameid ? `<span style="font-size:0.7rem;color:var(--text-muted);">${m.gameid}</span>` : ''}
+                ${g ? `<span class="grade-badge ${gCls}">${g}</span>` : ''}
+                ${m.market_value ? `<span style="font-size:0.7rem;color:var(--warning);font-weight:700;">${m.market_value}万</span>` : ''}
+                ${isBoss ? '<span class="pos-tag club-role-boss" style="font-size:0.65rem;">老板</span>' : ''}
+              </label>`;
+            }).join('')}
+          </div>
+          <button class="btn btn-sm" onclick="saveClubRoster(${clubId},'free')" style="background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.25);">保存自由名单</button>`}
+        </div>
+
+        <h4 style="margin-top:20px;margin-bottom:8px;font-size:0.9rem;">签约选手</h4>
         <select class="form-input" id="signPlayerId" style="margin-bottom:8px;">
           <option value="">选择要签约的选手...</option>
           ${marketPlayers.map(p => `<option value="${p.user_id}">${p.game_id}  | 巅峰${p.peak_score} ${p.game_rank} | ${p.market_value}万</option>`).join('')}
@@ -3943,7 +3998,7 @@ async function removeClubMember(clubId, userId) {
 }
 
 async function saveClubRoster(clubId, tier) {
-  const cls = tier === 'elite' ? '.roster-elite-check' : '.roster-secondary-check';
+  const cls = tier === 'elite' ? '.roster-elite-check' : tier === 'secondary' ? '.roster-secondary-check' : '.roster-free-check';
   const checked = Array.from(document.querySelectorAll(cls + ':checked')).map(cb => cb.value);
   if (checked.length > 5) { showToast('大名单最多5人','error'); return; }
   try {
@@ -4104,21 +4159,19 @@ async function acceptTeamInvite(teamId) {
 async function switchTab(tab) {
   stopRecruitPolling();
   currentTab = tab; updateUI();
-    if (tab === 'mine') cacheStore.delete('/api/schedules/mine');
-    else if (tab === 'public') cacheStore.delete('/api/recruitment/completed');
+    if (tab === 'public') cacheStore.delete('/api/recruitment/completed');
     else if (tab === 'recruit') { cacheStore.delete('/api/recruitment/active'); cacheStore.delete('/api/recruitment/full'); }
     else if (tab === 'team') cacheStore.delete('/api/teams/mine');
+    else if (tab === 'profile') cacheStore.delete('/api/schedules/mine');
   const content = document.getElementById('tabContent');
   content.innerHTML = '<div class="loading-spinner"></div>';
   try {
     if (tab === 'public') await loadPublicSchedules();
-    else if (tab === 'mine') await loadCalendar();
-    else if (tab === 'profile') await renderProfileForm();
+    else if (tab === 'profile') await renderProfileCenter();
     else if (tab === 'admin') await renderAdminPanel();
     else if (tab === 'team') await renderTeamPanel();
     else if (tab === 'recruit') { currentRecruitSubTab = 'active'; await loadRecruitHall(); startRecruitPolling(); }
     else if (tab === 'competition') await renderCompetitionPanel();
-    else if (tab === 'account') await renderAccountPanel();
     else if (tab === 'market') await renderMarketPanel();
     else if (tab === 'club') await renderClubPanel();
   } catch {
@@ -4128,7 +4181,7 @@ async function switchTab(tab) {
 
 document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => {
   const tab = b.dataset.tab;
-  if (['publish','mine','profile','admin','competition','account'].includes(tab) && !currentUser) { showToast('请先登录','info'); openAuthModal('login'); return; }
+  if (['publish','profile','admin','competition'].includes(tab) && !currentUser) { showToast('请先登录','info'); openAuthModal('login'); return; }
   switchTab(tab);
 }));
 
@@ -4803,19 +4856,38 @@ function renderPublicSchedules(matches) {
 }
 
 // ---------- 我的日程 ----------
-async function loadCalendar(year, month) {
+async function loadCalendar(year, month, targetEl) {
   if (!year || !month) { const now = new Date(); year = now.getFullYear(); month = now.getMonth() + 1; }
   if (month > 12) { month = 1; year++; }
   if (month < 1) { month = 12; year--; }
   calendarYear = year; calendarMonth = month;
+  // 如果传入了目标容器（个人中心场景），则渲染到该容器
+  if (targetEl) {
+    _calendarTargetEl = targetEl;
+    const [data, historyData] = await Promise.all([
+      api('/api/schedules/mine'),
+      api('/api/users/me/history').catch(() => ({ history: [] }))
+    ]);
+    targetEl.innerHTML = renderCalendarHtml(year, month, data.schedules || [], data.disabledDates || [], historyData.history || []);
+    return;
+  }
+  // 如果有遗留的渲染目标（个人中心日历翻页），使用该目标
+  const target = _calendarTargetEl;
+  _calendarTargetEl = null;
   const [data, historyData] = await Promise.all([
     api('/api/schedules/mine'),
     api('/api/users/me/history').catch(() => ({ history: [] }))
   ]);
-  renderCalendar(data.schedules || [], data.disabledDates || [], historyData.history || []);
+  if (target) {
+    target.innerHTML = renderCalendarHtml(year, month, data.schedules || [], data.disabledDates || [], historyData.history || []);
+  } else {
+    renderCalendar(data.schedules || [], data.disabledDates || [], historyData.history || []);
+  }
 }
 function renderCalendar(schedules, disabledDates, history) {
-  const year = calendarYear, month = calendarMonth;
+  document.getElementById('tabContent').innerHTML = renderCalendarHtml(calendarYear, calendarMonth, schedules, disabledDates, history);
+}
+function renderCalendarHtml(year, month, schedules, disabledDates, history) {
   const daysInMonth = new Date(year, month, 0).getDate();
   const firstDay = new Date(year, month-1, 1).getDay();
   const today = new Date().toISOString().split('T')[0];
@@ -4883,10 +4955,8 @@ function renderCalendar(schedules, disabledDates, history) {
       </div>`;
     });
   }
-
-  document.getElementById('tabContent').innerHTML = html;
+  return html;
 }
-
 async function cancelPublishedSchedule(id) {
   if (!await dialog({ title: '取消发布', body: '取消发布将删除该档期，如果已有申请者会收到通知，确定吗？', confirmText: '确定取消', cancelText: '保留', confirmBtnClass: 'btn-danger' })) return;
   try { await api(`/api/schedules/${id}/cancel-post`, { method:'DELETE' }); showToast('已取消发布','info'); await loadCalendar(); } catch(e) { showToast(e.message,'error'); }
@@ -4927,6 +4997,53 @@ async function toggleDisableDate(date) {
   loadCalendar(calendarYear, calendarMonth);
 }
 
+// ==================== 个人中心 ====================
+let currentProfileTab = 'info'; // info | calendar | account
+let _calendarTargetEl = null; // 个人中心日历渲染目标
+
+async function renderProfileCenter() {
+  const content = document.getElementById('tabContent');
+  content.innerHTML = `
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div class="profile-center-tabs">
+        <button class="profile-center-tab ${currentProfileTab === 'info' ? 'active' : ''}" data-ptab="info" onclick="switchProfileTab('info')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          个人信息
+        </button>
+        <button class="profile-center-tab ${currentProfileTab === 'calendar' ? 'active' : ''}" data-ptab="calendar" onclick="switchProfileTab('calendar')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          我的日程
+        </button>
+        <button class="profile-center-tab ${currentProfileTab === 'account' ? 'active' : ''}" data-ptab="account" onclick="switchProfileTab('account')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><line x1="12" y1="18" x2="12" y2="6"/></svg>
+          我的账户
+        </button>
+      </div>
+      <div id="profileCenterContent" style="padding:20px;"><div class="loading-spinner"></div></div>
+    </div>
+  `;
+  await loadProfileCenterTab();
+}
+
+async function switchProfileTab(tab) {
+  currentProfileTab = tab;
+  document.querySelectorAll('.profile-center-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.ptab === tab);
+  });
+  await loadProfileCenterTab();
+}
+
+async function loadProfileCenterTab() {
+  const container = document.getElementById('profileCenterContent');
+  if (currentProfileTab === 'info') {
+    await renderProfileForm();
+  } else if (currentProfileTab === 'calendar') {
+    await loadCalendar(null, null, container);
+  } else if (currentProfileTab === 'account') {
+    await renderAccountPanel(container);
+  }
+}
+
 // ---------- 个人信息 ----------
 async function renderProfileForm() {
   const gameId = currentUser.gameId || '';
@@ -4965,7 +5082,9 @@ async function renderProfileForm() {
     }
   } catch(e) {}
 
-  document.getElementById('tabContent').innerHTML = `
+  const pcContent = document.getElementById('profileCenterContent');
+  const target = pcContent || document.getElementById('tabContent');
+  target.innerHTML = `
     <div class="card">
       <div class="section-header">
         <div class="section-icon">
