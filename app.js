@@ -1467,12 +1467,7 @@ async function openNotifications() {
   else {
     data.notifications.forEach(n => {
       let actions = '';
-      if (n.type === 'confirm_result') {
-        actions = `<div style="margin-top:8px;display:flex;gap:8px;">
-          <button class="btn btn-sm" style="background:rgba(0,200,83,0.15);color:#00C853;border:1px solid rgba(0,200,83,0.3);font-size:0.78rem;" onclick="confirmMatchResult('${n.relatedId}','win')">确认胜利</button>
-          <button class="btn btn-sm" style="background:rgba(255,45,85,0.15);color:#FF2D55;border:1px solid rgba(255,45,85,0.3);font-size:0.78rem;" onclick="confirmMatchResult('${n.relatedId}','loss')">确认失败</button>
-        </div>`;
-      } else if (n.type === 'team_invite') {
+      if (n.type === 'team_invite') {
         actions = `<div style="margin-top:8px;">
           <button class="btn btn-primary btn-sm" onclick="acceptTeamInvite('${n.relatedId}')" style="font-size:0.78rem;">接受邀请</button>
         </div>`;
@@ -1496,15 +1491,6 @@ async function markAllRead() {
   checkNotifications();
   document.getElementById('notifPanel')?.remove();
 }
-async function confirmMatchResult(matchId, result) {
-  try {
-    await api(`/api/recruitment/${matchId}/confirm-result`, { method:'PUT', body: JSON.stringify({ result }) });
-    showToast(result === 'win' ? '已确认胜利！' : '已确认失败', 'success');
-    checkNotifications();
-    document.getElementById('notifPanel')?.remove();
-    switchTab('public');
-  } catch(e) { showToast(e.message, 'error'); }
-}
 async function acceptTeamInvite(teamId) {
   try {
     await api(`/api/teams/${teamId}/join`, { method:'POST' });
@@ -1523,8 +1509,7 @@ async function switchTab(tab) {
   const content = document.getElementById('tabContent');
   content.innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
   try {
-    if (tab === 'public') await loadPublicSchedules();
-    else if (tab === 'profile') await renderProfileCenter();
+    if (tab === 'profile') await renderProfileCenter();
     else if (tab === 'admin') await renderAdminPanel();
     else if (tab === 'team') await renderTeamPanel();
     else if (tab === 'competition') await renderCompetitionPanel();
@@ -1540,52 +1525,6 @@ document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', (
   if (['publish','profile','admin','competition'].includes(tab) && !currentUser) { showToast('请先登录','info'); openAuthModal('login'); return; }
   switchTab(tab);
 }));
-
-// ==================== 原有功能 ====================
-
-// ---------- 公示榜 ----------
-async function loadPublicSchedules() {
-  const data = await api('/api/recruitment/completed');
-  renderPublicSchedules(data.matches || []);
-}
-function renderPublicSchedules(matches) {
-  const content = document.getElementById('tabContent');
-  if (!matches.length) {
-    content.innerHTML = '<div class="card"><div class="empty-state"><div class="empty-state-icon" style="font-size:2.5rem;color:var(--text-muted);opacity:0.5;">无</div><p>暂无已结束的对局</p></div></div>';
-    return;
-  }
-  const grouped = {};
-  matches.forEach(m => {
-    const date = m.startTime ? m.startTime.split('T')[0] : '未知日期';
-    if (!grouped[date]) grouped[date] = [];
-    grouped[date].push(m);
-  });
-  let html = '';
-  Object.keys(grouped).sort().reverse().forEach(date => {
-    html += `<div class="card">
-      <div class="section-header">
-        <div class="section-icon">
-          <svg viewBox="0 0 24 24"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>
-        </div>
-        <div><div class="section-title">${date}</div></div>
-      </div>`;
-    grouped[date].forEach(m => {
-      const resultBadge = m.result === 'win'
-        ? '<span style="background:rgba(0,200,83,0.15);color:#00C853;border:1px solid rgba(0,200,83,0.3);padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:600;">胜</span>'
-        : '<span style="background:rgba(255,45,85,0.15);color:#FF2D55;border:1px solid rgba(255,45,85,0.3);padding:2px 10px;border-radius:20px;font-size:0.78rem;font-weight:600;">负</span>';
-      html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:16px; background:rgba(245, 158, 11, 0.08); border:1px solid rgba(245, 158, 11, 0.2); margin-bottom:12px; border-radius:var(--radius-md);">
-        <div>
-          <strong style="font-size:1rem;">${m.organizerName || '未知'}</strong>
-          <br><span class="badge badge-level" style="margin-top:6px;">${m.levelReq || ''}</span>
-          <br><span style="font-size:0.82rem;color:var(--text-muted);margin-top:6px;display:inline-block;">${m.startTime ? m.startTime.replace('T',' ') : ''} | 模式${m.mode || 1}</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;">${resultBadge}</div>
-      </div>`;
-    });
-    html += '</div>';
-  });
-  content.innerHTML = html;
-}
 
 // ---------- 我的日程 ----------
 async function loadCalendar(year, month, targetEl) {
@@ -1969,9 +1908,6 @@ function renderMyTeam(team) {
       </div>`;
   });
 
-  const recruitBtn = isCaptain
-    ? `<button class="btn btn-primary btn-sm" onclick="openCreateRecruitModal()">发布招募（带队伍）</button>`
-    : '';
   const inviteBtn = isCaptain && team.memberCount < team.maxMembers
     ? `<button class="btn btn-sm btn-ghost" onclick="openInviteTeamModal('${team.id}')">邀请成员</button>`
     : '';
@@ -1989,7 +1925,6 @@ function renderMyTeam(team) {
           ${team.bio ? `<p style="font-size:0.85rem;color:var(--text-light);margin-top:8px;">${team.bio}</p>` : ''}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          ${recruitBtn}
           ${inviteBtn}
           ${isCaptain ? `<button class="btn btn-sm btn-ghost" onclick="openEditTeamModal()">编辑队伍</button>` : ''}
           <button class="btn btn-sm btn-danger" onclick="leaveTeam('${team.id}')">${isCaptain ? '解散队伍' : '退出队伍'}</button>
@@ -2130,7 +2065,7 @@ async function renderAdminPanel() {
       <h3 style="margin-bottom:16px;">管理员面板</h3>
       <div class="recruit-tabs" style="margin-bottom:16px;">
         <button class="recruit-tab ${currentAdminSubTab==='dashboard'?'active':''}" onclick="switchAdminSubTab('dashboard')">仪表盘</button>
-        <button class="recruit-tab ${currentAdminSubTab==='recruitments'?'active':''}" onclick="switchAdminSubTab('recruitments')">招募管理</button>
+        <button class="recruit-tab ${currentAdminSubTab==='competitions'?'active':''}" onclick="switchAdminSubTab('competitions')">赛事管理</button>
         <button class="recruit-tab ${currentAdminSubTab==='schedules'?'active':''}" onclick="switchAdminSubTab('schedules')">档期管理</button>
         <button class="recruit-tab ${currentAdminSubTab==='users'?'active':''}" onclick="switchAdminSubTab('users')">用户管理</button>
         <button class="recruit-tab ${currentAdminSubTab==='teams'?'active':''}" onclick="switchAdminSubTab('teams')">队伍管理</button>
@@ -2149,7 +2084,7 @@ async function switchAdminSubTab(tab) {
   currentAdminSubTab = tab;
   document.querySelectorAll('.recruit-tab').forEach(t => {
     t.classList.toggle('active', t.textContent.includes({
-      dashboard: '仪表盘', recruitments: '招募管理', schedules: '档期管理',
+      dashboard: '仪表盘', competitions: '赛事管理', schedules: '档期管理',
       users: '用户管理', teams: '队伍管理', logs: '操作日志', security: '权限安全',
       players: '选手审核', clubs: '俱乐部管理'
     }[tab]));
@@ -2163,7 +2098,7 @@ async function loadAdminSubTab() {
   try {
     switch (currentAdminSubTab) {
       case 'dashboard': await loadAdminDashboard(container); break;
-      case 'recruitments': await loadAdminRecruitments(container); break;
+      case 'competitions': await loadAdminCompetitions(container); break;
       case 'schedules': await loadAdminSchedules(container); break;
       case 'users': await loadAdminUsers(container); break;
       case 'teams': await loadAdminTeams(container); break;
@@ -2316,18 +2251,6 @@ async function loadAdminDashboard(container) {
         <div class="stat-value">${s.totalSchedules}</div>
         <div class="stat-label">总档期数</div>
       </div>
-      <div class="stat-card cyan">
-        <div class="stat-value">${s.totalRecruitments}</div>
-        <div class="stat-label">总招募数</div>
-      </div>
-      <div class="stat-card green">
-        <div class="stat-value">${s.activeRecruitments}</div>
-        <div class="stat-label">招募中</div>
-      </div>
-      <div class="stat-card orange">
-        <div class="stat-value">${s.fullRecruitments}</div>
-        <div class="stat-label">已满对局</div>
-      </div>
       <div class="stat-card red">
         <div class="stat-value">${s.totalTeams || 0}</div>
         <div class="stat-label">队伍总数</div>
@@ -2336,27 +2259,51 @@ async function loadAdminDashboard(container) {
   `;
 }
 
-async function loadAdminRecruitments(container) {
-  const data = await api('/api/admin/recruitments');
-  if (!data.recruitments || data.recruitments.length === 0) {
-    container.innerHTML = '<p style="text-align:center;color:var(--text-light);padding:20px;">暂无招募数据</p>';
-    return;
-  }
-  let html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
-  html += '<tr style="background:rgba(22,93,255,0.10);"><th style="padding:8px;text-align:left;color:var(--text-primary);">时间</th><th>发起人</th><th>模式</th><th>状态</th><th>人数</th><th>操作</th></tr>';
-  data.recruitments.forEach(r => {
-    const statusBadge = r.status==='full' ? '<span class="badge badge-full">已满</span>' : r.status==='closed' ? '<span class="badge badge-closed">已关闭</span>' : '<span class="badge badge-recruiting">招募中</span>';
-    html += `<tr style="border-bottom:1px solid var(--border-color);">
-      <td style="padding:8px;color:var(--text-primary);">${r.startTime}</td>
-      <td style="padding:8px;color:var(--text-primary);">${r.organizer.teamName}</td>
-      <td style="padding:8px;color:var(--text-secondary);">模式${r.mode}</td>
-      <td style="padding:8px;">${statusBadge}</td>
-      <td style="padding:8px;color:var(--text-secondary);">${r.totalCount}/10</td>
-      <td style="padding:8px;"><button class="btn btn-xs btn-danger" onclick="adminDeleteRecruitment('${r.id}')">删除</button></td>
-    </tr>`;
-  });
-  html += '</table></div>';
-  container.innerHTML = html;
+async function loadAdminCompetitions(container) {
+  // Phase 3 占位：管理员赛事管理
+  container.innerHTML = `
+    <button class="btn btn-primary btn-sm" onclick="openCreateCompetitionModal()" style="margin-bottom:12px;">创建赛事</button>
+    <div id="adminCompList"><p style="color:var(--text-muted);">赛事列表加载中...</p></div>
+  `;
+  loadAdminCompList();
+}
+async function loadAdminCompList() {
+  const container = document.getElementById('adminCompList');
+  try {
+    const data = await api('/api/competitions');
+    const comps = data.competitions || [];
+    if (!comps.length) { container.innerHTML = '<p style="color:var(--text-muted);">暂无赛事</p>'; return; }
+    container.innerHTML = comps.map(c => `
+      <div style="padding:12px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:8px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <span style="font-weight:600;color:var(--text-primary);">${c.name}</span>
+          <span style="font-size:0.72rem;color:var(--text-muted);margin-left:8px;">${c.comp_status || c.status || ''}</span>
+        </div>
+        <button class="btn btn-xs btn-danger" onclick="adminDeleteCompetition('${c.id}')">删除</button>
+      </div>
+    `).join('');
+  } catch(e) { container.innerHTML = '<p style="color:var(--danger);">加载失败</p>'; }
+}
+async function openCreateCompetitionModal() {
+  const result = await dialogPrompt({ title: '创建常规赛事', body: '请输入赛事名称和开赛时间', placeholder: '如：5月17日黄金赛|2026-05-17 20:00', defaultValue: '', confirmText: '创建', cancelText: '取消' });
+  if (!result) return;
+  const parts = result.split('|');
+  const name = parts[0]?.trim();
+  const startTime = parts[1]?.trim();
+  if (!name) { showToast('请输入赛事名称', 'error'); return; }
+  try {
+    await api('/api/admin/competitions', { method:'POST', body: JSON.stringify({ name, start_time: startTime || null, tier: 'regular', bo: 1 }) });
+    showToast('赛事已创建', 'success');
+    loadAdminCompList();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+async function adminDeleteCompetition(id) {
+  if (!await dialog({ title: '删除赛事', body: '确定删除该赛事？', confirmText: '删除', cancelText: '取消', confirmBtnClass: 'btn-danger' })) return;
+  try {
+    await api(`/api/admin/competitions/${id}`, { method:'DELETE' });
+    showToast('已删除', 'info');
+    loadAdminCompList();
+  } catch(e) { showToast(e.message, 'error'); }
 }
 
 async function loadAdminSchedules(container) {
@@ -2821,13 +2768,6 @@ async function editClubName(clubId, currentName) {
 async function adminDeleteSchedule(id) {
   if (!await dialog({ title: '管理员操作', body: '确定强制删除此档期？', confirmText: '删除', cancelText: '取消', confirmBtnClass: 'btn-danger' })) return;
   await api(`/api/admin/schedules/${id}`, { method:'DELETE' });
-  showToast('已删除','info');
-  loadAdminSubTab();
-}
-
-async function adminDeleteRecruitment(id) {
-  if (!await dialog({ title: '管理员操作', body: '确定强制删除此招募？所有报名人员将被移除。', confirmText: '删除', cancelText: '取消', confirmBtnClass: 'btn-danger' })) return;
-  await api(`/api/admin/recruitments/${id}`, { method:'DELETE' });
   showToast('已删除','info');
   loadAdminSubTab();
 }
