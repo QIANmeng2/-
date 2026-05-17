@@ -1280,7 +1280,7 @@ app.put('/api/users/me/profile', authMiddleware, async (req, res) => {
 // 获取所有队伍（公开列表）
 app.get('/api/teams', async (req, res) => {
   try {
-    const teams = await pool.query("SELECT * FROM teams WHERE status = 'open' ORDER BY createdAt DESC");
+    const teams = await pool.query("SELECT * FROM teams ORDER BY createdAt DESC");
     if (teams.rows.length === 0) return res.json({ teams: [] });
 
     const teamIds = teams.rows.map(t => t.id);
@@ -1296,7 +1296,12 @@ app.get('/api/teams', async (req, res) => {
         const u = userMap[m.userid] || {};
         return { userId: m.userid, role: m.role, joinedAt: m.joinedat, username: u.username, teamName: u.teamname, coachName: u.coachname, level: u.level };
       });
-      return { id: t.id, name: t.name, bio: t.bio, captainId: t.captainid, status: t.status, memberCount: tm.length, maxMembers: t.maxmembers, members: memberList, createdAt: t.createdat };
+      // 根据实际人数计算真实状态（自动修复历史脏数据）
+      const actualStatus = tm.length >= t.maxmembers ? 'closed' : 'open';
+      if (actualStatus !== t.status) {
+        pool.query("UPDATE teams SET status = $1 WHERE id = $2", [actualStatus, t.id]).catch(() => {});
+      }
+      return { id: t.id, name: t.name, bio: t.bio, captainId: t.captainid, status: actualStatus, memberCount: tm.length, maxMembers: t.maxmembers, members: memberList, createdAt: t.createdat };
     });
     res.json({ teams: result });
   } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
@@ -1329,7 +1334,12 @@ app.get('/api/teams/mine', authMiddleware, async (req, res) => {
     });
 
     const myRole = members.rows.find(m => m.userid === req.userId)?.role || 'member';
-    res.json({ team: { id: t.id, name: t.name, bio: t.bio, captainId: t.captainid, status: t.status, memberCount: members.rows.length, maxMembers: t.maxmembers, members: memberList, createdAt: t.createdat, myRole } });
+    // 根据实际人数计算真实状态（自动修复历史脏数据）
+    const actualStatus = members.rows.length >= t.maxmembers ? 'closed' : 'open';
+    if (actualStatus !== t.status) {
+      await pool.query("UPDATE teams SET status = $1 WHERE id = $2", [actualStatus, t.id]);
+    }
+    res.json({ team: { id: t.id, name: t.name, bio: t.bio, captainId: t.captainid, status: actualStatus, memberCount: members.rows.length, maxMembers: t.maxmembers, members: memberList, createdAt: t.createdat, myRole } });
   } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
 });
 
