@@ -658,7 +658,9 @@
     .welcome-feat-desc {
       font-size: 0.72rem;
       color: var(--text-secondary);
-      line-height: 1.5;
+      line-height: 1.6;
+      word-break: keep-all;
+      overflow-wrap: break-word;
     }
     .welcome-footer {
       padding: 0 28px 28px;
@@ -2000,7 +2002,7 @@
       .welcome-features { padding: 0 14px 14px; gap: 7px; }
       .welcome-feature { padding: 10px 12px; gap: 10px; }
       .welcome-feat-label { font-size: 0.78rem; }
-      .welcome-feat-desc { font-size: 0.7rem; }
+      .welcome-feat-desc { font-size: 0.72rem; line-height: 1.5; }
       .welcome-footer { padding: 0 14px 18px; }
       .welcome-btn-login { padding: 12px; font-size: 0.88rem; border-radius: 8px; }
       .competition-card { padding: 22px 16px 18px; max-width: 92vw; }
@@ -2203,7 +2205,7 @@
         </div>
         <div>
           <div class="welcome-feat-label">招募大厅</div>
-          <div class="welcome-feat-desc">散人自由组队，凑齐10人全员确认成局，自动创建腾讯会议开打</div>
+          <div class="welcome-feat-desc">散人自由组队，凑齐 10 人全员确认成局</div>
         </div>
       </div>
       <div class="welcome-feature">
@@ -2212,7 +2214,7 @@
         </div>
         <div>
           <div class="welcome-feat-label">转会市场</div>
-          <div class="welcome-feat-desc">认证实力，巅峰分+段位自动生成身价，等待俱乐部老板签约带走</div>
+          <div class="welcome-feat-desc">巅峰分 + 段位认证实力，自动估价等老板签约</div>
         </div>
       </div>
       <div class="welcome-feature">
@@ -2221,7 +2223,7 @@
         </div>
         <div>
           <div class="welcome-feat-label">俱乐部</div>
-          <div class="welcome-feat-desc">老板创建专属战队，浏览转会市场签约心仪选手，管理自己的电竞军团</div>
+          <div class="welcome-feat-desc">创建专属战队，签约选手，管理电竞军团</div>
         </div>
       </div>
       <div class="welcome-feature">
@@ -2230,7 +2232,7 @@
         </div>
         <div>
           <div class="welcome-feat-label">赛事系统</div>
-          <div class="welcome-feat-desc">参与奖金赛事，赢取梦币奖励，查看历史战绩与获奖公示</div>
+          <div class="welcome-feat-desc">参与奖金赛事赢取梦币，查看战绩与获奖公示</div>
         </div>
       </div>
       <div class="welcome-feature">
@@ -2239,7 +2241,7 @@
         </div>
         <div>
           <div class="welcome-feat-label">经济系统</div>
-          <div class="welcome-feat-desc">赛事奖金、转会签约费，全部通过梦币流转，兑换实体奖励或采买选手</div>
+          <div class="welcome-feat-desc">赛事、转会资金全部梦币流转，可兑换实体奖励</div>
         </div>
       </div>
     </div>
@@ -2914,6 +2916,19 @@ async function renderMarketPanel() {
   const content = document.getElementById('tabContent');
   content.innerHTML = '<div class="loading-spinner"></div>';
   try {
+    // 管理员或俱乐部老板跳过选手认证，直接进入转会市场
+    const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
+    let isBoss = false;
+    if (!isAdmin && currentUser) {
+      try {
+        const clubsData = await api('/api/clubs');
+        isBoss = (clubsData.clubs || []).some(c => c.owner_id === currentUser.id);
+      } catch(e) { isBoss = false; }
+    }
+    if (isAdmin || isBoss) {
+      await loadMarketPlayers(content);
+      return;
+    }
     // 检查选手认证状态
     const playerData = await api('/api/player/status');
     const player = playerData.player;
