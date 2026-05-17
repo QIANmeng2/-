@@ -569,8 +569,6 @@ app.get('/api/admin/dashboard', authMiddleware, adminMiddleware, async (req, res
   } catch (e) { console.error(e); res.status(500).json({ message: '加载失败' }); }
 });
 
-});
-
 // 管理员获取所有用户（支持筛选）
 app.get('/api/admin/users', authMiddleware, adminMiddleware, async (req, res) => {
   try {
@@ -2032,5 +2030,6 @@ async function startServer() {
       }
     } catch(e) { console.error('[赛事自动转换]', e.message); }
   }, 60 * 1000);
+}
 
 startServer();
