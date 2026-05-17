@@ -771,14 +771,14 @@
       background: linear-gradient(90deg, #7B2FFD, #8b5cf6, #FFD700, #8b5cf6, #7B2FFD);
       background-size: 200% 100%;
       width: 0%;
-      animation: load-fill-progress 2.8s cubic-bezier(.2,.6,.35,1) forwards, load-fill-sweep 1.8s ease-in-out infinite;
+      animation: load-fill-progress 6s ease-out forwards, load-fill-sweep 1.8s ease-in-out infinite;
     }
     @keyframes load-fill-progress {
       0%   { width: 0%; }
-      20%  { width: 15%; }
-      50%  { width: 45%; }
-      80%  { width: 78%; }
-      100% { width: 90%; }
+      15%  { width: 45%; }   /* 0.9s 快速到45% */
+      65%  { width: 45%; }   /* 卡在45%（0.9s→3.9s，停3秒） */
+      82%  { width: 78%; }   /* 4.9s 跳到78% */
+      100% { width: 90%; }   /* 6s 慢速到90% */
     }
     @keyframes load-fill-sweep {
       0%, 100% { background-position: 0% 50%; }
