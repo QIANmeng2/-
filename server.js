@@ -1133,31 +1133,235 @@ app.get('/api/competitions', authMiddleware, async (req, res) => {
       WHERE c.status != 'deleted'
       ORDER BY c.created_at DESC
     `);
-    const all = result.rows;
+    // 为每个赛事附加报名统计
+    const comps = result.rows;
+    if (comps.length > 0) {
+      const ids = comps.map(c => c.id);
+      const regs = await pool.query(
+        `SELECT competition_id, entry_fee, status FROM competition_registrations WHERE competition_id = ANY($1) AND status != 'cancelled'`,
+        [ids]
+      );
+      const statsMap = {};
+      comps.forEach(c => { statsMap[c.id] = { count: 0, fee500: 0, fee1000: 0, fee2000: 0, prizePool: 0 }; });
+      regs.rows.forEach(r => {
+        const s = statsMap[r.competition_id];
+        if (!s) return;
+        s.count++;
+        if (r.entry_fee === 500) s.fee500++;
+        else if (r.entry_fee === 1000) s.fee1000++;
+        else if (r.entry_fee === 2000) s.fee2000++;
+        s.prizePool += r.entry_fee;
+      });
+      comps.forEach(c => { c.reg_stats = statsMap[c.id]; });
+    }
+    const all = comps;
     res.json({
+      competitions: all,
       elite: all.filter(c => c.tier === 'elite'),
       secondary: all.filter(c => c.tier === 'secondary'),
-      regular: all.filter(c => c.tier !== 'elite' && c.tier !== 'secondary'), // 含旧数据
-      all
+      regular: all.filter(c => c.tier !== 'elite' && c.tier !== 'secondary')
     });
   } catch(e) { res.status(500).json({ message: '查询失败' }); }
 });
 
 app.post('/api/admin/competitions', authMiddleware, adminMiddleware, async (req, res) => {
-  const { name, qr_code_url, tier } = req.body;
+  const { name, qr_code_url, tier, start_time, bo } = req.body;
   if (!name) return res.status(400).json({ message: '请填写赛事名称' });
   const id = 'comp_' + Date.now();
   try {
-    await pool.query('INSERT INTO competitions (id, name, qr_code_url, tier, created_by) VALUES ($1,$2,$3,$4,$5)', [id, name, qr_code_url || null, tier || 'regular', req.userId]);
+    await pool.query(
+      'INSERT INTO competitions (id, name, qr_code_url, tier, created_by, start_time, bo, comp_status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+      [id, name, qr_code_url || null, tier || 'regular', req.userId, start_time || null, bo || 1, 'upcoming']
+    );
     res.json({ success: true, id });
   } catch(e) { console.error(e); res.status(500).json({ message: '创建失败' }); }
 });
 
 app.delete('/api/admin/competitions/:id', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    await pool.query("UPDATE competitions SET status = 'deleted' WHERE id = $1", [req.params.id]);
+    await pool.query("UPDATE competitions SET comp_status = 'cancelled', status = 'deleted' WHERE id = $1", [req.params.id]);
+    // 取消所有报名并退费
+    const regs = await pool.query("SELECT player_user_id, entry_fee FROM competition_registrations WHERE competition_id = $1 AND entry_fee > 0", [req.params.id]);
+    for (const r of regs.rows) {
+      await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id = $2', [r.entry_fee, r.player_user_id]);
+      await pool.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'refund','赛事取消退款')", [r.player_user_id, r.entry_fee]);
+    }
+    await pool.query("UPDATE competition_registrations SET status = 'cancelled' WHERE competition_id = $1", [req.params.id]);
     res.json({ success: true });
   } catch(e) { res.status(500).json({ message: '删除失败' }); }
+});
+
+// ==================== 赛事报名系统 ====================
+
+// 团队报名（队长操作）
+app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
+  const { team_id } = req.body;
+  if (!team_id) return res.status(400).json({ message: '请选择队伍' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // 检查赛事状态
+    const comp = await client.query('SELECT * FROM competitions WHERE id = $1', [req.params.id]);
+    if (comp.rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ message: '赛事不存在' }); }
+    const c = comp.rows[0];
+    if (c.comp_status !== 'upcoming' && c.comp_status !== 'open') { await client.query('ROLLBACK'); return res.status(400).json({ message: '该赛事不可报名' }); }
+    // 检查队伍和队长身份
+    const team = await client.query('SELECT * FROM teams WHERE id = $1', [team_id]);
+    if (team.rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ message: '队伍不存在' }); }
+    if (team.rows[0].captainid !== req.userId) { await client.query('ROLLBACK'); return res.status(403).json({ message: '仅队长可报名' }); }
+    // 检查队伍是否在自由名单中（5人）
+    const tm = await client.query('SELECT * FROM team_members WHERE teamId = $1', [team_id]);
+    if (tm.rows.length < 5) { await client.query('ROLLBACK'); return res.status(400).json({ message: '队伍不足5人，无法报名' }); }
+    // 已报名检查
+    const already = await client.query('SELECT * FROM competition_registrations WHERE competition_id = $1 AND team_id = $2 AND status != $3', [req.params.id, team_id, 'cancelled']);
+    if (already.rows.length > 0) { await client.query('ROLLBACK'); return res.status(400).json({ message: '该队伍已报名' }); }
+    // 创建5路报名（待确认）
+    const lanes = ['对抗路','打野','中路','发育路','游走'];
+    for (const lane of lanes) {
+      await client.query(
+        'INSERT INTO competition_registrations (competition_id, team_id, player_user_id, lane, status) VALUES ($1,$2,$3,$4,$5)',
+        [req.params.id, team_id, '', lane, 'reserved']
+      );
+    }
+    // 设置赛事状态为 open
+    if (c.comp_status === 'upcoming') {
+      await client.query("UPDATE competitions SET comp_status = 'open' WHERE id = $1", [req.params.id]);
+    }
+    // 通知队伍全部5人确认入场
+    const members = tm.rows;
+    for (const m of members) {
+      await sendNotification(m.userid, 'competition_register',
+        `你的队伍「${team.rows[0].name}」已报名赛事「${c.name}」，请进入比赛页确认入场并选择入场费`);
+    }
+    await client.query('COMMIT');
+    res.json({ success: true, message: '报名成功，请等待队员确认' });
+  } catch(e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ message: '报名失败' }); } finally { client.release(); }
+});
+
+// 队员确认入场 + 选择入场费
+app.post('/api/competitions/:id/confirm', authMiddleware, async (req, res) => {
+  const { entry_fee } = req.body;
+  if (![500,1000,2000].includes(entry_fee)) return res.status(400).json({ message: '入场费必须为500/1000/2000' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // 检查用户是否在该赛事的报名中
+    const reg = await client.query(
+      'SELECT * FROM competition_registrations WHERE competition_id = $1 AND team_id IN (SELECT teamId FROM team_members WHERE userId = $2) AND status = $3',
+      [req.params.id, req.userId, 'reserved']
+    );
+    if (reg.rows.length === 0) { await client.query('ROLLBACK'); return res.status(400).json({ message: '未找到你的报名记录' }); }
+    // 检查余额
+    const user = await client.query('SELECT dream_coins FROM users WHERE id = $1', [req.userId]);
+    const balance = user.rows[0]?.dream_coins || 0;
+    if (balance < entry_fee) { await client.query('ROLLBACK'); return res.status(400).json({ message: `梦币不足（余额：${balance}）` }); }
+    // 分配一个空闲路线给该玩家
+    const freeLane = await client.query(
+      'SELECT * FROM competition_registrations WHERE competition_id = $1 AND team_id = $2 AND player_user_id = $3 AND status = $4 LIMIT 1 FOR UPDATE',
+      [req.params.id, reg.rows[0].team_id, '', 'reserved']
+    );
+    if (freeLane.rows.length === 0) { await client.query('ROLLBACK'); return res.status(400).json({ message: '没有空闲位置了' }); }
+    // 扣梦币
+    await client.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) - $1 WHERE id = $2', [entry_fee, req.userId]);
+    await client.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'deduct','赛事入场费')", [req.userId, -entry_fee]);
+    // 更新报名状态
+    await client.query(
+      'UPDATE competition_registrations SET player_user_id = $1, entry_fee = $2, status = $3 WHERE id = $4',
+      [req.userId, entry_fee, 'confirmed', freeLane.rows[0].id]
+    );
+    // 检查是否10人全部确认
+    const confirmed = await client.query(
+      "SELECT COUNT(*) FROM competition_registrations WHERE competition_id = $1 AND status = 'confirmed'",
+      [req.params.id]
+    );
+    if (parseInt(confirmed.rows[0].count) >= 10) {
+      await client.query("UPDATE competitions SET comp_status = 'locked' WHERE id = $1", [req.params.id]);
+    }
+    await client.query('COMMIT');
+    res.json({ success: true, entry_fee });
+  } catch(e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ message: '确认失败' }); } finally { client.release(); }
+});
+
+// 取消入场（退费）
+app.post('/api/competitions/:id/cancel', authMiddleware, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const reg = await client.query(
+      "SELECT * FROM competition_registrations WHERE competition_id = $1 AND player_user_id = $2 AND status = 'confirmed'",
+      [req.params.id, req.userId]
+    );
+    if (reg.rows.length === 0) { await client.query('ROLLBACK'); return res.status(400).json({ message: '未找到已确认的报名' }); }
+    const r = reg.rows[0];
+    if (r.entry_fee > 0) {
+      await client.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id = $2', [r.entry_fee, req.userId]);
+      await client.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'refund','取消入场退费')", [req.userId, r.entry_fee]);
+    }
+    await client.query("UPDATE competition_registrations SET status = 'cancelled', entry_fee = 0 WHERE id = $1", [r.id]);
+    // 如果之前是 locked，恢复为 open
+    await client.query("UPDATE competitions SET comp_status = 'open' WHERE id = $1 AND comp_status = 'locked'", [req.params.id]);
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch(e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ message: '取消失败' }); } finally { client.release(); }
+});
+
+// 提交赛后截图
+app.post('/api/competitions/:id/submit-result', authMiddleware, async (req, res) => {
+  const { winner, screenshots, players } = req.body;
+  if (!winner || !screenshots || !players) return res.status(400).json({ message: '参数不完整' });
+  try {
+    await pool.query(
+      'INSERT INTO competition_results (competition_id, winner, screenshot_urls, player_data) VALUES ($1,$2,$3,$4)',
+      [req.params.id, winner, JSON.stringify(screenshots), JSON.stringify(players)]
+    );
+    await pool.query("UPDATE competitions SET comp_status = 'review' WHERE id = $1", [req.params.id]);
+    res.json({ success: true, message: '结果已提交，等待管理员审核' });
+  } catch(e) { console.error(e); res.status(500).json({ message: '提交失败' }); }
+});
+
+// 管理员确认结果并发放奖池
+app.post('/api/admin/competitions/:id/confirm-result', authMiddleware, adminMiddleware, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // 获取所有已确认的报名
+    const regs = await client.query(
+      "SELECT * FROM competition_registrations WHERE competition_id = $1 AND status = 'confirmed'",
+      [req.params.id]
+    );
+    if (regs.rows.length < 10) { await client.query('ROLLBACK'); return res.status(400).json({ message: '报名不足10人' }); }
+    // 获取结果
+    const result = await client.query('SELECT * FROM competition_results WHERE competition_id = $1 ORDER BY created_at DESC LIMIT 1', [req.params.id]);
+    if (result.rows.length === 0) { await client.query('ROLLBACK'); return res.status(400).json({ message: '未找到比赛结果' }); }
+    const r = result.rows[0];
+    // 计算奖池
+    const totalPool = regs.rows.reduce((sum, x) => sum + x.entry_fee, 0);
+    // 根据 winner 和 players 数据判定胜负
+    const playerData = r.player_data || [];
+    const winners = playerData.filter(p => p.team === r.winner && p.win);
+    const winnerIds = new Set(winners.map(p => p.player_user_id));
+    // 胜方总入场费
+    const winnerFees = regs.rows.filter(x => winnerIds.has(x.player_user_id));
+    const winnerTotalFee = winnerFees.reduce((sum, x) => sum + x.entry_fee, 0);
+    // 按占比分配
+    for (const w of winnerFees) {
+      const share = Math.round(totalPool * (w.entry_fee / winnerTotalFee));
+      await client.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id = $2', [share, w.player_user_id]);
+      await client.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'reward','赛事奖励')", [w.player_user_id, share]);
+    }
+    // 写入玩家统计
+    for (const p of playerData) {
+      await client.query(
+        'INSERT INTO competition_player_stats (competition_id, player_user_id, team, lane, kda, win) VALUES ($1,$2,$3,$4,$5,$6)',
+        [req.params.id, p.player_user_id, p.team, p.lane, p.kda || '', p.win || false]
+      );
+    }
+    // 更新状态
+    await client.query('UPDATE competition_results SET confirmed_by = $1, confirmed_at = NOW() WHERE id = $2', [req.userId, r.id]);
+    await client.query("UPDATE competitions SET comp_status = 'finished' WHERE id = $1", [req.params.id]);
+    await client.query('COMMIT');
+    res.json({ success: true, totalPool, winnerCount: winnerFees.length });
+  } catch(e) { await client.query('ROLLBACK'); console.error(e); res.status(500).json({ message: '结算失败' }); } finally { client.release(); }
 });
 
 // ==================== 梦币系统 ====================
