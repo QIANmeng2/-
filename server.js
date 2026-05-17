@@ -1440,9 +1440,14 @@ app.post('/api/teams/:id/leave', authMiddleware, async (req, res) => {
       }
     }
 
-    // 如果之前关闭了，重新开放
-    if (t.status === 'closed') {
+    // 删除成员后，根据当前人数自动更新队伍状态
+    const countRes = await client.query('SELECT COUNT(*) FROM team_members WHERE teamId = $1', [req.params.id]);
+    const count = parseInt(countRes.rows[0].count);
+    const maxMembers = t.maxmembers || 7;
+    if (count < maxMembers) {
       await client.query("UPDATE teams SET status = 'open' WHERE id = $1", [req.params.id]);
+    } else {
+      await client.query("UPDATE teams SET status = 'closed' WHERE id = $1", [req.params.id]);
     }
 
     await client.query('COMMIT');
@@ -1466,9 +1471,14 @@ app.delete('/api/teams/:id/members/:userId', authMiddleware, async (req, res) =>
 
     await client.query('DELETE FROM team_members WHERE teamId = $1 AND userId = $2', [req.params.id, req.params.userId]);
 
-    // 如果之前关闭了，重新开放
-    if (tRes.rows[0].status === 'closed') {
+    // 删除成员后，根据当前人数自动更新队伍状态
+    const countRes = await client.query('SELECT COUNT(*) FROM team_members WHERE teamId = $1', [req.params.id]);
+    const count = parseInt(countRes.rows[0].count);
+    const maxMembers = tRes.rows[0].maxmembers || 7;
+    if (count < maxMembers) {
       await client.query("UPDATE teams SET status = 'open' WHERE id = $1", [req.params.id]);
+    } else {
+      await client.query("UPDATE teams SET status = 'closed' WHERE id = $1", [req.params.id]);
     }
 
     await client.query('COMMIT');
@@ -1622,6 +1632,18 @@ app.delete('/api/admin/teams/:id/members/:userId', authMiddleware, adminMiddlewa
     await client.query('DELETE FROM team_members WHERE teamId = $1 AND userId = $2', [req.params.id, req.params.userId]);
     // 如果移除的是队长，清空队伍的 captainId
     await client.query('UPDATE teams SET captainId = NULL WHERE id = $1 AND captainId = $2', [req.params.id, req.params.userId]);
+
+    // 删除成员后，根据当前人数自动更新队伍状态
+    const countRes = await client.query('SELECT COUNT(*) FROM team_members WHERE teamId = $1', [req.params.id]);
+    const count = parseInt(countRes.rows[0].count);
+    const teamInfoRes = await client.query('SELECT maxMembers FROM teams WHERE id = $1', [req.params.id]);
+    const maxMembers = teamInfoRes.rows[0]?.maxmembers || 7;
+    if (count < maxMembers) {
+      await client.query("UPDATE teams SET status = 'open' WHERE id = $1", [req.params.id]);
+    } else {
+      await client.query("UPDATE teams SET status = 'closed' WHERE id = $1", [req.params.id]);
+    }
+
     await client.query('COMMIT');
     // 通知被移除的成员
     const teamRes = await pool.query('SELECT name FROM teams WHERE id = $1', [req.params.id]);
