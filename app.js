@@ -277,6 +277,96 @@ async function handleCreateCompetition(e) {
     loadCompetitionList();
   } catch(e) { showToast(e.message,'error'); }
 }
+
+// ==================== 赛事报名交互 ====================
+async function loadCompRegUI(compId, c) {
+  const container = document.getElementById('compRegActions');
+  if (!container) return;
+  let myTeam = null;
+  try { const td = await api('/api/teams/mine'); myTeam = td.team; } catch(e) {}
+  const isCaptain = myTeam && myTeam.captainId === currentUser.id;
+  const canRegister = c.comp_status === 'open' || c.comp_status === 'upcoming';
+  // 检查当前用户报名状态
+  let myReg = null;
+  try {
+    const data = await api('/api/competitions/'+compId+'/my-reg');
+    const allRegs = data.registrations || [];
+    myReg = allRegs.find(r => r.player_user_id === currentUser.id);
+  } catch(e) {}
+
+  if (myReg && myReg.status === 'confirmed') {
+    container.innerHTML = '<div style="padding:12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:8px;"><span style="color:#10b981;font-weight:600;">已确认入场</span><span style="color:var(--text-muted);margin-left:8px;font-size:0.78rem;">'+myReg.lane+' · 入场费：'+myReg.entry_fee+'梦币</span></div>';
+  } else if (myReg && myReg.status === 'reserved') {
+    container.innerHTML = '<div style="padding:12px;background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.2);border-radius:8px;"><span style="color:var(--warning);font-weight:600;">待确认入场</span><span style="color:var(--text-muted);margin-left:8px;">'+myReg.lane+'</span><div style="display:flex;gap:8px;margin-top:8px;"><button class="btn btn-sm" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:#10b981;" onclick="confirmCompetitionEntry(\''+compId+'\',500)">500梦币</button><button class="btn btn-sm" style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);color:#f59e0b;" onclick="confirmCompetitionEntry(\''+compId+'\',1000)">1000梦币</button><button class="btn btn-sm" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#ef4444;" onclick="confirmCompetitionEntry(\''+compId+'\',2000)">2000梦币</button></div></div>';
+  } else if (canRegister && isCaptain && myTeam && myTeam.memberCount >= 5) {
+    container.innerHTML = '<button class="btn btn-primary btn-sm" onclick="openTeamPlayerSelect(\''+compId+'\',\''+myTeam.id+'\',\''+myTeam.name.replace(/'/g,"\\'")+'\')">选择队员报名参赛</button>';
+  } else if (canRegister && !myTeam) {
+    container.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;">需要加入队伍后由队长报名参赛</p>';
+  }
+  // 状态提示
+  if (c.comp_status === 'live') {
+    container.innerHTML += '<div style="margin-top:8px;padding:10px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:6px;color:var(--danger);font-size:0.78rem;">比赛进行中，开赛20分钟后可提交结果</div>';
+  } else if (c.comp_status === 'review') {
+    container.innerHTML += '<button class="btn btn-primary btn-sm" onclick="submitCompetitionResult(\''+compId+'\')" style="margin-top:8px;">提交比赛结果</button>';
+  }
+}
+
+// 队长选择5名队员+分配位置
+function openTeamPlayerSelect(compId, teamId, teamName) {
+  api('/api/teams/mine').then(data => {
+    const team = data.team;
+    if (!team) return showToast('队伍不存在','error');
+    const members = team.members || [];
+    if (members.length < 5) return showToast('队伍不足5人','error');
+    const lanes = ['对抗路','打野','中路','发育路','游走'];
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = '<div class="modal modal-md" style="max-width:500px;">'+
+      '<h3 style="margin-bottom:12px;">选择5名上场队员 - '+teamName+'</h3>'+
+      '<p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:12px;">为每位队员分配一个位置，同位置不能重复</p>'+
+      lanes.map(l => '<div class="form-group" style="display:flex;align-items:center;gap:8px;">'+
+        '<span style="width:56px;font-size:0.82rem;color:var(--text-secondary);flex-shrink:0;">'+l+'</span>'+
+        '<select class="form-input player-sel" data-lane="'+l+'" style="flex:1;">'+
+          '<option value="">-- 选择队员 --</option>'+
+          members.map(m => '<option value="'+m.userId+'">'+(m.coachName||m.username)+'</option>').join('')+
+        '</select></div>').join('')+
+      '<div style="margin-top:12px;display:flex;gap:8px;">'+
+        '<button class="btn btn-primary btn-sm" onclick="submitTeamPlayers(\''+compId+'\',\''+teamId+'\')">确认报名</button>'+
+        '<button class="btn btn-ghost btn-sm" onclick="this.closest(\'.modal-overlay\').remove()">取消</button>'+
+      '</div></div>';
+    document.body.appendChild(overlay);
+  }).catch(e => showToast('加载队伍失败','error'));
+}
+async function submitTeamPlayers(compId, teamId) {
+  const players = [];
+  const usedIds = new Set();
+  document.querySelectorAll('.player-sel').forEach(sel => {
+    const uid = sel.value;
+    const lane = sel.dataset.lane;
+    if (uid && !usedIds.has(uid)) {
+      usedIds.add(uid);
+      players.push({ user_id: uid, lane: lane });
+    }
+  });
+  if (players.length !== 5) { showToast('请为5个位置各选1名不同队员','error'); return; }
+  try {
+    await api('/api/competitions/'+compId+'/register', { method:'POST', body: JSON.stringify({ team_id: teamId, players }) });
+    showToast('报名成功','success');
+    document.querySelector('.modal-overlay')?.remove();
+    document.querySelector('.comp-detail-overlay')?.remove();
+    loadCompetitionList();
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+async function confirmCompetitionEntry(compId, fee) {
+  if (!await dialog({ title:'确认入场', body:'确定使用 '+fee+' 梦币入场吗？', confirmText:'确认', cancelText:'取消' })) return;
+  try {
+    await api('/api/competitions/'+compId+'/confirm', { method:'POST', body: JSON.stringify({ entry_fee: fee }) });
+    showToast('已确认入场','success');
+    document.querySelector('.comp-detail-overlay')?.remove();
+    loadCompetitionList();
+  } catch(e) { showToast(e.message,'error'); }
+}
 // ==================== 我的账户页面 ====================
 async function renderAccountPanel(targetEl) {
   const content = targetEl || document.getElementById('tabContent');
