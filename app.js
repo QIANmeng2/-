@@ -2386,8 +2386,8 @@ async function loadAdminCompList() {
   } catch(e) { container.innerHTML = '<p style="color:var(--danger);">加载失败</p>'; }
 }
 async function adminDeleteCompetition(id) {
-  if (!await dialog({ title: '删除赛事', body: '确定删除该赛事？', confirmText: '删除', cancelText: '取消', confirmBtnClass: 'btn-danger' })) return;
   try {
+    if (!await dialog({ title: '删除赛事', body: '确定删除该赛事？', confirmText: '删除', cancelText: '取消', confirmBtnClass: 'btn-danger' })) return;
     await api(`/api/admin/competitions/${id}`, { method:'DELETE' });
     showToast('已删除', 'info');
     loadAdminCompList();
@@ -2956,15 +2956,17 @@ function dialog(options) {
         ${options.title ? `<div class="dialog-title">${options.title}</div>` : ''}
         ${options.body ? `<div class="dialog-body">${options.body}</div>` : ''}
         <div class="dialog-actions">
-          ${options.cancelText ? `<button class="btn btn-ghost" id="dialogCancel">${options.cancelText}</button>` : ''}
-          ${options.confirmText ? `<button class="btn ${options.confirmBtnClass||'btn-primary'}" id="dialogConfirm">${options.confirmText}</button>` : ''}
+          ${options.cancelText ? `<button class="btn btn-ghost dialog-cancel">${options.cancelText}</button>` : ''}
+          ${options.confirmText ? `<button class="btn ${options.confirmBtnClass||'btn-primary'} dialog-confirm">${options.confirmText}</button>` : ''}
         </div>
       </div>`;
     document.body.appendChild(overlay);
-    const close = (result) => { document.body.removeChild(overlay); resolve(result); };
+    const close = (result) => { if (overlay.parentNode) document.body.removeChild(overlay); resolve(result); };
     overlay.addEventListener('click', e => { if (e.target === overlay) close(false); });
-    document.getElementById('dialogCancel')?.addEventListener('click', () => close(false));
-    document.getElementById('dialogConfirm')?.addEventListener('click', () => close(true));
+    const btnCancel = overlay.querySelector('.dialog-cancel');
+    const btnConfirm = overlay.querySelector('.dialog-confirm');
+    if (btnCancel) btnCancel.addEventListener('click', () => close(false));
+    if (btnConfirm) btnConfirm.addEventListener('click', () => close(true));
   });
 }
 
@@ -2976,20 +2978,22 @@ function dialogPrompt(options) {
       <div class="dialog">
         ${options.title ? `<div class="dialog-title">${options.title}</div>` : ''}
         ${options.body ? `<div class="dialog-body">${options.body}</div>` : ''}
-        <input class="dialog-input" id="dialogInput" value="${options.defaultValue || ''}" placeholder="${options.placeholder || ''}" style="margin-bottom:16px;">
+        <input class="dialog-input dialog-input-el" value="${options.defaultValue || ''}" placeholder="${options.placeholder || ''}" style="margin-bottom:16px;">
         <div class="dialog-actions">
-          <button class="btn btn-ghost" id="dialogCancel">${options.cancelText || '取消'}</button>
-          <button class="btn btn-primary" id="dialogConfirm">${options.confirmText || '确定'}</button>
+          <button class="btn btn-ghost dialog-cancel">${options.cancelText || '取消'}</button>
+          <button class="btn btn-primary dialog-confirm">${options.confirmText || '确定'}</button>
         </div>
       </div>`;
     document.body.appendChild(overlay);
-    const input = document.getElementById('dialogInput');
-    input?.focus();
-    const close = (result) => { document.body.removeChild(overlay); resolve(result); };
+    const input = overlay.querySelector('.dialog-input-el');
+    if (input) input.focus();
+    const close = (result) => { if (overlay.parentNode) document.body.removeChild(overlay); resolve(result); };
     overlay.addEventListener('click', e => { if (e.target === overlay) close(null); });
-    document.getElementById('dialogCancel')?.addEventListener('click', () => close(null));
-    document.getElementById('dialogConfirm')?.addEventListener('click', () => close(input?.value || null));
-    input?.addEventListener('keydown', e => { if (e.key === 'Enter') close(input?.value || null); });
+    const btnCancel = overlay.querySelector('.dialog-cancel');
+    const btnConfirm = overlay.querySelector('.dialog-confirm');
+    if (btnCancel) btnCancel.addEventListener('click', () => close(null));
+    if (btnConfirm) btnConfirm.addEventListener('click', () => close(input ? input.value : null));
+    if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') close(input.value); });
   });
 }
 
@@ -2997,23 +3001,24 @@ function dialogChoices(options) {
   return new Promise(resolve => {
     const overlay = document.createElement('div');
     overlay.className = 'dialog-overlay';
-    const choicesHtml = options.choices.map((c, i) => `<button class="btn btn-ghost" data-idx="${i}" style="margin-bottom:8px;width:100%;justify-content:center;">${c}</button>`).join('');
+    const choicesHtml = options.choices.map((c, i) => `<button class="btn btn-ghost dialog-choice" data-idx="${i}" style="margin-bottom:8px;width:100%;justify-content:center;">${c}</button>`).join('');
     overlay.innerHTML = `
       <div class="dialog">
         ${options.title ? `<div class="dialog-title">${options.title}</div>` : ''}
         ${options.body ? `<div class="dialog-body">${options.body}</div>` : ''}
-        <div id="dialogChoices">${choicesHtml}</div>
+        <div class="dialog-choices-list">${choicesHtml}</div>
         <div class="dialog-actions" style="margin-top:12px;">
-          <button class="btn btn-ghost" id="dialogCancel">${options.cancelText || '取消'}</button>
+          <button class="btn btn-ghost dialog-cancel">${options.cancelText || '取消'}</button>
         </div>
       </div>`;
     document.body.appendChild(overlay);
-    const close = (result) => { document.body.removeChild(overlay); resolve(result); };
+    const close = (result) => { if (overlay.parentNode) document.body.removeChild(overlay); resolve(result); };
     overlay.addEventListener('click', e => { if (e.target === overlay) close(null); });
-    options.choices.forEach((_, i) => {
-      document.querySelector(`[data-idx="${i}"]`)?.addEventListener('click', () => close(options.choices[i]));
+    overlay.querySelectorAll('.dialog-choice').forEach((btn, i) => {
+      btn.addEventListener('click', () => close(options.choices[i]));
     });
-    document.getElementById('dialogCancel')?.addEventListener('click', () => close(null));
+    const btnCancel = overlay.querySelector('.dialog-cancel');
+    if (btnCancel) btnCancel.addEventListener('click', () => close(null));
   });
 }
 
