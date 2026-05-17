@@ -210,6 +210,7 @@ async function initDB() {
         UNIQUE(competition_id, player_user_id)
       );
     `);
+    await client.query(`ALTER TABLE competition_registrations ADD COLUMN IF NOT EXISTS club_id TEXT`);
     // 赛事结果
     await client.query(`
       CREATE TABLE IF NOT EXISTS competition_results (
@@ -1194,8 +1195,10 @@ app.delete('/api/admin/competitions/:id', authMiddleware, adminMiddleware, async
 
 // 团队报名（队长操作，指定5人+位置）
 app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
-  const { team_id, players } = req.body; // players: [{user_id, lane}]
-  if (!team_id) return res.status(400).json({ message: '请选择队伍' });
+  const { team_id, club_id, players } = req.body; // players: [{user_id, lane}]
+  const isClub = !!club_id;
+  const isTeam = !!team_id;
+  if (!isTeam && !isClub) return res.status(400).json({ message: '请选择队伍或俱乐部' });
   if (!players || !Array.isArray(players) || players.length !== 5) return res.status(400).json({ message: '请指定5名队员和位置' });
   const lanes = ['对抗路','打野','中路','发育路','游走'];
   const usedLanes = new Set();
@@ -1212,29 +1215,45 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
     if (comp.rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ message: '赛事不存在' }); }
     const c = comp.rows[0];
     if (c.comp_status !== 'upcoming' && c.comp_status !== 'open') { await client.query('ROLLBACK'); return res.status(400).json({ message: '该赛事不可报名' }); }
-    // 验证队伍和队长
-    const team = await client.query('SELECT * FROM teams WHERE id = $1', [team_id]);
-    if (team.rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ message: '队伍不存在' }); }
-    if (team.rows[0].captainid !== req.userId) { await client.query('ROLLBACK'); return res.status(403).json({ message: '仅队长可报名' }); }
-    // 验证队员都在队伍中
-    const tm = await client.query('SELECT userId FROM team_members WHERE teamId = $1', [team_id]);
-    const memberIds = new Set(tm.rows.map(r => r.userid));
-    for (const p of players) {
-      if (!memberIds.has(p.user_id)) { await client.query('ROLLBACK'); return res.status(400).json({ message: '队员 '+p.user_id+' 不在队伍中' }); }
+    if (isTeam) {
+      // 验证队伍和队长
+      const team = await client.query('SELECT * FROM teams WHERE id = $1', [team_id]);
+      if (team.rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ message: '队伍不存在' }); }
+      if (team.rows[0].captainid !== req.userId) { await client.query('ROLLBACK'); return res.status(403).json({ message: '仅队长可报名' }); }
+      // 验证队员都在队伍中
+      const tm = await client.query('SELECT userId FROM team_members WHERE teamId = $1', [team_id]);
+      const memberIds = new Set(tm.rows.map(r => r.userid));
+      for (const p of players) {
+        if (!memberIds.has(p.user_id)) { await client.query('ROLLBACK'); return res.status(400).json({ message: '队员 '+p.user_id+' 不在队伍中' }); }
+      }
+      // 已报名检查（同队伍）
+      const already = await client.query('SELECT * FROM competition_registrations WHERE competition_id = $1 AND team_id = $2 AND status != $3', [req.params.id, team_id, 'cancelled']);
+      if (already.rows.length > 0) { await client.query('ROLLBACK'); return res.status(400).json({ message: '该队伍已报名' }); }
+    } else {
+      // 验证俱乐部和老板
+      const club = await client.query('SELECT * FROM clubs WHERE id = $1', [club_id]);
+      if (club.rows.length === 0) { await client.query('ROLLBACK'); return res.status(404).json({ message: '俱乐部不存在' }); }
+      if (club.rows[0].owner_id !== req.userId) { await client.query('ROLLBACK'); return res.status(403).json({ message: '仅俱乐部老板可报名' }); }
+      // 验证队员都在俱乐部中
+      const cm = await client.query('SELECT user_id FROM club_members WHERE club_id = $1', [club_id]);
+      const memberIds = new Set(cm.rows.map(r => r.user_id));
+      for (const p of players) {
+        if (!memberIds.has(p.user_id)) { await client.query('ROLLBACK'); return res.status(400).json({ message: '队员 '+p.user_id+' 不在俱乐部中' }); }
+      }
+      // 已报名检查（同俱乐部）
+      const already = await client.query('SELECT * FROM competition_registrations WHERE competition_id = $1 AND club_id = $2 AND status != $3', [req.params.id, club_id, 'cancelled']);
+      if (already.rows.length > 0) { await client.query('ROLLBACK'); return res.status(400).json({ message: '该俱乐部已报名' }); }
     }
-    // 已报名检查
-    const already = await client.query('SELECT * FROM competition_registrations WHERE competition_id = $1 AND team_id = $2 AND status != $3', [req.params.id, team_id, 'cancelled']);
-    if (already.rows.length > 0) { await client.query('ROLLBACK'); return res.status(400).json({ message: '该队伍已报名' }); }
     // 检查位置是否被占用
     for (const p of players) {
       const laneCheck = await client.query("SELECT * FROM competition_registrations WHERE competition_id = $1 AND lane = $2 AND status != 'cancelled'", [req.params.id, p.lane]);
       if (laneCheck.rows.length > 0) { await client.query('ROLLBACK'); return res.status(400).json({ message: '位置 '+p.lane+' 已被占用' }); }
     }
-    // 创建5路报名（指定队员，待确认入场费）
+    // 创建5路报名
     for (const p of players) {
       await client.query(
-        'INSERT INTO competition_registrations (competition_id, team_id, player_user_id, lane, status) VALUES ($1,$2,$3,$4,$5)',
-        [req.params.id, team_id, p.user_id, p.lane, 'reserved']
+        'INSERT INTO competition_registrations (competition_id, team_id, club_id, player_user_id, lane, status) VALUES ($1,$2,$3,$4,$5,$6)',
+        [req.params.id, isTeam ? team_id : '', club_id || null, p.user_id, p.lane, 'reserved']
       );
     }
     if (c.comp_status === 'upcoming') {
@@ -1243,7 +1262,7 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
     // 通知被选中的5人
     for (const p of players) {
       await sendNotification(p.user_id, 'competition_register',
-        `你被队长选入赛事「${c.name}」(${p.lane})，请进入比赛页确认入场并选择入场费`);
+        `你被${isClub?'老板':'队长'}选入赛事「${c.name}」(${p.lane})，请进入比赛页确认入场并选择入场费`);
     }
     await client.query('COMMIT');
     res.json({ success: true, message: '报名成功，队员请确认入场' });
