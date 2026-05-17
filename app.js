@@ -752,7 +752,7 @@ async function loadMarketPlayers(container) {
       <h3>转会市场</h3>
       <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px;">俱乐部老板可联系选手签约</p>
       ${balanceHtml}
-      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+      <div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;align-items:center;">
         <button class="btn btn-sm ${marketSort==='time'?'btn-primary':'btn-secondary'}" onclick="changeMarketSort('time')">最新</button>
         <button class="btn btn-sm ${marketSort==='value'?'btn-primary':'btn-secondary'}" onclick="changeMarketSort('value')">按身价</button>
         <select class="form-input" id="marketMaxValue" onchange="filterMarketPlayers()" style="width:auto;padding:4px 8px;font-size:0.8rem;">
@@ -760,12 +760,34 @@ async function loadMarketPlayers(container) {
           <option value="10">10万以下</option><option value="20">20万以下</option><option value="30">30万以下</option><option value="50">50万以下</option>
         </select>
       </div>
+      <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:0.72rem;color:var(--text-muted);">签约：</span>
+        <button class="market-chip ${window._marketContract==='all'?'active':''}" onclick="filterMarketContract('all')">全部</button>
+        <button class="market-chip market-chip-free ${window._marketContract==='free'?'active':''}" onclick="filterMarketContract('free')">未签约</button>
+        <button class="market-chip market-chip-signed ${window._marketContract==='signed'?'active':''}" onclick="filterMarketContract('signed')">已签约</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:0.72rem;color:var(--text-muted);">位置：</span>
+        ${['对抗路','打野','中路','发育路','游走'].map(l => `
+          <button class="market-chip market-chip-pos ${window._marketPosFilters.has('${l}')?'active':''}" onclick="toggleMarketPos('${l}')">${l}</button>
+        `).join('')}
+        ${window._marketPosFilters.size > 0 ? `<button class="market-chip" onclick="clearMarketPos()" style="font-size:0.65rem;">清除</button>` : ''}
+      </div>
       <div id="marketPlayerList"></div>
     </div>
   `;
   window._marketPlayers = players;
   window._marketSort = 'time';
+  if (window._marketContract === undefined) window._marketContract = 'all';
+  if (!window._marketPosFilters) window._marketPosFilters = new Set();
   window.changeMarketSort = (s) => { window._marketSort = s; renderMarketPlayerList(); };
+  window.filterMarketContract = (v) => { window._marketContract = v; renderMarketPlayerList(); };
+  window.toggleMarketPos = (pos) => {
+    if (window._marketPosFilters.has(pos)) window._marketPosFilters.delete(pos);
+    else window._marketPosFilters.add(pos);
+    renderMarketPlayerList();
+  };
+  window.clearMarketPos = () => { window._marketPosFilters.clear(); renderMarketPlayerList(); };
   window.filterMarketPlayers = () => { renderMarketPlayerList(); };
   renderMarketPlayerList();
 }
@@ -780,6 +802,17 @@ function renderMarketPlayerList() {
   let list = window._marketPlayers || [];
   const maxVal = document.getElementById('marketMaxValue')?.value;
   if (maxVal) list = list.filter(p => p.market_value <= parseInt(maxVal));
+  // 签约状态筛选
+  if (window._marketContract === 'free') list = list.filter(p => !p.club_id);
+  else if (window._marketContract === 'signed') list = list.filter(p => p.club_id);
+  // 位置筛选（多选交集，选了对抗路+打野 = 两个都会的选手）
+  if (window._marketPosFilters && window._marketPosFilters.size > 0) {
+    list = list.filter(p => {
+      let pos = [];
+      try { pos = JSON.parse(p.positions || '[]'); } catch(e) {}
+      return Array.from(window._marketPosFilters).every(f => pos.includes(f));
+    });
+  }
   if (window._marketSort === 'value') list.sort((a,b) => b.market_value - a.market_value);
   else list.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
 
@@ -844,6 +877,18 @@ posTagStyle.textContent = `
   .lane-stat-bar .lane-bar { flex:1;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden; }
   .lane-stat-bar .lane-fill { height:100%;background:var(--gradient-primary);border-radius:3px; }
   .lane-stat-bar .lane-val { width:32px;text-align:right;color:var(--text-secondary); }
+  .market-chip { display:inline-flex;align-items:center;padding:3px 10px;border-radius:14px;font-size:0.72rem;font-weight:600;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:var(--text-muted);cursor:pointer;transition:all .15s;user-select:none; }
+  .market-chip:hover { border-color:rgba(255,255,255,.2);color:var(--text-primary); }
+  .market-chip.active { border-color:var(--accent);background:rgba(123,47,253,.15);color:var(--accent); }
+  .market-chip-free { color:#10b981;border-color:rgba(16,185,129,.2); }
+  .market-chip-free.active { background:rgba(16,185,129,.15);border-color:#10b981;color:#10b981; }
+  .market-chip-free:hover { border-color:rgba(16,185,129,.4); }
+  .market-chip-signed { color:#f59e0b;border-color:rgba(245,158,11,.2); }
+  .market-chip-signed.active { background:rgba(245,158,11,.15);border-color:#f59e0b;color:#f59e0b; }
+  .market-chip-signed:hover { border-color:rgba(245,158,11,.4); }
+  .market-chip-pos { color:var(--text-muted); }
+  .market-chip-pos.active { background:rgba(139,92,246,.15);border-color:#8b5cf6;color:#8b5cf6; }
+  .market-chip-pos:hover { border-color:rgba(139,92,246,.4); }
 `;
 document.head.appendChild(posTagStyle);
 
