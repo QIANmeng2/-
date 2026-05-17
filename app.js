@@ -785,13 +785,32 @@ async function loadMarketPlayers(container) {
   window._marketPlayers = players;
   window._marketSort = 'time';
   window.changeMarketSort = (s) => { window._marketSort = s; renderMarketPlayerList(); };
-  window.filterMarketContract = (v) => { window._marketContract = v; renderMarketPlayerList(); };
+  window.filterMarketContract = (v) => {
+    window._marketContract = v;
+    document.querySelectorAll('[onclick^="filterMarketContract"]').forEach(chip => {
+      chip.classList.toggle('active', chip.textContent.trim() === (v === 'all' ? '全部' : v === 'free' ? '未签约' : '已签约'));
+    });
+    renderMarketPlayerList();
+  };
   window.toggleMarketPos = (pos) => {
     if (window._marketPosFilters.has(pos)) window._marketPosFilters.delete(pos);
     else window._marketPosFilters.add(pos);
+    // 同步 chip 按钮的 active 状态
+    document.querySelectorAll('.market-chip-pos').forEach(chip => {
+      if (chip.textContent.trim() === pos) chip.classList.toggle('active', window._marketPosFilters.has(pos));
+    });
+    // 同步'清除'按钮显示/隐藏
+    const clearBtn = document.querySelector('[onclick="clearMarketPos()"]');
+    if (clearBtn) clearBtn.style.display = window._marketPosFilters.size > 0 ? '' : 'none';
     renderMarketPlayerList();
   };
-  window.clearMarketPos = () => { window._marketPosFilters.clear(); renderMarketPlayerList(); };
+  window.clearMarketPos = () => {
+    window._marketPosFilters.clear();
+    document.querySelectorAll('.market-chip-pos').forEach(chip => chip.classList.remove('active'));
+    const clearBtn = document.querySelector('[onclick="clearMarketPos()"]');
+    if (clearBtn) clearBtn.style.display = 'none';
+    renderMarketPlayerList();
+  };
   window.filterMarketPlayers = () => { renderMarketPlayerList(); };
   renderMarketPlayerList();
 }
