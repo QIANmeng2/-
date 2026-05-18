@@ -91,9 +91,10 @@ describe('✅ 认证与授权', () => {
 });
 
 describe('✅ 认证 API', () => {
-  test('POST /api/auth/login 缺参数 → 400', async () => {
+  test('POST /api/auth/login 缺参数 → 400 + 统一格式', async () => {
     const res = await request(app).post('/api/auth/login').send({});
     expect(res.status).toBe(400);
+    expect(res.body).toHaveProperty('success', false);
     expect(res.body).toHaveProperty('message');
   });
 
