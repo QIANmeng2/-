@@ -1322,11 +1322,6 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
       const already = await client.query('SELECT * FROM competition_registrations WHERE competition_id = $1 AND club_id = $2 AND status != $3', [req.params.id, club_id, 'cancelled']);
       if (already.rows.length > 0) { await client.query('ROLLBACK'); return res.status(400).json({ message: '该俱乐部已报名' }); }
     }
-    // 检查位置是否被占用
-    for (const p of players) {
-      const laneCheck = await client.query("SELECT * FROM competition_registrations WHERE competition_id = $1 AND lane = $2 AND status != 'cancelled'", [req.params.id, p.lane]);
-      if (laneCheck.rows.length > 0) { await client.query('ROLLBACK'); return res.status(400).json({ message: '位置 '+p.lane+' 已被占用' }); }
-    }
     // 自动分配红蓝方
     const groupField = isTeam ? 'team_id' : 'club_id';
     const groupId = isTeam ? team_id : club_id;
@@ -1344,6 +1339,14 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
       const mySide = existingSides.rows.find(r => r[groupField] === groupId);
       if (mySide) side = mySide.side;
       else { await client.query('ROLLBACK'); return res.status(400).json({ message: '红蓝双方均已满员' }); }
+    }
+    // 检查位置是否被占用（同一side内不能重复，红蓝各自独立）
+    for (const p of players) {
+      const laneCheck = await client.query(
+        "SELECT * FROM competition_registrations WHERE competition_id = $1 AND lane = $2 AND side = $3 AND status != 'cancelled'",
+        [req.params.id, p.lane, side]
+      );
+      if (laneCheck.rows.length > 0) { await client.query('ROLLBACK'); return res.status(400).json({ message: '该方位置 "'+p.lane+'" 已被占用' }); }
     }
     // 创建5路报名
     for (const p of players) {
@@ -1531,11 +1534,24 @@ app.get('/api/me/coins', authMiddleware, async (req, res) => {
 });
 
 app.post('/api/admin/award-coins', authMiddleware, adminMiddleware, async (req, res) => {
-  const { userId, amount, note } = req.body;
-  if (!userId || !amount) return res.status(400).json({ message: '参数不完整' });
+  const { userId, amount, note, target } = req.body;
+  if (!amount) return res.status(400).json({ message: '缺少金额参数' });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    let affectedCount = 0;
+    // 批量发放给所有用户
+    if (userId === 'all' || target === 'all') {
+      const updateRes = await client.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1', [amount]);
+      affectedCount = updateRes.rowCount;
+      const reason = note || (amount > 0 ? '管理员发放初始奖金' : '梦币调整');
+      await client.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ('system', $1, $2, $3)", [amount, amount > 0 ? 'award' : 'deduct', reason]);
+      await client.query('COMMIT');
+      res.json({ success: true, message: '已向 ' + affectedCount + ' 名用户发放 ' + amount + ' 梦币', affectedCount });
+      return;
+    }
+    // 单用户发放
+    if (!userId) return res.status(400).json({ message: '参数不完整' });
     const updateRes = await client.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id = $2', [amount, userId]);
     if (updateRes.rowCount === 0) {
       await client.query('ROLLBACK');

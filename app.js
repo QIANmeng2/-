@@ -2349,6 +2349,7 @@ async function renderAdminPanel() {
         <button class="recruit-tab ${currentAdminSubTab==='security'?'active':''}" onclick="switchAdminSubTab('security')">权限安全</button>
         <button class="recruit-tab ${currentAdminSubTab==='players'?'active':''}" onclick="switchAdminSubTab('players')">选手审核</button>
         <button class="recruit-tab ${currentAdminSubTab==='clubs'?'active':''}" onclick="switchAdminSubTab('clubs')">俱乐部管理</button>
+        <button class="recruit-tab ${currentAdminSubTab==='coins'?'active':''}" onclick="switchAdminSubTab('coins')">梦币管理</button>
       </div>
       <div id="adminSubContent"><div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div></div>
     </div>
@@ -2382,6 +2383,7 @@ async function loadAdminSubTab() {
       case 'security': await loadAdminSecurity(container); break;
       case 'players': await loadAdminPlayers(container); break;
       case 'clubs': await loadAdminClubs(container); break;
+      case 'coins': await loadAdminCoins(container); break;
     }
   } catch (err) {
     container.innerHTML = `<p style="color:var(--danger);">加载失败：${err.message}</p>`;
@@ -3080,6 +3082,147 @@ async function adminDeleteUser(id) {
   await api(`/api/admin/users/${id}`, { method:'DELETE' });
   showToast('已删除','info');
   loadAdminSubTab();
+}
+
+// ==================== 管理员 - 梦币管理 ====================
+async function loadAdminCoins(container) {
+  try {
+    const [usersData, txData] = await Promise.all([
+      api('/api/admin/users'),
+      api('/api/admin/coin-transactions')
+    ]);
+    const users = usersData.users || [];
+    const totalCoins = users.reduce((sum, u) => sum + (u.dream_coins || 0), 0);
+    const txs = txData.transactions || [];
+
+    container.innerHTML = `
+      <div style="margin-bottom:20px;">
+        <h4 style="margin:0 0 16px 0;font-size:0.95rem;color:var(--text-secondary);">梦币概览</h4>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px;">
+          <div style="background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.2);border-radius:12px;padding:16px;text-align:center;">
+            <div style="font-size:1.8rem;font-weight:700;color:#FFD700;">${totalCoins.toLocaleString()}</div>
+            <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;">总梦币</div>
+          </div>
+          <div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:12px;padding:16px;text-align:center;">
+            <div style="font-size:1.8rem;font-weight:700;color:#10b981;">${users.length}</div>
+            <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;">用户数</div>
+          </div>
+          <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:12px;padding:16px;text-align:center;">
+            <div style="font-size:1.8rem;font-weight:700;color:#3b82f6;">${txs.length}</div>
+            <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px;">交易记录</div>
+          </div>
+        </div>
+
+        <h4 style="margin:0 0 16px 0;font-size:0.95rem;color:var(--text-secondary);">批量发放</h4>
+        <div style="background:#1A1A2E;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:16px;margin-bottom:20px;">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+            <div style="flex:1;min-width:200px;">
+              <label style="display:block;font-size:0.78rem;color:var(--text-muted);margin-bottom:6px;">发放金额（正数=发放，负数=扣除）</label>
+              <input type="number" id="batchCoinAmount" class="form-input" placeholder="如：5000" value="5000">
+            </div>
+            <div style="flex:1;min-width:200px;">
+              <label style="display:block;font-size:0.78rem;color:var(--text-muted);margin-bottom:6px;">备注说明</label>
+              <input type="text" id="batchCoinNote" class="form-input" placeholder="如：初始奖金发放">
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <button class="btn btn-primary" onclick="adminBatchAwardCoins()" style="background:linear-gradient(135deg,#FFD700,#FFA500);color:#000;border:none;font-weight:600;">
+              ⭐ 发放给所有用户
+            </button>
+            <span style="font-size:0.78rem;color:var(--text-muted);">将向全部 ${users.length} 名用户发放/扣除相同数量</span>
+          </div>
+        </div>
+
+        <h4 style="margin:0 0 16px 0;font-size:0.95rem;color:var(--text-secondary);">单用户发放</h4>
+        <div style="background:#1A1A2E;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:16px;margin-bottom:20px;">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+            <div style="flex:1;min-width:200px;">
+              <label style="display:block;font-size:0.78rem;color:var(--text-muted);margin-bottom:6px;">用户</label>
+              <select id="singleCoinUser" class="form-select" style="width:100%;">
+                <option value="">选择用户...</option>
+                ${users.map(u => `<option value="${u.id}">${u.coachname || u.username || u.id} (${u.dream_coins || 0}梦币)</option>`).join('')}
+              </select>
+            </div>
+            <div style="flex:1;min-width:200px;">
+              <label style="display:block;font-size:0.78rem;color:var(--text-muted);margin-bottom:6px;">金额</label>
+              <input type="number" id="singleCoinAmount" class="form-input" placeholder="正数=发放，负数=扣除">
+            </div>
+            <div style="flex:1;min-width:200px;">
+              <label style="display:block;font-size:0.78rem;color:var(--text-muted);margin-bottom:6px;">备注</label>
+              <input type="text" id="singleCoinNote" class="form-input" placeholder="备注说明">
+            </div>
+            <button class="btn btn-primary" onclick="adminSingleAwardCoin()" style="align-self:flex-end;">发放</button>
+          </div>
+        </div>
+
+        <h4 style="margin:0 0 16px 0;font-size:0.95rem;color:var(--text-secondary);">用户余额</h4>
+        <div style="background:#1A1A2E;border:1px solid rgba(255,255,255,.08);border-radius:12px;overflow:hidden;">
+          <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
+            <thead>
+              <tr style="background:rgba(255,255,255,.03);">
+                <th style="padding:12px 16px;text-align:left;color:var(--text-muted);font-weight:500;">用户</th>
+                <th style="padding:12px 16px;text-align:right;color:var(--text-muted);font-weight:500;">余额</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${users.sort((a,b) => (b.dream_coins||0) - (a.dream_coins||0)).map(u => `
+                <tr style="border-top:1px solid rgba(255,255,255,.05);">
+                  <td style="padding:12px 16px;color:var(--text-primary);">${u.coachname || u.username || u.id}</td>
+                  <td style="padding:12px 16px;text-align:right;color:${(u.dream_coins||0) > 0 ? '#10b981' : '#ef4444'};font-weight:600;">${u.dream_coins?.toLocaleString() || 0}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  } catch(e) {
+    container.innerHTML = `<p style="color:var(--danger);">加载失败：${e.message}</p>`;
+  }
+}
+
+async function adminBatchAwardCoins() {
+  const amount = parseInt(document.getElementById('batchCoinAmount').value);
+  const note = document.getElementById('batchCoinNote').value.trim();
+  if (isNaN(amount) || amount === 0) { showToast('请输入有效的金额（非0）', 'error'); return; }
+  const action = amount > 0 ? '发放' : '扣除';
+  const absAmount = Math.abs(amount);
+  if (!await dialog({
+    title: '批量' + action + '确认',
+    body: `确定向所有用户${action} <strong style="color:#FFD700;">${absAmount}</strong> 梦币吗？\n\n备注：${note || '无'}\n\n此操作不可撤销！`,
+    confirmText: '确认' + action,
+    cancelText: '取消',
+    confirmBtnClass: 'btn-warning'
+  })) return;
+  try {
+    const res = await api('/api/admin/award-coins', {
+      method: 'POST',
+      body: JSON.stringify({ userId: 'all', amount, note: note || action + '初始奖金' })
+    });
+    showToast(res.message || action + '成功', 'success');
+    loadAdminSubTab();
+  } catch(e) {
+    showToast(e.message || action + '失败', 'error');
+  }
+}
+
+async function adminSingleAwardCoin() {
+  const userId = document.getElementById('singleCoinUser').value;
+  const amount = parseInt(document.getElementById('singleCoinAmount').value);
+  const note = document.getElementById('singleCoinNote').value.trim();
+  if (!userId) { showToast('请选择用户', 'error'); return; }
+  if (isNaN(amount) || amount === 0) { showToast('请输入有效的金额（非0）', 'error'); return; }
+  const action = amount > 0 ? '发放' : '扣除';
+  try {
+    await api('/api/admin/award-coins', {
+      method: 'POST',
+      body: JSON.stringify({ userId, amount, note: note || action + '奖励' })
+    });
+    showToast(action + '成功', 'success');
+    loadAdminSubTab();
+  } catch(e) {
+    showToast(e.message || action + '失败', 'error');
+  }
 }
 
 // 图片预览弹窗
