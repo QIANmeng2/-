@@ -2184,4 +2184,9 @@ async function startServer() {
   }, 60 * 1000);
 }
 
-startServer();
+// 测试时只导出 app，不启动服务器
+if (require.main === module) {
+  startServer();
+} else {
+  module.exports = app;
+}

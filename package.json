@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "jest --runInBand --forceExit",
+    "test:e2e": "cypress run",
+    "test:e2e:open": "cypress open"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -11,5 +14,21 @@
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.0",
     "pg": "^8.12.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^6.3.4"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ],
+    "collectCoverageFrom": [
+      "server.js"
+    ],
+    "coveragePathIgnorePatterns": [
+      "/node_modules/"
+    ]
   }
 }
