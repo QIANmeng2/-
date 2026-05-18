@@ -1040,6 +1040,13 @@
       box-shadow: 0 4px 20px rgba(79,70,229,0.3);
     }
     .comp-tier-tab.active-regular::before { background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent); }
+    .comp-tier-tab.active-arena {
+      background: linear-gradient(135deg, rgba(16,185,129,0.18) 0%, rgba(5,150,105,0.12) 100%);
+      color: #34d399;
+      border-color: rgba(16,185,129,0.4);
+      box-shadow: 0 0 18px rgba(16,185,129,0.15), inset 0 1px 0 rgba(16,185,129,0.08);
+    }
+    .comp-tier-tab.active-arena::before { background: linear-gradient(90deg, transparent, #34d399, transparent); }
 
     /* ===== 赛事卡片 - 统一暗黑科技霓虹风 ===== */
     .comp-list-grid {

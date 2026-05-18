@@ -156,7 +156,8 @@ let compTier = 'regular';
 const TIER_CONFIG = {
   elite: { label: '顶级联赛', desc: 'S/A级俱乐部大名单参赛' },
   secondary: { label: '次级联赛', desc: 'B级俱乐部大名单参赛' },
-  regular: { label: '常规赛事', desc: '消耗梦币入场，10人对战，赢方瓜分奖池' }
+  regular: { label: '常规赛事', desc: '消耗梦币入场，10人对战，赢方瓜分奖池' },
+  arena: { label: '擂台赛', desc: '无限制报名，整队参赛，无需入场券，首队为擂主，默认BO1' }
 };
 
 async function renderCompetitionPanel() {
@@ -173,7 +174,7 @@ async function renderCompetitionPanel() {
         ${isAdmin ? '<button class="btn btn-primary btn-sm" onclick="openCreateCompetitionModal()">+ 创建赛事</button>' : ''}
       </div>
       <div class="comp-tier-tabs" style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
-        ${['elite','secondary','regular'].map(t => {
+        ${['elite','secondary','regular','arena'].map(t => {
           const cfg = TIER_CONFIG[t];
           return '<button class="comp-tier-tab '+(compTier===t?'active-'+t:'')+'" onclick="switchCompTier(\''+t+'\')">'+cfg.label+'</button>';
         }).join('')}
@@ -333,19 +334,26 @@ function openCreateCompetitionModal() {
           <input class="form-input" type="text" id="compName" required placeholder="如：5月18日黄金赛">
         </div>
         <div class="form-group"><label>赛事等级</label>
-          <select class="form-select" id="compTierSel" onchange="toggleCompExtraFields()">
+          <select class="form-select" id="compTierSel" onchange="onCompTierChange()">
             <option value="regular">常规赛事（梦币入场+奖池）</option>
+            <option value="arena">常规赛事（擂台赛）</option>
             <option value="elite">顶级联赛（S/A级俱乐部大名单）</option>
             <option value="secondary">次级联赛（B级俱乐部大名单）</option>
           </select>
         </div>
-        <div class="form-group"><label>开赛时间</label>
+        <div class="form-group" id="compStartTimeWrap"><label>开赛时间</label>
           <input class="form-input" type="datetime-local" id="compStartTime">
         </div>
-        <div class="form-group"><label>BO几</label>
+        <div class="form-group" id="compEndTimeWrap" style="display:none;"><label>结束时间</label>
+          <input class="form-input" type="datetime-local" id="compEndTime">
+        </div>
+        <div class="form-group" id="compBoWrap"><label>BO几</label>
           <select class="form-select" id="compBo">
             <option value="1">BO1</option><option value="3">BO3</option><option value="5">BO5</option>
           </select>
+        </div>
+        <div id="arenaHint" style="display:none;font-size:0.78rem;color:var(--text-muted);margin-bottom:12px;padding:8px;background:rgba(16,185,129,.08);border-radius:6px;border:1px solid rgba(16,185,129,.15);">
+          第一个报名的队伍/俱乐部自动成为擂主，默认BO1，不限报名数量，无需入场券
         </div>
         <div id="compExtraFields" style="display:none;">
           <div class="form-group"><label>赛事描述</label>
@@ -377,10 +385,23 @@ function openCreateCompetitionModal() {
   }, 50);
 }
 
-function toggleCompExtraFields() {
+function onCompTierChange() {
   const tier = document.getElementById('compTierSel').value;
   const extra = document.getElementById('compExtraFields');
-  if (extra) extra.style.display = tier === 'regular' ? 'none' : 'block';
+  const startWrap = document.getElementById('compStartTimeWrap');
+  const endWrap = document.getElementById('compEndTimeWrap');
+  const arenaHint = document.getElementById('arenaHint');
+  if (extra) extra.style.display = (tier === 'regular' || tier === 'arena') ? 'none' : 'block';
+  if (startWrap) {
+    const label = startWrap.querySelector('label');
+    if (label) label.textContent = tier === 'arena' ? '开始时间' : '开赛时间';
+  }
+  if (endWrap) endWrap.style.display = tier === 'arena' ? 'block' : 'none';
+  if (arenaHint) arenaHint.style.display = tier === 'arena' ? 'block' : 'none';
+  if (tier === 'arena') {
+    const boSel = document.getElementById('compBo');
+    if (boSel) boSel.value = '1';
+  }
 }
 
 async function handleCreateCompetition(e) {
@@ -388,18 +409,21 @@ async function handleCreateCompetition(e) {
   const name = document.getElementById('compName').value.trim();
   const tier = document.getElementById('compTierSel').value;
   const start_time = document.getElementById('compStartTime').value;
+  const end_time = document.getElementById('compEndTime')?.value || null;
   const bo = parseInt(document.getElementById('compBo').value);
   const description = (document.getElementById('compDesc')?.value || '').trim();
   if (!name) { showToast('请输入赛事名称','error'); return; }
   let qr_code_url = null;
   const file = document.getElementById('compImage')?.files?.[0];
-  if (file && tier !== 'regular') {
+  if (file && tier !== 'regular' && tier !== 'arena') {
     try {
       qr_code_url = await compressImageToBase64(file, 800, 0.6);
     } catch(err) { showToast('图片处理失败','error'); return; }
   }
+  const payload = { name, tier, start_time: start_time || null, bo, description, qr_code_url };
+  if (tier === 'arena') payload.end_time = end_time;
   try {
-    await api('/api/admin/competitions', { method:'POST', body: JSON.stringify({ name, tier, start_time: start_time || null, bo, description, qr_code_url }) });
+    await api('/api/admin/competitions', { method:'POST', body: JSON.stringify(payload) });
     showToast('赛事已创建','success');
     document.getElementById('createCompModal')?.remove();
     loadCompetitionList();
