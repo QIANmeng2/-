@@ -218,6 +218,7 @@ async function initDB() {
     `);
     await client.query(`ALTER TABLE competition_registrations ADD COLUMN IF NOT EXISTS club_id TEXT`);
     await client.query(`ALTER TABLE competition_registrations ADD COLUMN IF NOT EXISTS side TEXT DEFAULT 'red'`);
+    await client.query(`ALTER TABLE competition_registrations ADD COLUMN IF NOT EXISTS lane TEXT DEFAULT ''`);
     // 赛事结果
     await client.query(`
       CREATE TABLE IF NOT EXISTS competition_results (
@@ -1179,8 +1180,8 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
     // 创建5人报名
     for (const p of players) {
       await client.query(
-        'INSERT INTO competition_registrations (competition_id, team_id, club_id, player_user_id, status, side) VALUES ($1,$2,$3,$4,$5,$6)',
-        [req.params.id, isTeam ? team_id : '', club_id || null, p.user_id, 'reserved', side]
+        'INSERT INTO competition_registrations (competition_id, team_id, club_id, player_user_id, status, side, lane) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+        [req.params.id, isTeam ? team_id : '', club_id || null, p.user_id, 'reserved', side, p.lane || '']
       );
     }
     if (c.comp_status === 'upcoming') {

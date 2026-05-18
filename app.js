@@ -586,7 +586,7 @@ async function openTeamPlayerSelect(compId, teamId, teamName) {
     const form = document.getElementById('teamPlayerForm');
     form.innerHTML = members.map(m => `
       <label class="player-item" style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);transition:background .15s;" onmouseover="this.style.background='rgba(255,255,255,.03')" onmouseout="this.style.background=''">
-        <input type="checkbox" class="player-check" value="${m.userId}" style="width:18px;height:18px;accent-color:var(--primary);flex-shrink:0;">
+        <input type="checkbox" class="player-check" value="${m.userId}" data-lane="${escapeHtml(m.lane || m.position || '')}" style="width:18px;height:18px;accent-color:var(--primary);flex-shrink:0;">
         <span style="color:var(--text-primary);font-size:0.88rem;flex:1;">${escapeHtml(m.coachName || m.username || m.userId)}</span>
         <span style="color:var(--text-muted);font-size:0.75rem;">${escapeHtml(m.gameRank || '')}</span>
       </label>
@@ -626,7 +626,7 @@ async function submitTeamPlayers(compId, teamId) {
     showToast('请选择恰好5名队员', 'error');
     return;
   }
-  const players = Array.from(checked).map(cb => ({ user_id: cb.value }));
+  const players = Array.from(checked).map(cb => ({ user_id: cb.value, lane: cb.dataset.lane || '' }));
   const btn = document.getElementById('submitTeamBtn');
   if (btn) { btn.disabled = true; btn.textContent = '提交中…'; }
   try {
@@ -695,7 +695,7 @@ async function openClubPlayerSelect(compId, clubId, clubName) {
       const grade = m.grade || '';
       return `
         <label class="player-item" style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);transition:background .15s;" onmouseover="this.style.background='rgba(255,255,255,.03)" onmouseout="this.style.background=''">
-          <input type="checkbox" class="player-check" value="${uid}" style="width:18px;height:18px;accent-color:var(--primary);flex-shrink:0;">
+          <input type="checkbox" class="player-check" value="${uid}" data-lane="${escapeHtml(m.lane || m.position || '')}" style="width:18px;height:18px;accent-color:var(--primary);flex-shrink:0;">
           <span style="color:var(--text-primary);font-size:0.88rem;flex:1;">${escapeHtml(label)}</span>
           ${grade ? `<span style="color:#f59e0b;font-size:0.75rem;">${grade}级</span>` : ''}
         </label>
@@ -734,7 +734,7 @@ async function submitClubPlayers(compId, clubId) {
     showToast('请选择恰好5名队员', 'error');
     return;
   }
-  const players = Array.from(checked).map(cb => ({ user_id: cb.value }));
+  const players = Array.from(checked).map(cb => ({ user_id: cb.value, lane: cb.dataset.lane || '' }));
   const btn = document.getElementById('submitClubBtn');
   if (btn) { btn.disabled = true; btn.textContent = '提交中…'; }
   try {
