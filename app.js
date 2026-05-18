@@ -24,6 +24,17 @@ function escapeHtml(str) {
     .replace(/'/g, '&#x27;');
 }
 
+// 赛事报名状态标签
+function statusBadge(r) {
+  const map = {
+    reserved: { text: '待确认', color: '#f59e0b' },
+    confirmed: { text: '已确认', color: '#10b981' },
+    cancelled: { text: '已取消', color: '#6b7280' }
+  };
+  const s = map[r.status] || { text: r.status || '未知', color: 'var(--text-muted)' };
+  return '<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.7rem;background:'+s.color+'22;color:'+s.color+';">'+escapeHtml(s.text)+'</span>';
+}
+
 const cacheStore = new Map();
 async function api(path, options = {}, retries = 2) {
   const isGet = !options.method || options.method === 'GET';
