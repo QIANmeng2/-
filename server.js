@@ -62,20 +62,6 @@ async function initDB() {
         dream_coins INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT NOW()
       );
-      CREATE TABLE IF NOT EXISTS schedules (
-        id TEXT PRIMARY KEY,
-        userId TEXT NOT NULL,
-        teamId TEXT,
-        date TEXT NOT NULL,
-        startTime TEXT NOT NULL,
-        mode TEXT DEFAULT 'bo1',
-        globalBp BOOLEAN DEFAULT false,
-        status TEXT DEFAULT 'available',
-        applicants TEXT[] DEFAULT '{}',
-        confirmedApplicant TEXT,
-        modification JSONB,
-        is_public BOOLEAN DEFAULT false
-      );
       CREATE TABLE IF NOT EXISTS notifications (
         id SERIAL PRIMARY KEY,
         userId TEXT NOT NULL,
@@ -105,7 +91,6 @@ async function initDB() {
     `);
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT \'\'');
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS disabledDates TEXT[] DEFAULT \'{}\'');
-    await client.query('ALTER TABLE schedules ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT false');
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS gameId TEXT DEFAULT \'\'');
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS gameServer TEXT DEFAULT \'手Q区\'');
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS gameRank TEXT DEFAULT \'星耀\'');
@@ -113,7 +98,6 @@ async function initDB() {
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS laneStats TEXT DEFAULT \'{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}\'');
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS heroPool TEXT DEFAULT \'\'');
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()');
-    await client.query('ALTER TABLE schedules ADD COLUMN IF NOT EXISTS teamId TEXT');
     await client.query('ALTER TABLE notifications ADD COLUMN IF NOT EXISTS notification_id TEXT DEFAULT \'\'');
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS dream_coins INTEGER DEFAULT 0');
     await client.query(`
@@ -474,200 +458,15 @@ app.put('/api/notifications/read-all', authMiddleware, async (req, res) => {
   } catch (e) { serverError(res, '标记失败'); }
 });
 
-app.get('/api/schedules', async (req, res) => {
-  try {
-    const result = await pool.query("SELECT * FROM schedules WHERE status = 'available'");
-    if (result.rows.length === 0) return res.json({ schedules: [] });
-    const userIds = [...new Set(result.rows.map(s => s.userid))];
-    const usersRes = await pool.query('SELECT id, teamName, coachName, level, bio FROM users WHERE id = ANY($1)', [userIds]);
-    const usersMap = {};
-    usersRes.rows.forEach(u => { usersMap[u.id] = u; });
-    const schedules = result.rows.map(s => {
-      const user = usersMap[s.userid] || {};
-      return { id: s.id, date: s.date, startTime: s.starttime, mode: s.mode, globalBp: s.globalbp, status: s.status, applicantCount: (s.applicants || []).length, team: { id: user.id, teamName: user.teamname, coachName: user.coachname, level: user.level, bio: user.bio } };
-    });
-    res.json({ schedules });
-  } catch (e) { serverError(res, '加载失败'); }
-});
-
-app.get('/api/public-schedules', async (req, res) => {
-  try {
-    const result = await pool.query("SELECT * FROM schedules WHERE status = 'confirmed' AND is_public = true ORDER BY date DESC, startTime DESC");
-    if (result.rows.length === 0) return res.json({ schedules: [] });
-    const allUserIds = result.rows.flatMap(s => [s.userid, s.confirmedapplicant].filter(Boolean));
-    const uniqueUserIds = [...new Set(allUserIds)];
-    const usersRes = await pool.query('SELECT id, teamName, coachName, level, bio FROM users WHERE id = ANY($1)', [uniqueUserIds]);
-    const usersMap = {};
-    usersRes.rows.forEach(u => { usersMap[u.id] = u; });
-    const schedules = result.rows.map(s => {
-      const publisher = usersMap[s.userid] || {};
-      const opponent = usersMap[s.confirmedapplicant] || {};
-      return { id: s.id, date: s.date, startTime: s.starttime, mode: s.mode, globalBp: s.globalbp, status: s.status, publisher: { id: publisher.id, teamName: publisher.teamname, coachName: publisher.coachname, level: publisher.level, bio: publisher.bio }, opponent: { id: opponent.id, teamName: opponent.teamname, coachName: opponent.coachname, level: opponent.level, bio: opponent.bio } };
-    });
-    res.json({ schedules });
-  } catch (e) { serverError(res, '加载失败'); }
-});
-
-app.get('/api/schedules/mine', authMiddleware, async (req, res) => {
-  try {
-    const schedules = await pool.query('SELECT * FROM schedules WHERE userId = $1 ORDER BY date DESC, startTime DESC', [req.userId]);
-    const userResult = await pool.query('SELECT disabledDates FROM users WHERE id = $1', [req.userId]);
-    const disabledDates = userResult.rows[0]?.disableddates || [];
-    const allApplicantIds = schedules.rows.flatMap(s => s.applicants || []).filter(Boolean);
-    const confirmedIds = schedules.rows.map(s => s.confirmedapplicant).filter(Boolean);
-    const allUserIds = [...new Set([...allApplicantIds, ...confirmedIds])];
-    let usersMap = {};
-    if (allUserIds.length > 0) {
-      const usersRes = await pool.query('SELECT id, teamName, coachName, level FROM users WHERE id = ANY($1)', [allUserIds]);
-      usersRes.rows.forEach(u => { usersMap[u.id] = u; });
-    }
-    const formattedSchedules = schedules.rows.map(s => {
-      const applicants = (s.applicants || []).map(id => { const u = usersMap[id] || {}; return { id, teamName: u.teamname || '未知', coachName: u.coachname || '未知', level: u.level || '' }; });
-      let opponent = null;
-      if (s.confirmedapplicant) { const u = usersMap[s.confirmedapplicant] || {}; opponent = { id: s.confirmedapplicant, teamName: u.teamname || '未知', coachName: u.coachname || '未知', level: u.level || '' }; }
-      return { id: s.id, date: s.date, startTime: s.starttime, mode: s.mode, globalBp: s.globalbp, status: s.status, applicants, opponent, isPublisher: true };
-    });
-    res.json({ schedules: formattedSchedules, disabledDates });
-  } catch (e) { serverError(res, '加载失败'); }
-});
-
-app.post('/api/schedules', authMiddleware, async (req, res) => {
-  const { date, startTime, mode, globalBp } = req.body;
-  if (!date || !startTime) return badRequest(res, '请填写日期和时间');
-  const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
-  try {
-    await pool.query('INSERT INTO schedules (id, userId, date, startTime, mode, globalBp) VALUES ($1,$2,$3,$4,$5,$6)', [id, req.userId, date, startTime, mode || 'bo1', globalBp || false]);
-    res.json({ schedule: { id, date, startTime, mode, globalBp } });
-  } catch (e) { serverError(res, '发布失败'); }
-});
-
-app.delete('/api/schedules/:id/cancel-post', authMiddleware, async (req, res) => {
-  try {
-    const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1 AND userId = $2', [req.params.id, req.userId]);
-    if (sRes.rows.length === 0) return notFound(res, '档期不存在或无权操作');
-    const schedule = sRes.rows[0];
-    if (schedule.status === 'confirmed') return badRequest(res, '已确认的档期请使用取消训练功能');
-    if (schedule.applicants && schedule.applicants.length > 0) {
-      for (const appId of schedule.applicants) { await sendNotification(appId, 'schedule_cancelled', `你申请的档期 ${schedule.date} ${schedule.starttime} 已被发布者取消`); }
-    }
-    await pool.query('DELETE FROM schedules WHERE id = $1', [req.params.id]);
-    ok(res);
-  } catch (e) { serverError(res, '取消失败'); }
-});
-
-app.post('/api/schedules/:id/apply', authMiddleware, async (req, res) => {
-  try {
-    const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1', [req.params.id]);
-    if (sRes.rows.length === 0) return notFound(res, '档期不存在');
-    const schedule = sRes.rows[0];
-    if (schedule.userid === req.userId) return badRequest(res, '不能申请自己的档期');
-    if (schedule.status !== 'available') return badRequest(res, '该档期不可申请');
-    let applicants = schedule.applicants || [];
-    if (applicants.includes(req.userId)) return badRequest(res, '你已经申请过了');
-    applicants.push(req.userId);
-    await pool.query('UPDATE schedules SET applicants = $1 WHERE id = $2', [applicants, req.params.id]);
-    await sendNotification(schedule.userid, 'new_apply', `有人申请了你的档期 ${schedule.date} ${schedule.starttime}`);
-    ok(res);
-  } catch (e) { serverError(res, '申请失败'); }
-});
-
-app.put('/api/schedules/:id/confirm-applicant', authMiddleware, async (req, res) => {
-  const { applicantId, isPublic } = req.body;
-  try {
-    const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1 AND userId = $2', [req.params.id, req.userId]);
-    if (sRes.rows.length === 0) return notFound(res, '档期不存在');
-    if (!sRes.rows[0].applicants || !sRes.rows[0].applicants.includes(applicantId)) return badRequest(res, '该用户未申请');
-    await pool.query("UPDATE schedules SET status = 'confirmed', confirmedApplicant = $1, applicants = '{}', is_public = COALESCE($3, false) WHERE id = $2", [applicantId, req.params.id, isPublic || false]);
-    await sendNotification(applicantId, 'confirmed', `你的申请被接受！档期 ${sRes.rows[0].date} ${sRes.rows[0].starttime} 已确认`);
-    ok(res);
-  } catch (e) { serverError(res, '确认失败'); }
-});
-
-app.put('/api/schedules/:id/unconfirm', authMiddleware, async (req, res) => {
-  try {
-    const sRes = await pool.query("SELECT * FROM schedules WHERE id = $1 AND userId = $2 AND status = 'confirmed'", [req.params.id, req.userId]);
-    if (sRes.rows.length === 0) return notFound(res, '档期不存在或未确认');
-    await pool.query("UPDATE schedules SET status = 'available', confirmedApplicant = NULL, is_public = false WHERE id = $1", [req.params.id]);
-    ok(res);
-  } catch (e) { serverError(res, '撤回失败'); }
-});
-
-app.post('/api/schedules/:id/cancel', authMiddleware, async (req, res) => {
-  try {
-    const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1', [req.params.id]);
-    if (sRes.rows.length === 0) return notFound(res, '档期不存在');
-    const schedule = sRes.rows[0];
-    if (schedule.status !== 'confirmed') return badRequest(res, '只有已确认的档期才能取消');
-    if (req.userId !== schedule.userid && req.userId !== schedule.confirmedapplicant) return forbidden(res, '无权操作');
-    await pool.query("UPDATE schedules SET status = 'cancelled', modification = NULL WHERE id = $1", [req.params.id]);
-    const other = (req.userId === schedule.userid) ? schedule.confirmedapplicant : schedule.userid;
-    await sendNotification(other, 'cancelled', `训练赛 ${schedule.date} ${schedule.starttime} 已被取消`);
-    ok(res);
-  } catch (e) { serverError(res, '取消失败'); }
-});
-
-app.put('/api/schedules/:id/modify-time', authMiddleware, async (req, res) => {
-  const { newTime } = req.body;
-  if (!newTime) return badRequest(res, '请提供新时间');
-  try {
-    const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1', [req.params.id]);
-    if (sRes.rows.length === 0) return notFound(res, '档期不存在');
-    const schedule = sRes.rows[0];
-    if (schedule.status !== 'confirmed') return badRequest(res, '只有已确认的档期才能修改时间');
-    if (req.userId !== schedule.userid && req.userId !== schedule.confirmedapplicant) return forbidden(res, '无权操作');
-    await pool.query('UPDATE schedules SET startTime = $1 WHERE id = $2', [newTime, req.params.id]);
-    ok(res);
-  } catch (e) { serverError(res, '修改失败'); }
-});
-
-app.put('/api/schedules/:id/toggle-public', authMiddleware, async (req, res) => {
-  try {
-    const sRes = await pool.query("SELECT * FROM schedules WHERE id = $1 AND userId = $2 AND status = 'confirmed'", [req.params.id, req.userId]);
-    if (sRes.rows.length === 0) return notFound(res, '档期不存在');
-    const current = sRes.rows[0].is_public;
-    await pool.query('UPDATE schedules SET is_public = NOT is_public WHERE id = $1', [req.params.id]);
-    res.json({ isPublic: !current });
-  } catch (e) { serverError(res, '修改失败'); }
-});
-
-app.post('/api/schedules/:id/republish', authMiddleware, async (req, res) => {
-  try {
-    const sRes = await pool.query('SELECT * FROM schedules WHERE id = $1 AND userId = $2', [req.params.id, req.userId]);
-    if (sRes.rows.length === 0) return notFound(res, '档期不存在');
-    if (sRes.rows[0].status !== 'cancelled') return badRequest(res, '只有已取消的档期才能重新发布');
-    await pool.query("UPDATE schedules SET status = 'available', confirmedApplicant = NULL, applicants = '{}', modification = NULL, is_public = false WHERE id = $1", [req.params.id]);
-    ok(res);
-  } catch (e) { serverError(res, '重新发布失败'); }
-});
-
-app.get('/api/admin/schedules', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM schedules ORDER BY date DESC, startTime DESC');
-    res.json({ schedules: result.rows });
-  } catch (e) { serverError(res, '加载失败'); }
-});
-
-app.delete('/api/admin/schedules/:id', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    await pool.query('DELETE FROM schedules WHERE id = $1', [req.params.id]);
-    ok(res);
-  } catch (e) { serverError(res, '删除失败'); }
-});
-
 // 管理员仪表盘统计
 app.get('/api/admin/dashboard', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const usersCount = await pool.query('SELECT COUNT(*) FROM users');
-    const schedulesCount = await pool.query('SELECT COUNT(*) FROM schedules');
     const teamsCount = await pool.query('SELECT COUNT(*) FROM teams');
-    const today = new Date().toISOString().split('T')[0];
-    const todaySchedules = await pool.query("SELECT COUNT(*) FROM schedules WHERE date = $1", [today]);
     res.json({
       stats: {
         totalUsers: parseInt(usersCount.rows[0].count),
-        totalSchedules: parseInt(schedulesCount.rows[0].count),
-        totalTeams: parseInt(teamsCount.rows[0].count),
-        todaySchedules: parseInt(todaySchedules.rows[0].count)
+        totalTeams: parseInt(teamsCount.rows[0].count)
       }
     });
   } catch (e) { console.error(e); serverError(res, '加载失败'); }
@@ -1147,18 +946,25 @@ app.post('/api/admin/teams', authMiddleware, adminMiddleware, async (req, res) =
 
 // 管理员更新队伍（改名/换队长/改状态）
 app.put('/api/admin/teams/:id', authMiddleware, adminMiddleware, async (req, res) => {
-  const { name, captainId, status, bio, maxMembers } = req.body;
+  const { name, captainId, newCaptainUsername, status, bio, maxMembers } = req.body;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const current = await client.query('SELECT * FROM teams WHERE id = $1', [req.params.id]);
     if (current.rows.length === 0) { await client.query('ROLLBACK'); return notFound(res, '队伍不存在'); }
     const team = current.rows[0];
+    // 如果提供了用户名，自动解析为用户ID
+    let resolvedCaptainId = captainId;
+    if (resolvedCaptainId === undefined && newCaptainUsername) {
+      const userRes = await client.query('SELECT id FROM users WHERE username = $1', [newCaptainUsername]);
+      if (userRes.rows.length === 0) { await client.query('ROLLBACK'); return badRequest(res, '未找到用户：' + newCaptainUsername); }
+      resolvedCaptainId = userRes.rows[0].id;
+    }
     const updates = [];
     const params = [];
     let idx = 1;
     if (name !== undefined) { updates.push(`name = $${idx++}`); params.push(name.trim()); }
-    if (captainId !== undefined) { updates.push(`captainId = $${idx++}`); params.push(captainId); }
+    if (resolvedCaptainId !== undefined) { updates.push(`captainId = $${idx++}`); params.push(resolvedCaptainId); }
     if (status !== undefined) { updates.push(`status = $${idx++}`); params.push(status); }
     if (bio !== undefined) { updates.push(`bio = $${idx++}`); params.push(bio); }
     if (maxMembers !== undefined) { updates.push(`maxMembers = $${idx++}`); params.push(parseInt(maxMembers)); }
@@ -1167,9 +973,9 @@ app.put('/api/admin/teams/:id', authMiddleware, adminMiddleware, async (req, res
       await client.query(`UPDATE teams SET ${updates.join(', ')} WHERE id = $${idx}`, params);
     }
     // 如果换了队长，同步更新 team_members
-    if (captainId !== undefined && captainId !== team.captainid) {
+    if (resolvedCaptainId !== undefined && resolvedCaptainId !== team.captainid) {
       await client.query('UPDATE team_members SET role = $1 WHERE teamId = $2 AND userId = $3', ['member', req.params.id, team.captainid]);
-      await client.query('INSERT INTO team_members (teamId, userId, role) VALUES ($1, $2, $3) ON CONFLICT (teamId, userId) DO UPDATE SET role = $3', [req.params.id, captainId, 'captain']);
+      await client.query('INSERT INTO team_members (teamId, userId, role) VALUES ($1, $2, $3) ON CONFLICT (teamId, userId) DO UPDATE SET role = $3', [req.params.id, resolvedCaptainId, 'captain']);
     }
     await client.query('COMMIT');
     ok(res);
@@ -1565,27 +1371,40 @@ app.post('/api/admin/award-coins', authMiddleware, adminMiddleware, async (req, 
   try {
     await client.query('BEGIN');
     let affectedCount = 0;
-    // 批量发放给所有用户
+    // 批量发放给所有用户（带去重检查）
     if (userId === 'all' || target === 'all') {
       const allUsers = await client.query('SELECT id FROM users');
-      affectedCount = allUsers.rowCount;
-      await client.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1', [amount]);
       const reason = note || (amount > 0 ? '管理员发放初始奖金' : '梦币调整');
       const txType = amount > 0 ? 'award' : 'deduct';
-      // 为每个用户插入个人流水记录，确保用户能在自己的收支明细中看到
+      affectedCount = 0;
+      let skippedCount = 0;
+      // 逐用户处理：先检查是否已有相同 note 的流水，再决定是否发放
       for (const u of allUsers.rows) {
+        const existing = await client.query(
+          'SELECT id FROM coin_transactions WHERE user_id = $1 AND note = $2',
+          [u.id, reason]
+        );
+        if (existing.rows.length > 0) {
+          // 该用户已有相同 note 的记录，跳过（不重复发放）
+          skippedCount++;
+          continue;
+        }
+        // 未发放过：更新余额 + 插入流水
+        await client.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id = $2', [amount, u.id]);
         await client.query(
           "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1, $2, $3, $4)",
           [u.id, amount, txType, reason]
         );
+        affectedCount++;
       }
-      // 保留一条汇总记录供管理员全部流水查看
+      // 保留一条汇总记录供管理员全部流水查看（即使全部跳过也记录）
+      const summaryNote = reason + (skippedCount > 0 ? '（批量操作汇总，共' + allUsers.rowCount + '人，已跳过' + skippedCount + '人）' : '（批量操作汇总，共' + affectedCount + '人）');
       await client.query(
         "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ('system', $1, $2, $3)",
-        [amount, txType, reason + '（批量操作汇总，共' + affectedCount + '人）']
+        [amount, txType, summaryNote]
       );
       await client.query('COMMIT');
-      ok(res, {message: '已向 ' + affectedCount + ' 名用户发放 ' + amount + ' 梦币', affectedCount });
+      ok(res, {message: '已向 ' + affectedCount + ' 名用户发放 ' + amount + ' 梦币（' + skippedCount + '人已跳过）', affectedCount, skippedCount });
       return;
     }
     // 单用户发放
