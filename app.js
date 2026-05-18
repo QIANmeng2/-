@@ -10,6 +10,21 @@ let currentMatchId = null;
 const LANES = ['对抗路', '打野', '中路', '发育路', '游走'];
 const LANE_ICONS = { '对抗路': '对抗', '打野': '打野', '中路': '中路', '发育路': '发育', '游走': '游走' };
 
+// ====== 安全工具 ======
+/**
+ * HTML 转义（防止 XSS）
+ * 将用户输入或不可信数据插入 innerHTML 前必须调用此函数
+ */
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
 const cacheStore = new Map();
 async function api(path, options = {}, retries = 2) {
   const isGet = !options.method || options.method === 'GET';
@@ -1733,7 +1748,7 @@ async function checkNotifications() {
     else badge.style.display = 'none';
   } catch {}
 }
-async function openNotifications() {
+  async function openNotifications() {
   if (!currentUser) return;
   const existing = document.getElementById('notifPanel');
   if (existing) { existing.remove(); return; }
@@ -1742,22 +1757,35 @@ async function openNotifications() {
   if (data.notifications.length === 0) html += '<p style="text-align:center;color:var(--text-muted);padding:20px 0;">暂无通知</p>';
   else {
     data.notifications.forEach(n => {
+      // 安全：数据来自后端，但仍使用 escapeHtml 防护 content 中的特殊字符
+      const contentEsc = escapeHtml(n.content || '');
+      const timeEsc = escapeHtml(new Date(n.created_at).toLocaleString());
       let actions = '';
       if (n.type === 'team_invite') {
+        // 安全：relatedId 通过 data- 属性传递，避免直接拼接进 onclick
         actions = `<div style="margin-top:8px;">
-          <button class="btn btn-primary btn-sm" onclick="acceptTeamInvite('${n.relatedId}')" style="font-size:0.78rem;">接受邀请</button>
+          <button class="btn btn-primary btn-sm notif-action" data-action="acceptInvite" data-id="${escapeHtml(n.relatedId || '')}" style="font-size:0.78rem;">接受邀请</button>
         </div>`;
       }
-      html += `<div style="padding:12px;background:${n.read ? 'var(--bg-glass)' : 'rgba(0, 212, 255, 0.08)'};border-radius:var(--radius-md);margin-bottom:10px;font-size:0.88rem;border:1px solid ${n.read ? 'var(--border-color)' : 'rgba(0, 212, 255, 0.2)'};">${n.content}<br><small style="color:var(--text-muted);">${new Date(n.created_at).toLocaleString()}</small>${actions}</div>`;
+      html += `<div class="notif-item ${n.read ? '' : 'notif-unread'}" style="padding:12px;background:${n.read ? 'var(--bg-glass)' : 'rgba(0, 212, 255, 0.08)'};border-radius:var(--radius-md);margin-bottom:10px;font-size:0.88rem;border:1px solid ${n.read ? 'var(--border-color)' : 'rgba(0, 212, 255, 0.2)'};">${contentEsc}<br><small style="color:var(--text-muted);">${timeEsc}</small>${actions}</div>`;
     });
-    html += '<button class="btn btn-primary btn-sm" onclick="markAllRead()" style="width:100%;margin-top:8px;">全部已读</button>';
+    html += '<button class="btn btn-primary btn-sm notif-action" data-action="markAllRead" style="width:100%;margin-top:8px;">全部已读</button>';
   }
   html += '</div>';
   const panel = document.createElement('div');
   panel.id = 'notifPanel';
   panel.style.cssText = 'position:fixed;top:80px;right:16px;width:340px;max-height:450px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:var(--radius-xl);box-shadow:var(--shadow-lg);z-index:150;padding:20px;overflow-y:auto;';
-  panel.innerHTML = `<div style="font-weight:700;font-size:1rem;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;color:var(--text-primary);">消息通知 <span onclick="document.getElementById('notifPanel').remove()" style="cursor:pointer;font-size:1.4rem;color:var(--text-muted);width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);transition:all 0.2s;">&times;</span></div>${html}`;
+  panel.innerHTML = `<div style="font-weight:700;font-size:1rem;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;color:var(--text-primary);">消息通知 <span id="notifPanelClose" style="cursor:pointer;font-size:1.4rem;color:var(--text-muted);width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);transition:all 0.2s;">&times;</span></div>${html}`;
+  // 事件代理：统一处理按钮点击，避免内联 onclick
+  panel.addEventListener('click', (e) => {
+    const btn = e.target.closest('.notif-action');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    if (action === 'markAllRead') { markAllRead(); panel.remove(); }
+    else if (action === 'acceptInvite') { const id = btn.dataset.id; if (id) acceptTeamInvite(id); panel.remove(); }
+  });
   document.body.appendChild(panel);
+  panel.querySelector('#notifPanelClose').addEventListener('click', () => panel.remove());
   const closeOnOutside = (e) => { if (!panel.contains(e.target) && e.target.id !== 'notificationBell') { panel.remove(); document.removeEventListener('click', closeOnOutside); } };
   setTimeout(() => document.addEventListener('click', closeOnOutside), 0);
 }
@@ -3370,16 +3398,31 @@ function closeWelcomeAndLogin() {
   openAuthModal('login');
 }
 
-// ==================== 假进度：CSS 动画驱动宽度，JS 读取百分比 + 超时重试 ====================
-const LOAD_TIMEOUT = 8000; // 8秒超时
+// ==================== 加载进度监控（内存安全版） ====================
+// 改进：仅在有 spinner 且页面可见时轮询；页面隐藏时自动暂停；退出时清理
+const LOAD_TIMEOUT = 8000;
 const _spinnerTimestamps = new WeakMap();
+let _spinnerRafId = null;
+let _spinnerLastTick = 0;
 
-setInterval(() => {
+function _tickSpinners() {
+  // 节流：每 120ms 最多一次
   const now = Date.now();
-  document.querySelectorAll('.loading-spinner:not(.load-timeout)').forEach(spinner => {
-    // 记录首次出现时间
-    if (!_spinnerTimestamps.has(spinner)) _spinnerTimestamps.set(spinner, now);
+  if (now - _spinnerLastTick < 120) {
+    _spinnerRafId = requestAnimationFrame(_tickSpinners);
+    return;
+  }
+  _spinnerLastTick = now;
 
+  const active = document.querySelectorAll('.loading-spinner:not(.load-timeout)');
+  if (active.length === 0) {
+    // 没有活跃 spinner，停止轮询
+    if (_spinnerRafId) { cancelAnimationFrame(_spinnerRafId); _spinnerRafId = null; }
+    return;
+  }
+
+  active.forEach(spinner => {
+    if (!_spinnerTimestamps.has(spinner)) _spinnerTimestamps.set(spinner, now);
     const fill = spinner.querySelector('.load-fill');
     const text = spinner.querySelector('.load-text');
     if (text && fill) {
@@ -3388,22 +3431,37 @@ setInterval(() => {
       const pct = Math.min(Math.round((fillW / barW) * 100), 99);
       text.textContent = `加载中… ${pct}%`;
     }
-
-    // 超时检测：超过8秒未加载完成
     const start = _spinnerTimestamps.get(spinner);
     if (now - start > LOAD_TIMEOUT) {
       spinner.classList.add('load-timeout');
-      // 尝试获取重试回调，默认切回当前页面
       const retry = spinner.dataset.retry || 'switchTab(currentTab)';
+      // 安全：retry 来自 dataset，仅包含受控字符串，不执行用户输入
       spinner.innerHTML = `
         <div style="text-align:center;padding:20px;">
           <div class="load-text" style="color:var(--danger);margin-bottom:12px;">加载超时，请重试</div>
-          <button class="btn btn-sm btn-primary" onclick="${retry}" style="padding:8px 24px;">重新加载</button>
-        </div>
-      `;
+          <button class="btn btn-sm btn-primary" style="padding:8px 24px;">重新加载</button>
+        </div>`;
+      spinner.querySelector('button').onclick = () => { try { eval(retry); } catch(e) { switchTab(currentTab); } };
     }
   });
-}, 120);
+
+  _spinnerRafId = requestAnimationFrame(_tickSpinners);
+}
+
+// Visibility API：页面隐藏时暂停，恢复时重启
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (_spinnerRafId) { cancelAnimationFrame(_spinnerRafId); _spinnerRafId = null; }
+  } else if (document.querySelector('.loading-spinner:not(.load-timeout)')) {
+    _spinnerLastTick = 0; // 重置节流，下次立即执行
+    _spinnerRafId = requestAnimationFrame(_tickSpinners);
+  }
+});
+
+// 页面卸载时清理
+window.addEventListener('beforeunload', () => {
+  if (_spinnerRafId) { cancelAnimationFrame(_spinnerRafId); _spinnerRafId = null; }
+});
 
 // 启动
 (async () => {
