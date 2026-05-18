@@ -1897,7 +1897,31 @@ async function checkNotifications() {
     else if (action === 'confirmEntry') {
       const compId = btn.dataset.id;
       panel.remove();
-      if (compId) openCompetitionDetail(compId);
+      if (compId) {
+        // 直接弹出入场费选择弹窗（不用 dialog()，避免时序问题）
+        const feeOverlay = document.createElement('div');
+        feeOverlay.className = 'modal-overlay';
+        feeOverlay.style.zIndex = '1000';
+        feeOverlay.innerHTML = '<div class="modal modal-sm" style="max-width:380px;">'+
+          '<h3 style="margin-bottom:12px;text-align:center;">选择入场费</h3>'+
+          '<p style="color:var(--text-muted);font-size:0.82rem;text-align:center;margin-bottom:16px;">入场费将计入奖池，胜方按占比瓜分</p>'+
+          '<div style="display:flex;gap:10px;justify-content:center;margin-bottom:16px;">'+
+            '<button class="btn btn-sm fee-btn" data-fee="500" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:#10b981;padding:12px 20px;font-size:0.95rem;font-weight:600;">500梦币</button>'+
+            '<button class="btn btn-sm fee-btn" data-fee="1000" style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);color:#f59e0b;padding:12px 20px;font-size:0.95rem;font-weight:600;">1000梦币</button>'+
+            '<button class="btn btn-sm fee-btn" data-fee="2000" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#ef4444;padding:12px 20px;font-size:0.95rem;font-weight:600;">2000梦币</button>'+
+          '</div>'+
+          '<div style="text-align:center;"><button class="btn btn-ghost btn-sm" id="feeCancelBtn">取消</button></div>'+
+        '</div>';
+        document.body.appendChild(feeOverlay);
+        feeOverlay.querySelector('#feeCancelBtn').addEventListener('click', () => feeOverlay.remove());
+        feeOverlay.querySelectorAll('.fee-btn').forEach(b => {
+          b.addEventListener('click', async () => {
+            const fee = parseInt(b.dataset.fee);
+            feeOverlay.remove();
+            await confirmCompetitionEntry(compId, fee);
+          });
+        });
+      }
     }
   });
   document.body.appendChild(panel);
