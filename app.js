@@ -2188,6 +2188,7 @@ async function switchTab(tab) {
     else if (tab === 'competition') await renderCompetitionPanel();
     else if (tab === 'market') await renderMarketPanel();
     else if (tab === 'club') await renderClubPanel();
+    else if (tab === 'leaderboard') await renderLeaderboardPanel();
   } catch {
     content.innerHTML = '<div class="card"><p>加载失败</p><button class="btn btn-sm btn-primary" onclick="switchTab(\''+tab+'\')">重试</button></div>';
   }

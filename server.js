@@ -39,6 +39,47 @@ function serverError(res, message, error) {
 
 
 
+// 更新选手player_score：0.5 * market_value + 0.5 * dream_coins
+async function updatePlayerScore(userId) {
+  try {
+    const result = await pool.query(`
+      SELECT p.market_value, u.dream_coins
+      FROM players p
+      LEFT JOIN users u ON p.user_id = u.id
+      WHERE p.user_id = $1
+    `, [userId]);
+    if (result.rows.length === 0) return;
+    const { market_value, dream_coins } = result.rows[0];
+    const playerValue = market_value || 0;
+    const dreamcoinValue = dream_coins || 0;
+    const playerScore = Math.round(0.5 * playerValue + 0.5 * dreamcoinValue);
+    await pool.query('UPDATE players SET player_score = $1 WHERE user_id = $2', [playerScore, userId]);
+    const playerClub = await pool.query('SELECT club_id FROM players WHERE user_id = $1', [userId]);
+    if (playerClub.rows.length > 0 && playerClub.rows[0].club_id) {
+      await updateClubScore(playerClub.rows[0].club_id);
+    }
+  } catch (e) {
+    console.error('[updatePlayerScore error]', e);
+  }
+}
+
+// 更新俱乐部club_score：top5上场成员player_score之和
+async function updateClubScore(clubId) {
+  try {
+    const members = await pool.query(`
+      SELECT player_score
+      FROM players
+      WHERE club_id = $1 AND status = 'approved'
+      ORDER BY player_score DESC
+      LIMIT 5
+    `, [clubId]);
+    const clubScore = members.rows.reduce((sum, m) => sum + (m.player_score || 0), 0);
+    await pool.query('UPDATE clubs SET club_score = $1 WHERE id = $2', [clubScore, clubId]);
+  } catch (e) {
+    console.error('[updateClubScore error]', e);
+  }
+}
+
 async function initDB() {
   const client = await pool.connect();
   try {
@@ -239,6 +280,9 @@ async function initDB() {
     await client.query(`ALTER TABLE competition_registrations ADD COLUMN IF NOT EXISTS club_id TEXT`);
     await client.query(`ALTER TABLE competition_registrations ADD COLUMN IF NOT EXISTS side TEXT DEFAULT 'red'`);
     await client.query(`ALTER TABLE competition_registrations ADD COLUMN IF NOT EXISTS lane TEXT DEFAULT ''`);
+    // 榜单分数字段
+    await client.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS player_score INTEGER DEFAULT 0`);
+    await client.query(`ALTER TABLE clubs ADD COLUMN IF NOT EXISTS club_score INTEGER DEFAULT 0`);
     // 赛事结果
     await client.query(`
       CREATE TABLE IF NOT EXISTS competition_results (
@@ -1430,6 +1474,7 @@ app.post('/api/admin/award-coins', authMiddleware, adminMiddleware, async (req, 
       const txType = amount > 0 ? 'award' : 'deduct';
       affectedCount = 0;
       let skippedCount = 0;
+      const affectedUserIds = [];
       // 逐用户处理：先检查是否已有相同 note 的流水，再决定是否发放
       for (const u of allUsers.rows) {
         const existing = await client.query(
@@ -1448,6 +1493,7 @@ app.post('/api/admin/award-coins', authMiddleware, adminMiddleware, async (req, 
           [u.id, amount, txType, reason]
         );
         affectedCount++;
+        affectedUserIds.push(u.id);
       }
       // 保留一条汇总记录供管理员全部流水查看（即使全部跳过也记录）
       const summaryNote = reason + (skippedCount > 0 ? '（批量操作汇总，共' + allUsers.rowCount + '人，已跳过' + skippedCount + '人）' : '（批量操作汇总，共' + affectedCount + '人）');
@@ -1456,6 +1502,8 @@ app.post('/api/admin/award-coins', authMiddleware, adminMiddleware, async (req, 
         [amount, txType, summaryNote]
       );
       await client.query('COMMIT');
+      // 更新榜单分数
+      for (const id of affectedUserIds) { await updatePlayerScore(id); }
       ok(res, {message: '已向 ' + affectedCount + ' 名用户发放 ' + amount + ' 梦币（' + skippedCount + '人已跳过）', affectedCount, skippedCount });
       return;
     }
@@ -1468,6 +1516,8 @@ app.post('/api/admin/award-coins', authMiddleware, adminMiddleware, async (req, 
     }
     await client.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,$3,$4)", [userId, amount, amount > 0 ? 'award' : 'deduct', note || (amount > 0 ? '赛事奖励' : '梦币扣除')]);
     await client.query('COMMIT');
+    // 更新榜单分数
+    await updatePlayerScore(userId);
     try {
       const notifMsg = amount > 0
         ? '你获得了 ' + amount + ' 梦币！' + (note ? '备注：' + note : '')
@@ -1621,6 +1671,7 @@ app.post('/api/admin/player-review', authMiddleware, adminMiddleware, async (req
       "UPDATE players SET status='approved',market_value=$1,grade=$2,reviewed_by=$3,reviewed_at=NOW() WHERE user_id=$4",
       [marketValue, grade, req.userId, userId]
     );
+    await updatePlayerScore(userId);
     await sendNotification(userId, 'player_approved', `你的选手认证已通过！身价：${marketValue}万 等级：${grade}级`);
     ok(res, {marketValue });
   } catch(e) { serverError(res, '操作失败'); }
@@ -1862,6 +1913,9 @@ app.post('/api/club/sign', authMiddleware, async (req, res) => {
     );
 
     await client.query('COMMIT');
+    // 更新榜单分数
+    await updatePlayerScore(ownerId);
+    await updatePlayerScore(playerUserId);
     res.json({
       success: true,
       message: '签约成功！签约费 ' + feeWan + ' 万梦币',
@@ -1911,9 +1965,11 @@ app.post('/api/admin/salary/pay', authMiddleware, adminMiddleware, async (req, r
       const boss = await pool.query('SELECT dream_coins FROM users WHERE id=$1', [bossId]);
       if ((boss.rows[0]?.dream_coins || 0) < group.total) continue; // 余额不足跳过
       await pool.query('UPDATE users SET dream_coins = dream_coins - $1 WHERE id=$2', [group.total, bossId]);
+      await updatePlayerScore(bossId);
       await pool.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'deduct',$3)", [bossId, -group.total, '本周薪资支出，共' + group.players.length + '位选手']);
       for (const mp of group.players) {
         await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id=$2', [mp.salary, mp.userId]);
+        await updatePlayerScore(mp.userId);
         await pool.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'reward',$3)", [mp.userId, mp.salary, '周薪' + mp.grade + '级']);
         await pool.query('INSERT INTO salary_records (club_id, player_user_id, amount, grade, paid_by) VALUES ($1,$2,$3,$4,$5)', [group.clubId, mp.userId, mp.salary, mp.grade, bossId]);
         totalPaid += mp.salary;
@@ -2162,6 +2218,11 @@ app.post('/api/trade/:id/accept', authMiddleware, async (req, res) => {
     if (t.trade_type === 'swap' && t.swap_player_user_id) {
       await pool.query("UPDATE players SET trade_status=NULL WHERE user_id=$1", [t.swap_player_user_id]);
     }
+    // 更新榜单分数
+    await updatePlayerScore(t.player_user_id);
+    if (t.trade_type === 'swap' && t.swap_player_user_id) {
+      await updatePlayerScore(t.swap_player_user_id);
+    }
     ok(res, { success: true });
   } catch(e) { console.error(e); serverError(res, '接受交易失败'); }
 });
@@ -2259,6 +2320,8 @@ app.get('/api/trade/:id', authMiddleware, async (req, res) => {
 });
 
 
+
+require('./leaderboard.js')(app, pool, authMiddleware, ok, badRequest, serverError);
 
 async function startServer() {
   await initDB();

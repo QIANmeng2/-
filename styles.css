@@ -2405,3 +2405,28 @@
 
     /* ===== 选中样式 ===== */
     ::selection { background: rgba(79, 70, 229, 0.3); color: #fff; }
+
+/* ===== 榜单系统 ===== */
+#leaderboardContent table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+#leaderboardContent th {
+  padding: 8px 12px;
+  color: var(--text-muted);
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+#leaderboardContent td {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+#leaderboardContent tr:hover {
+  background: rgba(255,255,255,0.03);
+}
+#leaderboardContent .rank-top {
+  color: var(--warning);
+  font-weight: 700;
+}
