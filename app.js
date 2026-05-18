@@ -277,15 +277,9 @@ async function loadCompPlayerList(compId, isRegular) {
       container.innerHTML = '<div style="padding:12px;background:rgba(255,255,255,.02);border-radius:8px;color:var(--text-muted);font-size:0.82rem;text-align:center;">暂无参赛人员</div>';
       return;
     }
-    const laneOrder = { '对抗路':1, '打野':2, '中路':3, '发育路':4, '游走':5 };
-    const statusBadge = (r) => {
-      if (r.status === 'confirmed') return '<span style="font-size:0.65rem;color:#10b981;background:rgba(16,185,129,.1);padding:1px 6px;border-radius:4px;">已确认</span>';
-      if (r.status === 'reserved') return '<span style="font-size:0.65rem;color:var(--warning);background:rgba(255,215,0,.08);padding:1px 6px;border-radius:4px;">待确认</span>';
-      return '';
-    };
-    // 按红蓝方分组
-    const redRegs = regs.filter(r => r.side === 'red').sort((a,b) => (laneOrder[a.lane]||99) - (laneOrder[b.lane]||99));
-    const blueRegs = regs.filter(r => r.side === 'blue').sort((a,b) => (laneOrder[a.lane]||99) - (laneOrder[b.lane]||99));
+    // 按红蓝方分组，按报名顺序排列
+    const redRegs = regs.filter(r => r.side === 'red').sort((a,b) => (a.created_at||'').localeCompare(b.created_at||''));
+    const blueRegs = regs.filter(r => r.side === 'blue').sort((a,b) => (a.created_at||'').localeCompare(b.created_at||''));
     const renderSide = (sideRegs, sideLabel, sideColor) => {
       if (!sideRegs.length) return '';
       const confirmedCount = sideRegs.filter(r => r.status === 'confirmed').length;
@@ -299,7 +293,7 @@ async function loadCompPlayerList(compId, isRegular) {
           const name = r.coachname || r.username || r.player_user_id;
           return '<div style="padding:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:8px;">'+
             '<div style="font-size:0.82rem;color:var(--text-primary);font-weight:600;">'+name+'</div>'+
-            '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">'+(r.lane||'')+(isRegular && r.entry_fee ? ' &middot; '+r.entry_fee+'梦币' : '')+'</div>'+
+            '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">'+(isRegular && r.entry_fee ? r.entry_fee+'梦币入场' : '')+'</div>'+
             '<div style="margin-top:4px;">'+statusBadge(r)+'</div>'+
           '</div>';
         }).join('')+
@@ -467,10 +461,10 @@ async function loadCompRegUI(compId, c) {
     myReg = allRegs.find(r => r.player_user_id === currentUser.id);
   } catch(e) {}
   if (myReg && myReg.status === 'confirmed') {
-    container.innerHTML = '<div style="padding:12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:8px;"><span style="color:#10b981;font-weight:600;">已确认入场</span><span style="color:var(--text-muted);margin-left:8px;font-size:0.78rem;">'+myReg.lane+' &middot; 入场费：'+myReg.entry_fee+'梦币</span></div>';
+    container.innerHTML = '<div style="padding:12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:8px;"><span style="color:#10b981;font-weight:600;">已确认入场</span><span style="color:var(--text-muted);margin-left:8px;font-size:0.78rem;">入场费：'+(myReg.entry_fee||0)+'梦币</span></div>';
     return;
   } else if (myReg && myReg.status === 'reserved') {
-    container.innerHTML = '<div style="padding:12px;background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.2);border-radius:8px;"><span style="color:var(--warning);font-weight:600;">待确认入场</span><span style="color:var(--text-muted);margin-left:8px;">'+myReg.lane+'</span><div style="display:flex;gap:8px;margin-top:8px;"><button class="btn btn-sm" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:#10b981;" onclick="confirmCompetitionEntry(\''+compId+'\',500)">500梦币</button><button class="btn btn-sm" style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);color:#f59e0b;" onclick="confirmCompetitionEntry(\''+compId+'\',1000)">1000梦币</button><button class="btn btn-sm" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#ef4444;" onclick="confirmCompetitionEntry(\''+compId+'\',2000)">2000梦币</button></div></div>';
+    container.innerHTML = '<div style="padding:12px;background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.2);border-radius:8px;"><span style="color:var(--warning);font-weight:600;">待确认入场</span><div style="display:flex;gap:8px;margin-top:8px;"><button class="btn btn-sm" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:#10b981;" onclick="confirmCompetitionEntry(\''+compId+'\',500)">500梦币</button><button class="btn btn-sm" style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);color:#f59e0b;" onclick="confirmCompetitionEntry(\''+compId+'\',1000)">1000梦币</button><button class="btn btn-sm" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#ef4444;" onclick="confirmCompetitionEntry(\''+compId+'\',2000)">2000梦币</button></div></div>';
     return;
   }
   if (!canRegister) {
@@ -559,92 +553,90 @@ async function loadAdminTeamPicker(compId) {
 }
 
 // 队长选择5名队员+分配位置
+// ---------- 队伍选队员报名（简化版：多选列表，无需分配分路） ----------
 async function openTeamPlayerSelect(compId, teamId, teamName) {
-  const TEAM_LANES = ['对抗路','打野','中路','发育路','游走'];
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = '<div class="modal modal-md" style="max-width:500px;">'+
-    '<h3 style="margin-bottom:12px;">选择5名上场队员 - '+escapeHtml(teamName)+'</h3>'+
+    '<h3 style="margin-bottom:12px;">选择上场队员 - '+escapeHtml(teamName)+'</h3>'+
     '<p id="teamSelectStatus" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;">加载中…</p>'+
-    '<div id="teamPlayerForm" style="display:none;">'+
-      TEAM_LANES.map(l => '<div class="form-group" style="display:flex;align-items:center;gap:8px;">'+
-        '<span style="width:56px;font-size:0.82rem;color:var(--text-secondary);flex-shrink:0;">'+l+'</span>'+
-        '<select class="form-input player-sel" data-lane="'+l+'" style="flex:1;">'+
-          '<option value="">-- 选择队员 --</option>'+
-        '</select></div>').join('')+
-      '<div style="margin-top:12px;display:flex;gap:8px;">'+
-        '<button class="btn btn-primary btn-sm" id="submitTeamBtn" onclick="submitTeamPlayers(\''+compId+'\',\''+teamId+'\')">确认报名</button>'+
+    '<div id="teamPlayerForm" style="display:none;max-height:360px;overflow-y:auto;border:1px solid rgba(255,255,255,.06);border-radius:8px;"></div>'+
+    '<div style="margin-top:12px;display:flex;gap:8px;align-items:center;justify-content:space-between;">'+
+      '<span id="selectedCount" style="font-size:0.82rem;color:var(--text-muted);">已选 0/5 人</span>'+
+      '<div style="display:flex;gap:8px;">'+
         '<button class="btn btn-ghost btn-sm" onclick="this.closest(\'.modal-overlay\').remove()">取消</button>'+
+        '<button class="btn btn-primary btn-sm" id="submitTeamBtn">确认报名</button>'+
       '</div>'+
     '</div>'+
   '</div>';
   document.body.appendChild(overlay);
 
+  document.getElementById('submitTeamBtn').addEventListener('click', () => submitTeamPlayers(compId, teamId));
+
   try {
     const data = await api('/api/teams/mine');
     const team = (data.data || {}).team || data.team;
     if (!team) { document.getElementById('teamSelectStatus').textContent = '队伍不存在'; return; }
-    const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
     const members = team.members || [];
-    if (members.length < 5 && !isAdmin) {
+    if (members.length < 5) {
       document.getElementById('teamSelectStatus').textContent = '队伍不足5人（当前'+members.length+'人），无法报名';
       return;
     }
 
-    // 渲染下拉选项 + 防重 change 事件
-    TEAM_LANES.forEach(lane => {
-      const sel = document.querySelector('.player-sel[data-lane="'+lane+'"]');
-      if (!sel) return;
-      members.forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m.userId;
-        opt.textContent = m.coachName || m.username || m.userId;
-        sel.appendChild(opt);
-      });
-      sel.addEventListener('change', () => {
-        const selected = {};
-        document.querySelectorAll('.player-sel').forEach(s => { if (s.value) selected[s.dataset.lane] = s.value; });
-        const dupEntry = Object.entries(selected).find(([l, v]) => v === sel.value && l !== sel.dataset.lane);
-        if (dupEntry) {
-          showToast('该队员已在其他位置被选择','warn');
-          sel.value = '';
+    const form = document.getElementById('teamPlayerForm');
+    form.innerHTML = members.map(m => `
+      <label class="player-item" style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);transition:background .15s;" onmouseover="this.style.background='rgba(255,255,255,.03')" onmouseout="this.style.background=''">
+        <input type="checkbox" class="player-check" value="${m.userId}" style="width:18px;height:18px;accent-color:var(--primary);flex-shrink:0;">
+        <span style="color:var(--text-primary);font-size:0.88rem;flex:1;">${escapeHtml(m.coachName || m.username || m.userId)}</span>
+        <span style="color:var(--text-muted);font-size:0.75rem;">${escapeHtml(m.gameRank || '')}</span>
+      </label>
+    `).join('');
+
+    // 复选事件：更新计数
+    form.querySelectorAll('.player-check').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const checked = form.querySelectorAll('.player-check:checked');
+        const count = checked.length;
+        const countEl = document.getElementById('selectedCount');
+        if (count > 5) {
+          cb.checked = false;
+          showToast('最多选择5人', 'warn');
           return;
         }
+        countEl.textContent = `已选 ${count}/5 人`;
+        countEl.style.color = count === 5 ? '#4ade80' : 'var(--text-muted)';
+        // 整行高亮
+        form.querySelectorAll('.player-item').forEach(item => {
+          const check = item.querySelector('input');
+          item.style.background = check.checked ? 'rgba(123,47,255,.12)' : '';
+        });
       });
     });
 
-    document.getElementById('teamSelectStatus').textContent = '共 ' + members.length + ' 名成员，请为5个位置各选1人（不可重复）';
-    const form = document.getElementById('teamPlayerForm');
-    if (form) form.style.display = 'block';
+    document.getElementById('teamSelectStatus').textContent = '共 ' + members.length + ' 名成员，请选择5人上场';
+    form.style.display = 'block';
   } catch(e) {
     const el = document.getElementById('teamSelectStatus');
     if (el) { el.textContent = '加载失败：' + (e.message || '网络错误'); el.style.color = '#f87171'; }
   }
 }
 async function submitTeamPlayers(compId, teamId) {
-  const players = [];
-  const usedIds = new Set();
-  document.querySelectorAll('.player-sel').forEach(sel => {
-    const uid = sel.value;
-    const lane = sel.dataset.lane;
-    if (uid && !usedIds.has(uid)) {
-      usedIds.add(uid);
-      players.push({ user_id: uid, lane: lane });
-    }
-  });
-  const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
-  if (players.length !== 5 && !isAdmin) { showToast('请为5个位置各选1名不同队员','error'); return; }
-  if (players.length < 1) { showToast('至少选择1名队员','error'); return; }
+  const checked = document.querySelectorAll('#teamPlayerForm .player-check:checked');
+  if (checked.length !== 5) {
+    showToast('请选择恰好5名队员', 'error');
+    return;
+  }
+  const players = Array.from(checked).map(cb => ({ user_id: cb.value }));
   const btn = document.getElementById('submitTeamBtn');
   if (btn) { btn.disabled = true; btn.textContent = '提交中…'; }
   try {
     await api('/api/competitions/'+compId+'/register', { method:'POST', body: JSON.stringify({ team_id: teamId, players }) });
-    showToast('报名成功','success');
+    showToast('报名成功', 'success');
     document.querySelector('.modal-overlay')?.remove();
     document.querySelector('.comp-detail-overlay')?.remove();
     loadCompetitionList();
   } catch(e) {
-    showToast(e.message || '报名失败，请重试','error');
+    showToast(e.message || '报名失败，请重试', 'error');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '确认报名'; }
   }
@@ -660,118 +652,97 @@ async function confirmCompetitionEntry(compId, fee) {
   } catch(e) { showToast(e.message,'error'); }
 }
 
-// ---------- 俱乐部选队员报名 ----------
+// ---------- 俱乐部选队员报名（简化版：多选列表，从自由名单选人） ----------
 async function openClubPlayerSelect(compId, clubId, clubName) {
-  const LANES = ['对抗路','打野','中路','发育路','游走'];
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.innerHTML = '<div class="modal modal-md" style="max-width:500px;">'+
-    '<h3 style="margin-bottom:12px;">选择5名上场队员 - '+escapeHtml(clubName)+'</h3>'+
+    '<h3 style="margin-bottom:12px;">选择上场队员 - '+escapeHtml(clubName)+'</h3>'+
     '<p id="clubSelectStatus" style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;">加载中…</p>'+
-    '<div id="clubPlayerForm" style="display:none;">'+
-      LANES.map(l => '<div class="form-group" style="display:flex;align-items:center;gap:8px;">'+
-        '<span style="width:56px;font-size:0.82rem;color:var(--text-secondary);flex-shrink:0;">'+l+'</span>'+
-        '<select class="form-input player-sel" data-lane="'+l+'" style="flex:1;">'+
-          '<option value="">-- 选择队员 --</option>'+
-        '</select></div>').join('')+
-      '<div style="margin-top:12px;display:flex;gap:8px;">'+
-        '<button class="btn btn-primary btn-sm" onclick="submitClubPlayers(\''+compId+'\',\''+clubId+'\')">确认报名</button>'+
+    '<div id="clubPlayerForm" style="display:none;max-height:360px;overflow-y:auto;border:1px solid rgba(255,255,255,.06);border-radius:8px;"></div>'+
+    '<div style="margin-top:12px;display:flex;gap:8px;align-items:center;justify-content:space-between;">'+
+      '<span id="selectedCount" style="font-size:0.82rem;color:var(--text-muted);">已选 0/5 人</span>'+
+      '<div style="display:flex;gap:8px;">'+
         '<button class="btn btn-ghost btn-sm" onclick="this.closest(\'.modal-overlay\').remove()">取消</button>'+
+        '<button class="btn btn-primary btn-sm" id="submitClubBtn">确认报名</button>'+
       '</div>'+
     '</div>'+
   '</div>';
   document.body.appendChild(overlay);
 
+  document.getElementById('submitClubBtn').addEventListener('click', () => submitClubPlayers(compId, clubId));
+
   try {
-    const data = await api('/api/club/'+clubId);
-    const raw = data.data || {};
-    const club = raw.club || {};
-    // 修复：正确从 data.data.members 取数据（统一响应格式）
-    let members = raw.members || data.members || [];
+    // 从俱乐部大名单 API 获取自由名单成员
+    const data = await api('/api/club/'+clubId+'/roster');
+    const freeRoster = data.free || [];
 
-    // 若后端未自动追加 owner（兜底），手动加入
-    if (club.owner_id && !members.find(m => m.user_id === club.owner_id)) {
-      members = [{ user_id: club.owner_id, username: club.owner_username, coachName: club.owner_name, role: 'boss' }, ...members];
+    if (freeRoster.length === 0) {
+      document.getElementById('clubSelectStatus').innerHTML = '<span style="color:#f87171;">该俱乐部自由名单为空，请先在俱乐部管理中设置自由名单</span>';
+      return;
     }
-
-    if (members.length === 0) {
-      document.getElementById('clubSelectStatus').textContent = '该俱乐部暂无可报名成员';
+    if (freeRoster.length < 5) {
+      document.getElementById('clubSelectStatus').innerHTML = '<span style="color:#f87171;">自由名单不足5人（当前'+freeRoster.length+'人），无法报名</span>';
       return;
     }
 
-    // 写入全局，供防重逻辑使用
-    window._clubPlayerData = members;
+    const form = document.getElementById('clubPlayerForm');
+    form.innerHTML = freeRoster.map(m => {
+      const uid = m.player_user_id || m.user_id;
+      const label = m.game_id || m.coachName || m.username || uid;
+      const grade = m.grade || '';
+      return `
+        <label class="player-item" style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);transition:background .15s;" onmouseover="this.style.background='rgba(255,255,255,.03)" onmouseout="this.style.background=''">
+          <input type="checkbox" class="player-check" value="${uid}" style="width:18px;height:18px;accent-color:var(--primary);flex-shrink:0;">
+          <span style="color:var(--text-primary);font-size:0.88rem;flex:1;">${escapeHtml(label)}</span>
+          ${grade ? `<span style="color:#f59e0b;font-size:0.75rem;">${grade}级</span>` : ''}
+        </label>
+      `;
+    }).join('');
 
-    // 渲染下拉选项（每个 select 加 change 事件防重）
-    const setStatus = (msg) => { const el = document.getElementById('clubSelectStatus'); if (el) el.textContent = msg; };
-    LANES.forEach(lane => {
-      const sel = document.querySelector('.player-sel[data-lane="'+lane+'"]');
-      if (!sel) return;
-      members.forEach(m => {
-        const uid = m.user_id || m.userId;
-        const label = m.coachName || m.username || uid;
-        const opt = document.createElement('option');
-        opt.value = uid;
-        opt.textContent = label + (m.role === 'boss' ? '（老板）' : '');
-        sel.appendChild(opt);
-      });
-      sel.addEventListener('change', () => {
-        // 收集当前已选成员
-        const selected = {};
-        document.querySelectorAll('.player-sel').forEach(s => { if (s.value) selected[s.dataset.lane] = s.value; });
-        // 检查重复
-        const dupEntry = Object.entries(selected).find(([l, v]) => v === sel.value && l !== sel.dataset.lane);
-        if (dupEntry) {
-          showToast('该队员已在其他位置被选择', 'warn');
-          sel.value = '';
+    // 复选事件
+    form.querySelectorAll('.player-check').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const checked = form.querySelectorAll('.player-check:checked');
+        const count = checked.length;
+        if (count > 5) {
+          cb.checked = false;
+          showToast('最多选择5人', 'warn');
           return;
         }
-        // 更新其他下拉的禁用状态
-        document.querySelectorAll('.player-sel').forEach(s => {
-          if (s === sel) return;
-          const val = sel.value;
-          Array.from(s.options).forEach(opt => {
-            if (!opt.value) return;
-            const taken = Object.values(selected).filter((v, i) => v && Object.keys(selected)[i] !== s.dataset.lane);
-            opt.disabled = val && opt.value === val && s.dataset.lane !== sel.dataset.lane;
-          });
+        document.getElementById('selectedCount').textContent = `已选 ${count}/5 人`;
+        document.getElementById('selectedCount').style.color = count === 5 ? '#4ade80' : 'var(--text-muted)';
+        form.querySelectorAll('.player-item').forEach(item => {
+          const check = item.querySelector('input');
+          item.style.background = check.checked ? 'rgba(123,47,255,.12)' : '';
         });
       });
     });
 
-    setStatus('共 ' + members.length + ' 名成员，请为5个位置各选1人（不可重复）');
-    const form = document.getElementById('clubPlayerForm');
-    if (form) form.style.display = 'block';
+    document.getElementById('clubSelectStatus').textContent = '共 ' + freeRoster.length + ' 名自由名单成员，请选择5人上场';
+    form.style.display = 'block';
   } catch(e) {
     const el = document.getElementById('clubSelectStatus');
-    if (el) el.textContent = '加载失败：' + (e.message || '网络错误');
-    el.style.color = '#f87171';
+    if (el) { el.textContent = '加载失败：' + (e.message || '网络错误'); el.style.color = '#f87171'; }
   }
 }
-
 async function submitClubPlayers(compId, clubId) {
-  const players = [];
-  const usedIds = new Set();
-  document.querySelectorAll('.player-sel').forEach(sel => {
-    const uid = sel.value;
-    const lane = sel.dataset.lane;
-    if (uid && !usedIds.has(uid)) {
-      usedIds.add(uid);
-      players.push({ user_id: uid, lane: lane });
-    }
-  });
-  if (players.length !== 5) { showToast('请为5个位置各选1名不同队员','error'); return; }
-  // 禁用按钮，防止重复提交
-  const btn = document.querySelector('[onclick="submitClubPlayers(\''+compId+'\',\''+clubId+'\')"]');
+  const checked = document.querySelectorAll('#clubPlayerForm .player-check:checked');
+  if (checked.length !== 5) {
+    showToast('请选择恰好5名队员', 'error');
+    return;
+  }
+  const players = Array.from(checked).map(cb => ({ user_id: cb.value }));
+  const btn = document.getElementById('submitClubBtn');
   if (btn) { btn.disabled = true; btn.textContent = '提交中…'; }
   try {
     await api('/api/competitions/'+compId+'/register', { method:'POST', body: JSON.stringify({ club_id: clubId, players }) });
-    showToast('报名成功','success');
+    showToast('报名成功', 'success');
     document.querySelector('.modal-overlay')?.remove();
     document.querySelector('.comp-detail-overlay')?.remove();
     loadCompetitionList();
   } catch(e) {
-    showToast(e.message || '报名失败，请重试','error');
+    showToast(e.message || '报名失败，请重试', 'error');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '确认报名'; }
   }

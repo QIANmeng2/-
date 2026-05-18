@@ -210,11 +210,9 @@ async function initDB() {
         competition_id TEXT NOT NULL,
         team_id TEXT NOT NULL,
         player_user_id TEXT NOT NULL,
-        lane TEXT NOT NULL,
         entry_fee INTEGER DEFAULT 0,
         status TEXT DEFAULT 'pending',
         created_at TIMESTAMP DEFAULT NOW(),
-        UNIQUE(competition_id, lane),
         UNIQUE(competition_id, player_user_id)
       );
     `);
@@ -1108,15 +1106,12 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
   const isClub = !!club_id;
   const isTeam = !!team_id;
   if (!isTeam && !isClub) return badRequest(res, '请选择队伍或俱乐部');
-  if (!players || !Array.isArray(players) || players.length !== 5) return badRequest(res, '请指定5名队员和位置');
-  const lanes = ['对抗路','打野','中路','发育路','游走'];
-  const usedLanes = new Set();
+  if (!players || !Array.isArray(players) || players.length !== 5) return badRequest(res, '请指定5名队员');
   for (const p of players) {
-    if (!p.user_id || !p.lane) return badRequest(res, '请为每位队员指定位置');
-    if (!lanes.includes(p.lane)) return badRequest(res, '位置无效: ' + p.lane);
-    if (usedLanes.has(p.lane)) return badRequest(res, '位置重复: ' + p.lane);
-    usedLanes.add(p.lane);
+    if (!p.user_id) return badRequest(res, 'user_id 必填');
   }
+  // 日志：报名请求
+  console.info('[报名请求]', JSON.stringify({ competition_id: req.params.id, user_id: req.userId, team_id: team_id || null, club_id: club_id || null, player_ids: players.map(p => p.user_id), timestamp: new Date().toISOString() }));
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -1143,11 +1138,14 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
       const club = await client.query('SELECT * FROM clubs WHERE id = $1', [club_id]);
       if (club.rows.length === 0) { await client.query('ROLLBACK'); return notFound(res, '俱乐部不存在'); }
       if (club.rows[0].owner_id !== req.userId) { await client.query('ROLLBACK'); return forbidden(res, '仅俱乐部老板可报名'); }
-      // 验证队员都在俱乐部中
-      const cm = await client.query('SELECT user_id FROM club_members WHERE club_id = $1', [club_id]);
-      const memberIds = new Set(cm.rows.map(r => r.user_id));
+      // 验证队员都在俱乐部自由名单中（tier='free'）
+      const rosterRes = await client.query(
+        'SELECT player_user_id FROM club_rosters WHERE club_id = $1 AND tier = $2',
+        [club_id, 'free']
+      );
+      const freeUserIds = new Set(rosterRes.rows.map(r => r.player_user_id));
       for (const p of players) {
-        if (!memberIds.has(p.user_id)) { await client.query('ROLLBACK'); return badRequest(res, '队员 ' + p.user_id + ' 不在俱乐部中'); }
+        if (!freeUserIds.has(p.user_id)) { await client.query('ROLLBACK'); return badRequest(res, '队员 ' + p.user_id + ' 不在俱乐部自由名单中'); }
       }
       // 已报名检查（同俱乐部）
       const already = await client.query('SELECT * FROM competition_registrations WHERE competition_id = $1 AND club_id = $2 AND status != $3', [req.params.id, club_id, 'cancelled']);
@@ -1171,32 +1169,33 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
       if (mySide) side = mySide.side;
       else { await client.query('ROLLBACK'); return badRequest(res, '红蓝双方均已满员'); }
     }
-    // 检查位置是否被占用（同一side内不能重复，红蓝各自独立）
-    for (const p of players) {
-      const laneCheck = await client.query(
-        "SELECT * FROM competition_registrations WHERE competition_id = $1 AND lane = $2 AND side = $3 AND status != 'cancelled'",
-        [req.params.id, p.lane, side]
-      );
-      if (laneCheck.rows.length > 0) { await client.query('ROLLBACK'); return badRequest(res, '该方位置 "' + p.lane + '" 已被占用'); }
-    }
-    // 创建5路报名
+    // 房间容量检查（固定10人上限）
+    const countRes = await client.query(
+      'SELECT COUNT(*) FROM competition_registrations WHERE competition_id = $1 AND status != $2',
+      [req.params.id, 'cancelled']
+    );
+    const currentCount = parseInt(countRes.rows[0].count);
+    if (currentCount >= 10) { await client.query('ROLLBACK'); return badRequest(res, '房间已满（10人上限）'); }
+    // 创建5人报名
     for (const p of players) {
       await client.query(
-        'INSERT INTO competition_registrations (competition_id, team_id, club_id, player_user_id, lane, status, side) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-        [req.params.id, isTeam ? team_id : '', club_id || null, p.user_id, p.lane, 'reserved', side]
+        'INSERT INTO competition_registrations (competition_id, team_id, club_id, player_user_id, status, side) VALUES ($1,$2,$3,$4,$5,$6)',
+        [req.params.id, isTeam ? team_id : '', club_id || null, p.user_id, 'reserved', side]
       );
     }
     if (c.comp_status === 'upcoming') {
       await client.query("UPDATE competitions SET comp_status = 'open' WHERE id = $1", [req.params.id]);
     }
-    // 通知被选中的5人
+      // 通知被选中的5人
     for (const p of players) {
       await sendNotification(p.user_id, 'competition_register',
-        `你被${isClub?'老板':'队长'}选入赛事「${c.name}」(${p.lane})，请进入比赛页确认入场并选择入场费`);
+        `你被${isClub?'老板':'队长'}选入赛事「${c.name}」，请进入比赛页确认入场并选择入场费`);
     }
     await client.query('COMMIT');
+    // 日志：报名成功
+    console.info('[报名成功]', JSON.stringify({ competition_id: req.params.id, user_id: req.userId, team_id: isTeam ? team_id : null, club_id: isClub ? club_id : null, player_ids: players.map(p => p.user_id), timestamp: new Date().toISOString(), status: 'SUCCESS' }));
     ok(res, {message: '报名成功，队员请确认入场' });
-  } catch(e) { await client.query('ROLLBACK'); console.error(e); serverError(res, '报名失败'); } finally { client.release(); }
+  } catch(e) { await client.query('ROLLBACK'); console.error('[报名失败]', JSON.stringify({ competition_id: req.params.id, user_id: req.userId, error: e.message, timestamp: new Date().toISOString(), status: 'FAILED' })); serverError(res, '报名失败'); } finally { client.release(); }
 });
 
 // 查询用户在赛事中的报名状态
@@ -1218,7 +1217,7 @@ app.get('/api/competitions/:id/registrations', async (req, res) => {
       FROM competition_registrations r
       LEFT JOIN users u ON u.id = r.player_user_id
       WHERE r.competition_id = $1 AND r.status != 'cancelled'
-      ORDER BY r.side, r.lane
+      ORDER BY r.side, r.created_at
     `, [req.params.id]);
     res.json({ registrations: regs.rows });
   } catch(e) { serverError(res, '查询失败'); }
