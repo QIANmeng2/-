@@ -1080,12 +1080,12 @@ function renderMarketPlayerList() {
     return `
     <div class="market-player-card" onclick="openPlayerDetailModal('${p.user_id}')">
       <div class="market-player-info">
-        <div class="market-player-name">${p.game_id} <span style="font-size:0.72rem;color:var(--text-muted);">(${p.coachname || p.username})</span></div>
+        <div class="market-player-name">${p.game_id} <span style="font-size:0.72rem;color:var(--text-muted);">(${p.coachName || p.username})</span></div>
         <div class="market-player-detail">巅峰${p.peak_score} | ${p.game_rank}</div>
         <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;">
           ${positions.map(l => `<span class="pos-tag pos-tag-${l}">${l}</span>`).join('')}
         </div>
-        ${p.heropool ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px;" title="擅长英雄：${p.heropool}"><span style="color:var(--text-secondary);">擅长：</span>${p.heropool}</div>` : ''}
+        ${p.heroPool ? `<div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px;" title="擅长英雄：${p.heroPool}"><span style="color:var(--text-secondary);">擅长：</span>${p.heroPool}</div>` : ''}
       </div>
       <div class="market-player-value">
         ${p.grade ? `<span class="grade-badge grade-${p.grade.toLowerCase()}">${p.grade}级</span>` : ''}
