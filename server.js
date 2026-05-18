@@ -1186,16 +1186,22 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
     if (c.comp_status === 'upcoming') {
       await client.query("UPDATE competitions SET comp_status = 'open' WHERE id = $1", [req.params.id]);
     }
-      // 通知被选中的5人
-    for (const p of players) {
-      await sendNotification(p.user_id, 'competition_register',
-        `你被${isClub?'老板':'队长'}选入赛事「${c.name}」，请进入比赛页确认入场并选择入场费`);
-    }
     await client.query('COMMIT');
+    // 通知被选中的5人（非阻塞，失败不影响报名结果）
+    for (const p of players) {
+      try {
+        await sendNotification(p.user_id, 'competition_register',
+          `你被${isClub?'老板':'队长'}选入赛事「${c.name}」，请进入比赛页确认入场并选择入场费`);
+      } catch(notifyErr) { console.warn('[报名通知失败]', p.user_id, notifyErr.message); }
+    }
     // 日志：报名成功
     console.info('[报名成功]', JSON.stringify({ competition_id: req.params.id, user_id: req.userId, team_id: isTeam ? team_id : null, club_id: isClub ? club_id : null, player_ids: players.map(p => p.user_id), timestamp: new Date().toISOString(), status: 'SUCCESS' }));
     ok(res, {message: '报名成功，队员请确认入场' });
-  } catch(e) { await client.query('ROLLBACK'); console.error('[报名失败]', JSON.stringify({ competition_id: req.params.id, user_id: req.userId, error: e.message, timestamp: new Date().toISOString(), status: 'FAILED' })); serverError(res, '报名失败'); } finally { client.release(); }
+  } catch(e) {
+    try { await client.query('ROLLBACK'); } catch(rollbackErr) {}
+    console.error('[报名失败]', JSON.stringify({ competition_id: req.params.id, user_id: req.userId, error: e.message, stack: e.stack, timestamp: new Date().toISOString(), status: 'FAILED' }));
+    serverError(res, '报名失败: ' + e.message, e);
+  } finally { client.release(); }
 });
 
 // 查询用户在赛事中的报名状态

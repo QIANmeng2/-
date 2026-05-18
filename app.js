@@ -630,8 +630,10 @@ async function submitTeamPlayers(compId, teamId) {
   const btn = document.getElementById('submitTeamBtn');
   if (btn) { btn.disabled = true; btn.textContent = '提交中…'; }
   try {
-    await api('/api/competitions/'+compId+'/register', { method:'POST', body: JSON.stringify({ team_id: teamId, players }) });
-    showToast('报名成功', 'success');
+    const result = await api('/api/competitions/'+compId+'/register', { method:'POST', body: JSON.stringify({ team_id: teamId, players }) });
+    if (!result) { showToast('登录已过期，请重新登录', 'error'); return; }
+    if (!result.success) { showToast(result.message || '报名失败', 'error'); return; }
+    showToast(result.message || '报名成功', 'success');
     document.querySelector('.modal-overlay')?.remove();
     document.querySelector('.comp-detail-overlay')?.remove();
     loadCompetitionList();
@@ -736,8 +738,10 @@ async function submitClubPlayers(compId, clubId) {
   const btn = document.getElementById('submitClubBtn');
   if (btn) { btn.disabled = true; btn.textContent = '提交中…'; }
   try {
-    await api('/api/competitions/'+compId+'/register', { method:'POST', body: JSON.stringify({ club_id: clubId, players }) });
-    showToast('报名成功', 'success');
+    const result = await api('/api/competitions/'+compId+'/register', { method:'POST', body: JSON.stringify({ club_id: clubId, players }) });
+    if (!result) { showToast('登录已过期，请重新登录', 'error'); return; }
+    if (!result.success) { showToast(result.message || '报名失败', 'error'); return; }
+    showToast(result.message || '报名成功', 'success');
     document.querySelector('.modal-overlay')?.remove();
     document.querySelector('.comp-detail-overlay')?.remove();
     loadCompetitionList();
