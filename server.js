@@ -170,6 +170,24 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
+    // 选手交易记录
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS player_trades (
+        id SERIAL PRIMARY KEY,
+        player_user_id TEXT NOT NULL,
+        from_club_id INTEGER NOT NULL,
+        to_club_id INTEGER NOT NULL,
+        trade_type TEXT NOT NULL DEFAULT 'buy',
+        swap_player_user_id TEXT,
+        price_diff INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'pending',
+        initiated_by TEXT NOT NULL,
+        initiated_club_id INTEGER NOT NULL,
+        accepted_by TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
     // 赛事分级
     await client.query("ALTER TABLE competitions ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'regular'");
     await client.query("ALTER TABLE competitions ADD COLUMN IF NOT EXISTS description TEXT DEFAULT NULL");
@@ -177,6 +195,7 @@ async function initDB() {
     await client.query('ALTER TABLE players ADD COLUMN IF NOT EXISTS grade TEXT DEFAULT NULL');
     await client.query('ALTER TABLE players ADD COLUMN IF NOT EXISTS buyout_fee INTEGER DEFAULT NULL');
     await client.query('ALTER TABLE players ADD COLUMN IF NOT EXISTS custom_salary INTEGER DEFAULT NULL');
+    await client.query("ALTER TABLE players ADD COLUMN IF NOT EXISTS trade_status TEXT DEFAULT NULL");
     // 薪资记录
     await client.query(`
       CREATE TABLE IF NOT EXISTS salary_records (
@@ -2037,8 +2056,209 @@ app.post('/api/player/:userId/buyout', authMiddleware, async (req, res) => {
   } catch(e) { console.error(e); serverError(res, '解约失败'); }
 });
 
-// ====================== 赛事分级展示 ======================
-// 重写 GET /api/competitions：按 tier 分组返回
+// ====================== 选手交易系统 ======================
+
+// 1. 发起购买/互换请求
+app.post('/api/trade/initiate', authMiddleware, async (req, res) => {
+  try {
+    const { player_user_id, from_club_id, to_club_id, trade_type, swap_player_user_id, price_diff } = req.body;
+    if (!player_user_id || !from_club_id || !to_club_id) return badRequest(res, '参数不完整');
+    if (from_club_id === to_club_id) return badRequest(res, '不能与自己俱乐部交易');
+    // 校验发起人是否是目标俱乐部老板
+    const toClub = await pool.query('SELECT * FROM clubs WHERE id=$1', [to_club_id]);
+    if (toClub.rows.length === 0) return notFound(res, '目标俱乐部不存在');
+    if (toClub.rows[0].owner_id !== req.userId) return forbidden(res, '只有俱乐部老板可以发起交易');
+    // 校验选手是否已签约且该俱乐部
+    const player = await pool.query('SELECT * FROM players WHERE user_id=$1', [player_user_id]);
+    if (player.rows.length === 0) return notFound(res, '选手不存在');
+    if (player.rows[0].club_id != from_club_id) return badRequest(res, '选手不在源俱乐部');
+    if (player.rows[0].trade_status === 'pending_trade') return badRequest(res, '选手已在交易中');
+    // 校验源俱乐部存在
+    const fromClub = await pool.query('SELECT * FROM clubs WHERE id=$1', [from_club_id]);
+    if (fromClub.rows.length === 0) return notFound(res, '源俱乐部不存在');
+    // 如果是互换，校验互换选手是否在目标俱乐部
+    if (trade_type === 'swap' && swap_player_user_id) {
+      const swapP = await pool.query('SELECT * FROM players WHERE user_id=$1', [swap_player_user_id]);
+      if (swapP.rows.length === 0) return notFound(res, '互换选手不存在');
+      if (swapP.rows[0].club_id != to_club_id) return badRequest(res, '互换选手不在你的俱乐部');
+    }
+    // 计算差价（如果是购买，price_diff = 选手身价*10000；如果是互换，price_diff由前端计算传入）
+    let finalPriceDiff = 0;
+    if (trade_type === 'buy') {
+      finalPriceDiff = (player.rows[0].market_value || 0) * 10000;
+    } else {
+      finalPriceDiff = Math.abs(parseInt(price_diff) || 0);
+    }
+    // 检查目标俱乐部老板余额是否足够支付差价
+    const owner = await pool.query('SELECT dream_coins FROM users WHERE id=$1', [req.userId]);
+    if ((owner.rows[0]?.dream_coins || 0) < finalPriceDiff) return badRequest(res, '余额不足，需支付差价' + finalPriceDiff + '梦币');
+    // 创建交易记录
+    const result = await pool.query(`INSERT INTO player_trades
+      (player_user_id, from_club_id, to_club_id, trade_type, swap_player_user_id, price_diff, status, initiated_by, initiated_club_id)
+      VALUES ($1,$2,$3,$4,$5,$6,'pending',$7,$8) RETURNING id`,
+      [player_user_id, from_club_id, to_club_id, trade_type || 'buy', swap_player_user_id || null, finalPriceDiff, req.userId, to_club_id]);
+    // 标记选手交易中
+    await pool.query("UPDATE players SET trade_status='pending_trade' WHERE user_id=$1", [player_user_id]);
+    if (trade_type === 'swap' && swap_player_user_id) {
+      await pool.query("UPDATE players SET trade_status='pending_trade' WHERE user_id=$1", [swap_player_user_id]);
+    }
+    ok(res, { tradeId: result.rows[0].id, price_diff: finalPriceDiff });
+  } catch(e) { console.error(e); serverError(res, '发起交易失败'); }
+});
+
+// 2. 接受交易
+app.post('/api/trade/:id/accept', authMiddleware, async (req, res) => {
+  try {
+    const tradeId = req.params.id;
+    const trade = await pool.query('SELECT * FROM player_trades WHERE id=$1', [tradeId]);
+    if (trade.rows.length === 0) return notFound(res, '交易不存在');
+    if (trade.rows[0].status !== 'pending') return badRequest(res, '交易已处理');
+    // 校验接受人是否是源俱乐部老板
+    const fromClub = await pool.query('SELECT * FROM clubs WHERE id=$1', [trade.rows[0].from_club_id]);
+    if (fromClub.rows.length === 0) return notFound(res, '源俱乐部不存在');
+    if (fromClub.rows[0].owner_id !== req.userId) return forbidden(res, '只有源俱乐部老板可以接受交易');
+    const t = trade.rows[0];
+    const priceDiff = t.price_diff || 0;
+    // 转账差价：目标俱乐部老板 → 平台40% + 原俱乐部老板50% + 选手10%
+    if (priceDiff > 0) {
+      const platformFee = Math.floor(priceDiff * 0.4);
+      const origBossFee = Math.floor(priceDiff * 0.5);
+      const playerFee = priceDiff - platformFee - origBossFee;
+      // 目标俱乐部老板扣款
+      await pool.query('UPDATE users SET dream_coins = dream_coins - $1 WHERE id=$2', [priceDiff, t.initiated_by]);
+      await pool.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'trade','选手交易支付差价')", [t.initiated_by, -priceDiff]);
+      // 平台收入（管理员）
+      await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id=$2', [platformFee, 'mp4hmya7ad15v6']);
+      await pool.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'trade','平台交易手续费')", ['mp4hmya7ad15v6', platformFee]);
+      // 原俱乐部老板收入
+      const origBossId = fromClub.rows[0].owner_id;
+      await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id=$2', [origBossFee, origBossId]);
+      await pool.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'trade','选手交易收入')", [origBossId, origBossFee]);
+      // 选手收入
+      await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id=$2', [playerFee, t.player_user_id]);
+      await pool.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'trade','选手交易分成')", [t.player_user_id, playerFee]);
+    }
+    // 更新选手俱乐部
+    await pool.query('UPDATE players SET club_id=$1, trade_status=NULL WHERE user_id=$2', [t.to_club_id, t.player_user_id]);
+    await pool.query('DELETE FROM club_members WHERE club_id=$1 AND user_id=$2', [t.from_club_id, t.player_user_id]);
+    await pool.query('INSERT INTO club_members (club_id, user_id, role) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [t.to_club_id, t.player_user_id, 'member']);
+    // 如果是互换， also 更新互换选手
+    if (t.trade_type === 'swap' && t.swap_player_user_id) {
+      await pool.query('UPDATE players SET club_id=$1, trade_status=NULL WHERE user_id=$2', [t.from_club_id, t.swap_player_user_id]);
+      await pool.query('DELETE FROM club_members WHERE club_id=$1 AND user_id=$2', [t.to_club_id, t.swap_player_user_id]);
+      await pool.query('INSERT INTO club_members (club_id, user_id, role) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [t.from_club_id, t.swap_player_user_id, 'member']);
+    }
+    // 更新大名单（如果有）
+    await pool.query('DELETE FROM club_rosters WHERE player_user_id=$1', [t.player_user_id]);
+    await pool.query('INSERT INTO club_rosters (club_id, tier, player_user_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [t.to_club_id, 'regular', t.player_user_id]);
+    if (t.trade_type === 'swap' && t.swap_player_user_id) {
+      await pool.query('DELETE FROM club_rosters WHERE player_user_id=$1', [t.swap_player_user_id]);
+      await pool.query('INSERT INTO club_rosters (club_id, tier, player_user_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [t.from_club_id, 'regular', t.swap_player_user_id]);
+    }
+    // 更新交易状态
+    await pool.query("UPDATE player_trades SET status='accepted', accepted_by=$1, updated_at=NOW() WHERE id=$2", [req.userId, tradeId]);
+    // 清除选手交易状态
+    await pool.query("UPDATE players SET trade_status=NULL WHERE user_id=$1", [t.player_user_id]);
+    if (t.trade_type === 'swap' && t.swap_player_user_id) {
+      await pool.query("UPDATE players SET trade_status=NULL WHERE user_id=$1", [t.swap_player_user_id]);
+    }
+    ok(res, { success: true });
+  } catch(e) { console.error(e); serverError(res, '接受交易失败'); }
+});
+
+// 3. 拒绝交易
+app.post('/api/trade/:id/reject', authMiddleware, async (req, res) => {
+  try {
+    const tradeId = req.params.id;
+    const trade = await pool.query('SELECT * FROM player_trades WHERE id=$1', [tradeId]);
+    if (trade.rows.length === 0) return notFound(res, '交易不存在');
+    if (trade.rows[0].status !== 'pending') return badRequest(res, '交易已处理');
+    // 校验拒绝人是否是源俱乐部老板
+    const fromClub = await pool.query('SELECT * FROM clubs WHERE id=$1', [trade.rows[0].from_club_id]);
+    if (fromClub.rows[0]?.owner_id !== req.userId) return forbidden(res, '只有源俱乐部老板可以拒绝交易');
+    await pool.query("UPDATE player_trades SET status='rejected', accepted_by=$1, updated_at=NOW() WHERE id=$2", [req.userId, tradeId]);
+    // 清除选手交易状态
+    await pool.query("UPDATE players SET trade_status=NULL WHERE user_id=$1", [trade.rows[0].player_user_id]);
+    if (trade.rows[0].swap_player_user_id) {
+      await pool.query("UPDATE players SET trade_status=NULL WHERE user_id=$1", [trade.rows[0].swap_player_user_id]);
+    }
+    ok(res, { success: true });
+  } catch(e) { console.error(e); serverError(res, '拒绝交易失败'); }
+});
+
+// 4. 取消交易（发起人撤回）
+app.post('/api/trade/:id/cancel', authMiddleware, async (req, res) => {
+  try {
+    const tradeId = req.params.id;
+    const trade = await pool.query('SELECT * FROM player_trades WHERE id=$1', [tradeId]);
+    if (trade.rows.length === 0) return notFound(res, '交易不存在');
+    if (trade.rows[0].status !== 'pending') return badRequest(res, '交易已处理');
+    if (trade.rows[0].initiated_by !== req.userId) return forbidden(res, '只有发起人可以取消交易');
+    await pool.query("UPDATE player_trades SET status='cancelled', updated_at=NOW() WHERE id=$1", [tradeId]);
+    // 清除选手交易状态
+    await pool.query("UPDATE players SET trade_status=NULL WHERE user_id=$1", [trade.rows[0].player_user_id]);
+    if (trade.rows[0].swap_player_user_id) {
+      await pool.query("UPDATE players SET trade_status=NULL WHERE user_id=$1", [trade.rows[0].swap_player_user_id]);
+    }
+    ok(res, { success: true });
+  } catch(e) { console.error(e); serverError(res, '取消交易失败'); }
+});
+
+// 5. 我的交易列表（支持 clubId 参数过滤指定俱乐部的交易）
+app.get('/api/trades', authMiddleware, async (req, res) => {
+  try {
+    const filterClubId = req.query.clubId ? parseInt(req.query.clubId) : null;
+    if (filterClubId) {
+      // 校验当前用户是否有权限查看该俱乐部的交易（俱乐部老板或管理员）
+      const club = await pool.query('SELECT * FROM clubs WHERE id=$1', [filterClubId]);
+      if (club.rows.length === 0) return notFound(res, '俱乐部不存在');
+      if (club.rows[0].owner_id !== req.userId && req.userId !== ADMIN_USER_ID) return forbidden(res, '无权限查看该俱乐部交易记录');
+      const result = await pool.query(`SELECT t.*, p.game_id as player_name, p.market_value, fc.name as from_club_name, tc.name as to_club_name,
+        u1.username as initiated_name, u2.username as accepted_name
+        FROM player_trades t
+        LEFT JOIN players p ON t.player_user_id=p.user_id
+        LEFT JOIN clubs fc ON t.from_club_id=fc.id
+        LEFT JOIN clubs tc ON t.to_club_id=tc.id
+        LEFT JOIN users u1 ON t.initiated_by=u1.id
+        LEFT JOIN users u2 ON t.accepted_by=u2.id
+        WHERE t.from_club_id=$1 OR t.to_club_id=$1
+        ORDER BY t.created_at DESC LIMIT 50`, [filterClubId]);
+      return ok(res, { trades: result.rows });
+    }
+    // 原有逻辑：查询与当前用户相关的交易
+    const myClubs = await pool.query('SELECT id FROM clubs WHERE owner_id=$1', [req.userId]);
+    const clubIds = myClubs.rows.map(c => c.id);
+    let query = 'SELECT t.*, p.game_id as player_name, fc.name as from_club_name, tc.name as to_club_name FROM player_trades t LEFT JOIN players p ON t.player_user_id=p.user_id LEFT JOIN clubs fc ON t.from_club_id=fc.id LEFT JOIN clubs tc ON t.to_club_id=tc.id WHERE t.initiated_by=$1';
+    let params = [req.userId];
+    if (clubIds.length > 0) {
+      query += ' OR t.from_club_id IN (' + clubIds.map((_,i) => '$'+(i+2)).join(',') + ') OR t.to_club_id IN (' + clubIds.map((_,i) => '$'+(i+2+clubIds.length)).join(',') + ')';
+      params = [req.userId, ...clubIds, ...clubIds];
+    }
+    query += ' ORDER BY t.created_at DESC LIMIT 50';
+    const result = await pool.query(query, params);
+    ok(res, { trades: result.rows });
+  } catch(e) { console.error(e); serverError(res, '获取交易列表失败'); }
+});
+
+// 6. 交易详情
+app.get('/api/trade/:id', authMiddleware, async (req, res) => {
+  try {
+    const tradeId = req.params.id;
+    const result = await pool.query(`SELECT t.*, p.game_id as player_name, p.market_value, fc.name as from_club_name, tc.name as to_club_name,
+      u1.username as initiated_name, u2.username as accepted_name
+      FROM player_trades t
+      LEFT JOIN players p ON t.player_user_id=p.user_id
+      LEFT JOIN clubs fc ON t.from_club_id=fc.id
+      LEFT JOIN clubs tc ON t.to_club_id=tc.id
+      LEFT JOIN users u1 ON t.initiated_by=u1.id
+      LEFT JOIN users u2 ON t.accepted_by=u2.id
+      WHERE t.id=$1`, [tradeId]);
+    if (result.rows.length === 0) return notFound(res, '交易不存在');
+    ok(res, { trade: result.rows[0] });
+  } catch(e) { console.error(e); serverError(res, '获取交易详情失败'); }
+});
+
+
 
 async function startServer() {
   await initDB();

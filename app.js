@@ -1324,7 +1324,8 @@ function renderMarketPlayerList() {
     let positions = [];
     try { positions = JSON.parse(p.positions || '[]'); } catch(e) {}
     const isFree = !p.club_id;
-    const canBuy = isBoss && isFree && (isAdmin || myClubs.some(c => c.owner_id === currentUser.id));
+    const canBuy = isFree && isBoss && (isAdmin || myClubs.some(c => c.owner_id === currentUser.id));
+    const canTrade = !isFree && isBoss && p.trade_status !== 'pending_trade' && !myClubs.some(c => c.id === p.club_id);
     return `
     <div class="market-player-card" onclick="openPlayerDetailModal('${p.user_id}')">
       <div class="market-player-info">
@@ -1340,6 +1341,7 @@ function renderMarketPlayerList() {
         <span style="font-size:1.2rem;font-weight:700;color:var(--warning);">${p.market_value}万</span>
         <span style="font-size:0.7rem;color:var(--text-muted);">${p.club_name ? '已签约: '+p.club_name : '自由选手'}</span>
         ${canBuy ? `<button class="market-buy-btn" onclick="event.stopPropagation();buyPlayer('${p.user_id}',${p.market_value})">采买</button>` : ''}
+        ${canTrade ? `<button class="market-trade-btn" onclick="event.stopPropagation();showTradeDialog('${p.user_id}',${p.club_id},'${p.club_name}','${p.game_id}',${p.market_value})">交易</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1369,6 +1371,9 @@ posTagStyle.textContent = `
   .market-buy-btn { padding:4px 14px;border-radius:6px;border:none;background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:#fff;font-size:0.75rem;font-weight:700;cursor:pointer;transition:all .2s;margin-top:4px; }
   .market-buy-btn:hover { transform:translateY(-1px);box-shadow:0 4px 12px rgba(16,185,129,.3); }
   .market-buy-btn:disabled { opacity:.5;cursor:not-allowed;transform:none;box-shadow:none; }
+  .market-trade-btn { padding:4px 14px;border-radius:6px;border:none;background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);color:#1a1a2e;font-size:0.75rem;font-weight:700;cursor:pointer;transition:all .2s;margin-top:4px;margin-left:4px; }
+  .market-trade-btn:hover { transform:translateY(-1px);box-shadow:0 4px 12px rgba(245,158,11,.35); }
+  .market-trade-btn:disabled { opacity:.5;cursor:not-allowed;transform:none;box-shadow:none; }
   .player-detail-section { margin-bottom:14px; }
   .player-detail-section h4 { font-size:0.82rem;color:var(--text-secondary);margin-bottom:8px;font-weight:600; }
   .player-detail-grid { display:grid;grid-template-columns:repeat(2,1fr);gap:8px; }
@@ -1606,6 +1611,123 @@ async function buyPlayer(playerUserId, marketValue) {
   }
 }
 
+// 显示交易对话框
+let _tradePlayerUserId = '';
+let _tradeFromClubId = '';
+async function showTradeDialog(playerUserId, fromClubId, fromClubName, playerName, marketValue) {
+  _tradePlayerUserId = playerUserId;
+  _tradeFromClubId = fromClubId;
+  // 获取我的俱乐部列表（目标俱乐部）
+  const myClubs = window._myClubs || [];
+  const targetClubs = myClubs.filter(c => c.id != fromClubId && c.owner_id === currentUser.id);
+  if (targetClubs.length === 0) { showToast('你还没有其他俱乐部作为交易目标', 'error'); return; }
+  // 获取目标俱乐部的选手列表（用于互换）
+  let myPlayers = [];
+  try {
+    const clubData = await api('/api/club/' + targetClubs[0].id);
+    myPlayers = clubData.members || [];
+  } catch(e) {}
+  const overlay = document.createElement('div');
+  overlay.id = 'tradeModal';
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:480px;" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <h3 style="margin:0;">发起交易</h3>
+        <button class="btn btn-ghost btn-sm" onclick="closeTradeModal()" style="padding:4px 10px;">关闭</button>
+      </div>
+      <div style="margin-bottom:12px;font-size:0.85rem;color:var(--text-secondary);">选手：<b>${playerName}</b>｜身价：<b>${marketValue}万</b>｜来自俱乐部：<b>${fromClubName}</b></div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.8rem;color:var(--text-secondary);">交易类型：</label>
+        <select id="tradeType" class="form-input" style="margin-top:4px;" onchange="onTradeTypeChange()">
+          <option value="buy">购买（支付差价）</option>
+          <option value="swap">互换选手</option>
+        </select>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.8rem;color:var(--text-secondary);">目标俱乐部：</label>
+        <select id="tradeToClubId" class="form-input" style="margin-top:4px;">
+          ${targetClubs.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+        </select>
+      </div>
+      <div id="swapSection" style="margin-bottom:12px;display:none;">
+        <label style="font-size:0.8rem;color:var(--text-secondary);">互换选手（你的俱乐部选手）：</label>
+        <select id="swapPlayerId" class="form-input" style="margin-top:4px;">
+          <option value="">-- 选择互换选手 --</option>
+          ${myPlayers.map(p => `<option value="${p.user_id}">${p.game_id || p.username}（${p.market_value}万）</option>`).join('')}
+        </select>
+      </div>
+      <div id="priceDiffDisplay" style="margin-bottom:12px;font-size:0.82rem;color:var(--warning);"></div>
+      <button class="btn btn-primary" onclick="submitTrade()" style="width:100%;">确认交易</button>
+    </div>`;
+  overlay.onclick = (e) => { if (e.target === overlay) closeTradeModal(); };
+  document.body.appendChild(overlay);
+  document.body.style.overflow = 'hidden';
+  onTradeTypeChange();
+}
+
+function onTradeTypeChange() {
+  const type = document.getElementById('tradeType')?.value;
+  const swapSection = document.getElementById('swapSection');
+  const priceDiffDisplay = document.getElementById('priceDiffDisplay');
+  if (type === 'swap') {
+    swapSection.style.display = 'block';
+    priceDiffDisplay.textContent = '互换将计算两名选手身价之差作为差价';
+  } else {
+    swapSection.style.display = 'none';
+    const marketValue = 0; // 会从全局获取
+    priceDiffDisplay.textContent = '';
+  }
+}
+
+async function submitTrade() {
+  const tradeType = document.getElementById('tradeType').value;
+  const toClubId = parseInt(document.getElementById('tradeToClubId').value);
+  const swapPlayerId = document.getElementById('swapPlayerId')?.value || null;
+  // 计算差价
+  let priceDiff = 0;
+  if (tradeType === 'buy') {
+    // 获取选手身价
+    try {
+      const pData = await api('/api/users/' + _tradePlayerUserId);
+      priceDiff = (pData.player?.market_value || 0) * 10000;
+    } catch(e) { showToast('获取选手信息失败', 'error'); return; }
+  } else {
+    // 互换：计算差价
+    if (!swapPlayerId) { showToast('请选择互换选手', 'error'); return; }
+    try {
+      const p1Data = await api('/api/users/' + _tradePlayerUserId);
+      const p2Data = await api('/api/users/' + swapPlayerId);
+      const diff = (p1Data.player?.market_value || 0) - (p2Data.player?.market_value || 0);
+      priceDiff = diff * 10000; // 可能为负数，取绝对值由后端处理
+    } catch(e) { showToast('计算差价失败', 'error'); return; }
+  }
+  try {
+    const res = await api('/api/trade/initiate', {
+      method: 'POST',
+      body: JSON.stringify({
+        player_user_id: _tradePlayerUserId,
+        from_club_id: _tradeFromClubId,
+        to_club_id: toClubId,
+        trade_type: tradeType,
+        swap_player_user_id: swapPlayerId,
+        price_diff: Math.abs(priceDiff)
+      })
+    });
+    showToast('交易请求已发起！', 'success');
+    closeTradeModal();
+    await renderMarketPanel();
+  } catch(e) {
+    showToast(e.message || '发起交易失败', 'error');
+  }
+}
+
+function closeTradeModal() {
+  const modal = document.getElementById('tradeModal');
+  if (modal) modal.remove();
+  document.body.style.overflow = '';
+}
+
 // ==================== 俱乐部页面 ====================
 async function renderClubPanel() {
   const content = document.getElementById('tabContent');
@@ -1674,6 +1796,12 @@ async function renderClubDetail(clubId) {
     if (!c) { content.innerHTML = '<div class="card"><p>俱乐部不存在或加载失败</p><button class="btn btn-sm btn-primary" onclick="renderClubPanel()">返回</button></div>'; return; }
     const members = (data.data || data).members || [];
     const transfers = (data.data || data).transfers || [];
+    // 获取选手交易记录
+    let trades = [];
+    try {
+      const tradesData = await api('/api/trades?clubId=' + clubId);
+      trades = tradesData.trades || [];
+    } catch(e) { console.error('获取交易记录失败', e.message); }
     const isOwner = currentUser && c.owner_id === currentUser.id;
 
     // 获取大名单
@@ -1818,6 +1946,17 @@ async function renderClubDetail(clubId) {
             <span>${t.player_name || t.player_username || t.player_user_id}</span>
             <span style="color:var(--warning);margin:0 8px;">${t.fee}万</span>
             <span style="color:var(--text-muted);">${new Date(t.created_at).toLocaleDateString('zh-CN')}</span>
+          </div>
+        `).join('')}
+
+        <h4 style="margin-top:20px;margin-bottom:8px;font-size:0.9rem;">选手交易记录</h4>
+        ${trades.length === 0 ? '<p style="color:var(--text-muted);">暂无选手交易记录</p>' : trades.map(t => `
+          <div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:0.8rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;">
+            <span><b>${t.player_name || t.player_user_id}</b> <span style="color:var(--text-muted);">${t.trade_type==='buy'?'购买':'互换'}</span></span>
+            <span style="font-size:0.72rem;color:var(--text-secondary);">${t.from_club_name} → ${t.to_club_name}</span>
+            <span style="font-size:0.72rem;color:var(--warning);">差价${t.price_diff/10000}万</span>
+            <span class="trade-status-${t.status}">${t.status==='pending'?'待处理':t.status==='accepted'?'已接受':t.status==='rejected'?'已拒绝':'已取消'}</span>
+            <span style="font-size:0.7rem;color:var(--text-muted);">${new Date(t.created_at).toLocaleDateString('zh-CN')}</span>
           </div>
         `).join('')}
       </div>`;
