@@ -211,6 +211,7 @@ async function initDB() {
       );
     `);
     await client.query(`ALTER TABLE competition_registrations ADD COLUMN IF NOT EXISTS club_id TEXT`);
+    await client.query(`ALTER TABLE competition_registrations ADD COLUMN IF NOT EXISTS side TEXT DEFAULT 'red'`);
     // 赛事结果
     await client.query(`
       CREATE TABLE IF NOT EXISTS competition_results (
@@ -1326,11 +1327,29 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
       const laneCheck = await client.query("SELECT * FROM competition_registrations WHERE competition_id = $1 AND lane = $2 AND status != 'cancelled'", [req.params.id, p.lane]);
       if (laneCheck.rows.length > 0) { await client.query('ROLLBACK'); return res.status(400).json({ message: '位置 '+p.lane+' 已被占用' }); }
     }
+    // 自动分配红蓝方
+    const groupField = isTeam ? 'team_id' : 'club_id';
+    const groupId = isTeam ? team_id : club_id;
+    const existingSides = await client.query(
+      `SELECT DISTINCT side, ${groupField} FROM competition_registrations WHERE competition_id = $1 AND status != 'cancelled' AND ${groupField} != '' AND ${groupField} IS NOT NULL`,
+      [req.params.id]
+    );
+    const redTaken = existingSides.rows.some(r => r.side === 'red');
+    const blueTaken = existingSides.rows.some(r => r.side === 'blue');
+    let side = 'red';
+    if (redTaken && !blueTaken) {
+      side = 'blue';
+    } else if (redTaken && blueTaken) {
+      // 检查当前队伍是否已占某一方（重复报名检查已在上面做，这里理论上不会触发）
+      const mySide = existingSides.rows.find(r => r[groupField] === groupId);
+      if (mySide) side = mySide.side;
+      else { await client.query('ROLLBACK'); return res.status(400).json({ message: '红蓝双方均已满员' }); }
+    }
     // 创建5路报名
     for (const p of players) {
       await client.query(
-        'INSERT INTO competition_registrations (competition_id, team_id, club_id, player_user_id, lane, status) VALUES ($1,$2,$3,$4,$5,$6)',
-        [req.params.id, isTeam ? team_id : '', club_id || null, p.user_id, p.lane, 'reserved']
+        'INSERT INTO competition_registrations (competition_id, team_id, club_id, player_user_id, lane, status, side) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+        [req.params.id, isTeam ? team_id : '', club_id || null, p.user_id, p.lane, 'reserved', side]
       );
     }
     if (c.comp_status === 'upcoming') {
@@ -1365,7 +1384,7 @@ app.get('/api/competitions/:id/registrations', async (req, res) => {
       FROM competition_registrations r
       LEFT JOIN users u ON u.id = r.player_user_id
       WHERE r.competition_id = $1 AND r.status != 'cancelled'
-      ORDER BY r.lane
+      ORDER BY r.side, r.lane
     `, [req.params.id]);
     res.json({ registrations: regs.rows });
   } catch(e) { res.status(500).json({ message: '查询失败' }); }

@@ -264,23 +264,36 @@ async function loadCompPlayerList(compId, isRegular) {
       return;
     }
     const laneOrder = { '对抗路':1, '打野':2, '中路':3, '发育路':4, '游走':5 };
-    const sorted = regs.slice().sort((a,b) => (laneOrder[a.lane]||99) - (laneOrder[b.lane]||99));
     const statusBadge = (r) => {
       if (r.status === 'confirmed') return '<span style="font-size:0.65rem;color:#10b981;background:rgba(16,185,129,.1);padding:1px 6px;border-radius:4px;">已确认</span>';
       if (r.status === 'reserved') return '<span style="font-size:0.65rem;color:var(--warning);background:rgba(255,215,0,.08);padding:1px 6px;border-radius:4px;">待确认</span>';
       return '';
     };
+    // 按红蓝方分组
+    const redRegs = regs.filter(r => r.side === 'red').sort((a,b) => (laneOrder[a.lane]||99) - (laneOrder[b.lane]||99));
+    const blueRegs = regs.filter(r => r.side === 'blue').sort((a,b) => (laneOrder[a.lane]||99) - (laneOrder[b.lane]||99));
+    const renderSide = (sideRegs, sideLabel, sideColor) => {
+      if (!sideRegs.length) return '';
+      const confirmedCount = sideRegs.filter(r => r.status === 'confirmed').length;
+      return '<div style="margin-bottom:12px;">'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'+
+          '<span style="font-size:0.78rem;font-weight:700;color:'+sideColor+';">'+sideLabel+'</span>'+
+          '<span style="font-size:0.7rem;color:var(--text-muted);">'+confirmedCount+'/5 已确认</span>'+
+        '</div>'+
+        '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">'+
+        sideRegs.map(r => {
+          const name = r.coachname || r.username || r.player_user_id;
+          return '<div style="padding:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:8px;">'+
+            '<div style="font-size:0.82rem;color:var(--text-primary);font-weight:600;">'+name+'</div>'+
+            '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">'+(r.lane||'')+(isRegular && r.entry_fee ? ' &middot; '+r.entry_fee+'梦币' : '')+'</div>'+
+            '<div style="margin-top:4px;">'+statusBadge(r)+'</div>'+
+          '</div>';
+        }).join('')+
+        '</div></div>';
+    };
     container.innerHTML = '<div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px;">参赛人员</div>'+
-      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">'+
-      sorted.map(r => {
-        const name = r.coachname || r.username || r.player_user_id;
-        return '<div style="padding:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:8px;">'+
-          '<div style="font-size:0.82rem;color:var(--text-primary);font-weight:600;">'+name+'</div>'+
-          '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">'+(r.lane||'')+(isRegular && r.entry_fee ? ' &middot; '+r.entry_fee+'梦币' : '')+'</div>'+
-          '<div style="margin-top:4px;">'+statusBadge(r)+'</div>'+
-        '</div>';
-      }).join('')+
-      '</div>';
+      renderSide(redRegs, '红方', '#ef4444') +
+      renderSide(blueRegs, '蓝方', '#3b82f6');
   } catch(e) {
     container.innerHTML = '<div style="color:var(--text-muted);font-size:0.78rem;">参赛人员加载失败</div>';
   }
@@ -395,6 +408,33 @@ function compressImageToBase64(file, maxWidth, quality) {
 }
 
 // ==================== 赛事报名交互 ====================
+
+// 入场券玩法说明弹窗
+function showEntryFeeRulesThen(callback) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.zIndex = '10000';
+  overlay.innerHTML = '<div class="modal modal-sm" style="max-width:420px;">'+
+    '<h3 style="margin-bottom:12px;font-size:1rem;">入场券玩法说明</h3>'+
+    '<div style="font-size:0.82rem;color:var(--text-secondary);line-height:1.7;">'+
+      '<p style="margin:0 0 8px 0;"><strong style="color:var(--warning);">1.</strong> 入场费分三档：<span style="color:#10b981;font-weight:600;">500</span> / <span style="color:#f59e0b;font-weight:600;">1000</span> / <span style="color:#ef4444;font-weight:600;">2000</span> 梦币</p>'+
+      '<p style="margin:0 0 8px 0;"><strong style="color:var(--warning);">2.</strong> 赛事需<strong>10人</strong>（红蓝双方各5人）全部确认入场后开赛</p>'+
+      '<p style="margin:0 0 8px 0;"><strong style="color:var(--warning);">3.</strong> 总奖池 = 10人总入场费之和</p>'+
+      '<p style="margin:0 0 8px 0;"><strong style="color:var(--warning);">4.</strong> 胜方按各自入场费占比瓜分奖池（入场费越高，分得越多）</p>'+
+      '<p style="margin:0;color:var(--text-muted);font-size:0.75rem;">例：A投入2000，B投入500，总奖池2500。若A获胜，A分得奖池的2000/2500=80%</p>'+
+    '</div>'+
+    '<div style="margin-top:16px;display:flex;gap:8px;">'+
+      '<button class="btn btn-primary btn-sm" id="entryFeeConfirmBtn" style="flex:1;">我已了解，继续报名</button>'+
+      '<button class="btn btn-ghost btn-sm" onclick="this.closest(\'.modal-overlay\').remove()" style="flex:1;">返回</button>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(overlay);
+  document.getElementById('entryFeeConfirmBtn').onclick = () => {
+    overlay.remove();
+    if (typeof callback === 'function') callback();
+  };
+}
+
 async function loadCompRegUI(compId, c) {
   const container = document.getElementById('compRegActions');
   if (!container) return;
@@ -423,10 +463,10 @@ async function loadCompRegUI(compId, c) {
     container.innerHTML = '<div style="padding:12px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:8px;color:var(--text-muted);font-size:0.82rem;">当前赛事状态为 <b style="color:var(--text-primary);">'+statusCN+'</b>，不可报名（仅"即将开始"和"报名中"可报名）</div>';
     return;
   }
-  // 两入口选择
+  // 两入口选择（点击后先弹出入场券说明）
   container.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
-    '<button class="btn btn-primary btn-sm" onclick="loadTeamRegisterFlow(\''+compId+'\')" style="flex:1;min-width:120px;">以队伍报名</button>'+
-    '<button class="btn btn-ghost btn-sm" onclick="loadClubRegisterFlow(\''+compId+'\')" style="flex:1;min-width:120px;border-color:rgba(245,158,11,.3);color:#f59e0b;">以俱乐部报名</button>'+
+    '<button class="btn btn-primary btn-sm" onclick="showEntryFeeRulesThen(()=>loadTeamRegisterFlow(\''+compId+'\'))" style="flex:1;min-width:120px;">以队伍报名</button>'+
+    '<button class="btn btn-ghost btn-sm" onclick="showEntryFeeRulesThen(()=>loadClubRegisterFlow(\''+compId+'\'))" style="flex:1;min-width:120px;border-color:rgba(245,158,11,.3);color:#f59e0b;">以俱乐部报名</button>'+
     '</div>';
 }
 
