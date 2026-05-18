@@ -846,11 +846,11 @@ app.get('/api/teams', async (req, res) => {
 app.get('/api/teams/mine', authMiddleware, async (req, res) => {
   try {
     const memberRes = await pool.query('SELECT * FROM team_members WHERE userId = $1', [req.userId]);
-    if (memberRes.rows.length === 0) return res.json({ team: null });
+    if (memberRes.rows.length === 0) return ok(res, { team: null });
 
     const teamId = memberRes.rows[0].teamid;
     const tRes = await pool.query('SELECT * FROM teams WHERE id = $1', [teamId]);
-    if (tRes.rows.length === 0) return res.json({ team: null });
+    if (tRes.rows.length === 0) return ok(res, { team: null });
     const t = tRes.rows[0];
 
     const members = await pool.query('SELECT * FROM team_members WHERE teamId = $1', [teamId]);
@@ -874,8 +874,8 @@ app.get('/api/teams/mine', authMiddleware, async (req, res) => {
     if (actualStatus !== t.status) {
       await pool.query("UPDATE teams SET status = $1 WHERE id = $2", [actualStatus, t.id]);
     }
-    res.json({ team: { id: t.id, name: t.name, bio: t.bio, captainId: t.captainid, status: actualStatus, memberCount: members.rows.length, maxMembers: t.maxmembers, members: memberList, createdAt: t.createdat, myRole } });
-  } catch (e) { console.error(e); serverError(res, '加载失败'); }
+    ok(res, { team: { id: t.id, name: t.name, bio: t.bio, captainId: t.captainid, status: actualStatus, memberCount: members.rows.length, maxMembers: t.maxmembers, members: memberList, createdAt: t.createdat, myRole } });
+  } catch (e) { serverError(res, '加载队伍失败', e); }
 });
 
 // 获取单个队伍详情
@@ -1812,8 +1812,8 @@ app.get('/api/clubs', authMiddleware, async (req, res) => {
       'SELECT club_id, role FROM club_members WHERE user_id = $1',
       [req.userId]
     );
-    res.json({ clubs: result.rows, memberships: memberships.rows });
-  } catch(e) { serverError(res, '查询失败'); }
+    ok(res, { clubs: result.rows, memberships: memberships.rows });
+  } catch(e) { serverError(res, '查询俱乐部列表失败', e); }
 });
 
 // 俱乐部详情
@@ -1846,8 +1846,23 @@ app.get('/api/club/:id', authMiddleware, async (req, res) => {
       LIMIT 30
     `, [id]);
 
-    res.json({ club: club.rows[0], members: members.rows, transfers: transfers.rows });
-  } catch(e) { serverError(res, '查询失败'); }
+    // 老板（owner）不在 club_members 表中，将其加入成员列表供报名使用
+    const c = club.rows[0];
+    let memberList = members.rows;
+    if (c.owner_id) {
+      const ownerInClub = members.rows.find(m => m.user_id === c.owner_id);
+      if (!ownerInClub) {
+        const ownerUser = await pool.query(`
+          SELECT u.id AS user_id, u.username, u.coachName, u.gameId, u.gameRank, u.peakScore,
+            p.market_value, p.grade, 'boss' AS role
+          FROM users u LEFT JOIN players p ON u.id = p.user_id WHERE u.id = $1
+        `, [c.owner_id]);
+        if (ownerUser.rows.length > 0) memberList = [ownerUser.rows[0], ...memberList];
+      }
+    }
+
+    ok(res, { club: c, members: memberList, transfers: transfers.rows });
+  } catch(e) { serverError(res, '查询俱乐部失败', e); }
 });
 
 // 老板管理队员（移除队员）
