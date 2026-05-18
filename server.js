@@ -677,7 +677,7 @@ app.get('/api/admin/dashboard', authMiddleware, adminMiddleware, async (req, res
 app.get('/api/admin/users', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { level, gameServer, gameRank, search, heroPool, teamId, minPeak, maxPeak, peakSort } = req.query;
-    let sql = 'SELECT id, username, teamName, coachName, wechat, level, bio, gameId, gameServer, gameRank, peakScore, heroPool, created_at FROM users WHERE 1=1';
+    let sql = 'SELECT id, username, teamName, coachName, wechat, level, bio, gameId, gameServer, gameRank, peakScore, heroPool, dream_coins, created_at FROM users WHERE 1=1';
     const params = [];
     let idx = 1;
     if (level) { sql += ` AND level = $${idx++}`; params.push(level); }
@@ -707,6 +707,7 @@ app.get('/api/admin/users', authMiddleware, adminMiddleware, async (req, res) =>
       id: u.id, username: u.username, teamName: u.teamname, coachName: u.coachname,
       wechat: u.wechat, level: u.level, bio: u.bio, createdAt: u.created_at,
       gameId: u.gameid || '', gameServer: u.gameserver || '', gameRank: u.gamerank || '', peakScore: u.peakscore || 0, heroPool: u.heropool || '',
+      dream_coins: u.dream_coins || 0,
       team: teamMap[u.id] || null
     })) });
   } catch (e) { console.error(e); serverError(res, '加载失败'); }
@@ -1566,10 +1567,23 @@ app.post('/api/admin/award-coins', authMiddleware, adminMiddleware, async (req, 
     let affectedCount = 0;
     // 批量发放给所有用户
     if (userId === 'all' || target === 'all') {
-      const updateRes = await client.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1', [amount]);
-      affectedCount = updateRes.rowCount;
+      const allUsers = await client.query('SELECT id FROM users');
+      affectedCount = allUsers.rowCount;
+      await client.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1', [amount]);
       const reason = note || (amount > 0 ? '管理员发放初始奖金' : '梦币调整');
-      await client.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ('system', $1, $2, $3)", [amount, amount > 0 ? 'award' : 'deduct', reason]);
+      const txType = amount > 0 ? 'award' : 'deduct';
+      // 为每个用户插入个人流水记录，确保用户能在自己的收支明细中看到
+      for (const u of allUsers.rows) {
+        await client.query(
+          "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1, $2, $3, $4)",
+          [u.id, amount, txType, reason]
+        );
+      }
+      // 保留一条汇总记录供管理员全部流水查看
+      await client.query(
+        "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ('system', $1, $2, $3)",
+        [amount, txType, reason + '（批量操作汇总，共' + affectedCount + '人）']
+      );
       await client.query('COMMIT');
       ok(res, {message: '已向 ' + affectedCount + ' 名用户发放 ' + amount + ' 梦币', affectedCount });
       return;
