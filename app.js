@@ -626,7 +626,8 @@ async function submitTeamPlayers(compId, teamId) {
     showToast('请选择恰好5名队员', 'error');
     return;
   }
-  const players = Array.from(checked).map(cb => ({ user_id: cb.value, lane: cb.dataset.lane || '' }));
+  const lanes = ['对抗路','打野','中路','发育路','游走'];
+  const players = Array.from(checked).map((cb, i) => ({ user_id: cb.value, lane: cb.dataset.lane || lanes[i] || '' }));
   const btn = document.getElementById('submitTeamBtn');
   if (btn) { btn.disabled = true; btn.textContent = '提交中…'; }
   try {
@@ -734,7 +735,8 @@ async function submitClubPlayers(compId, clubId) {
     showToast('请选择恰好5名队员', 'error');
     return;
   }
-  const players = Array.from(checked).map(cb => ({ user_id: cb.value, lane: cb.dataset.lane || '' }));
+  const lanes = ['对抗路','打野','中路','发育路','游走'];
+  const players = Array.from(checked).map((cb, i) => ({ user_id: cb.value, lane: cb.dataset.lane || lanes[i] || '' }));
   const btn = document.getElementById('submitClubBtn');
   if (btn) { btn.disabled = true; btn.textContent = '提交中…'; }
   try {
