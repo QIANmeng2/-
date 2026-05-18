@@ -283,7 +283,7 @@ app.post('/api/auth/login', async (req, res) => {
     if (result.rows.length === 0 || !bcrypt.compareSync(password, result.rows[0].password)) return res.status(400).json({ message: '用户名或密码错误' });
     const user = result.rows[0];
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id: user.id, teamName: user.teamname, coachName: user.coachname, wechat: user.wechat, level: user.level, bio: user.bio, disabledDates: user.disableddates || [], gameId: user.gameid || '', gameServer: user.gameserver || '手Q区', gameRank: user.gamerank || '星耀', peakScore: user.peakscore || 0, laneStats: user.lanestats || '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}', heroPool: user.heropool || '' } });
+    res.json({ token, user: { id: user.id, teamName: user.teamname, coachName: user.coachname, wechat: user.wechat, level: user.level, bio: user.bio, disabledDates: user.disableddates || [], gameId: user.gameid || '', gameServer: user.gameserver || '手Q区', gameRank: user.gamerank || '星耀', peakScore: user.peakscore || 0, laneStats: user.lanestats || '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}', heroPool: user.heropool || '', dream_coins: user.dream_coins || 0 } });
   } catch (e) { res.status(500).json({ message: '登录失败' }); }
 });
 
@@ -294,6 +294,83 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
     const u = result.rows[0];
     res.json({ user: { id: u.id, teamName: u.teamname, coachName: u.coachname, wechat: u.wechat, level: u.level, bio: u.bio, disabledDates: u.disableddates || [], gameId: u.gameid || '', gameServer: u.gameserver || '手Q区', gameRank: u.gamerank || '星耀', peakScore: u.peakscore || 0, laneStats: u.lanestats || '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}', heroPool: u.heropool || '', dream_coins: u.dream_coins || 0 } });
   } catch (e) { res.status(500).json({ message: '获取失败' }); }
+});
+
+// ====================== 梦币系统 ======================
+
+// 获取我的梦币余额和交易明细
+app.get('/api/me/coins', authMiddleware, async (req, res) => {
+  try {
+    // 获取余额
+    const userRes = await pool.query('SELECT dream_coins FROM users WHERE id = $1', [req.userId]);
+    const balance = userRes.rows[0]?.dream_coins || 0;
+    
+    // 获取交易明细（最近50条）
+    const txRes = await pool.query(
+      'SELECT * FROM coin_transactions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50',
+      [req.userId]
+    );
+    
+    const transactions = txRes.rows.map(t => ({
+      id: t.id,
+      amount: t.amount,
+      type: t.type,
+      note: t.note,
+      related_match_id: t.related_match_id,
+      created_at: t.created_at
+    }));
+    
+    res.json({ balance, transactions });
+  } catch (e) { console.error(e); res.status(500).json({ message: '查询失败' }); }
+});
+
+// 管理员发放梦币
+app.post('/api/admin/award-coins', authMiddleware, adminMiddleware, async (req, res) => {
+  const { userId, amount, note } = req.body;
+  if (!userId || !amount || amount <= 0) return res.status(400).json({ message: '参数错误' });
+  try {
+    // 更新用户余额
+    await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins, 0) + $1 WHERE id = $2', [amount, userId]);
+    // 记录交易
+    await pool.query(
+      "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1, $2, 'award', $3)",
+      [userId, amount, note || '管理员发放']
+    );
+    // 获取更新后的余额
+    const userRes = await pool.query('SELECT dream_coins FROM users WHERE id = $1', [userId]);
+    const newBalance = userRes.rows[0]?.dream_coins || 0;
+    // 发送通知
+    await sendNotification(userId, 'coin_award', `你收到了 ${amount} 梦币奖励：${note || '管理员发放'}`, null);
+    res.json({ success: true, newBalance, awarded: amount });
+  } catch (e) { console.error(e); res.status(500).json({ message: '操作失败' }); }
+});
+
+// 管理员获取所有交易记录
+app.get('/api/admin/coin-transactions', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { userId, limit = 100 } = req.query;
+    let query = 'SELECT ct.*, u.coachname, u.username FROM coin_transactions ct LEFT JOIN users u ON ct.user_id = u.id';
+    const params = [];
+    if (userId) {
+      query += ' WHERE ct.user_id = $1';
+      params.push(userId);
+    }
+    query += ' ORDER BY ct.created_at DESC LIMIT $' + (params.length + 1);
+    params.push(parseInt(limit));
+    
+    const result = await pool.query(query, params);
+    res.json({ transactions: result.rows.map(t => ({
+      id: t.id,
+      user_id: t.user_id,
+      coachname: t.coachname,
+      username: t.username,
+      amount: t.amount,
+      type: t.type,
+      note: t.note,
+      related_match_id: t.related_match_id,
+      created_at: t.created_at
+    })) });
+  } catch (e) { console.error(e); res.status(500).json({ message: '查询失败' }); }
 });
 
 app.put('/api/users/me', authMiddleware, async (req, res) => {

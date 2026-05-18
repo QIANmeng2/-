@@ -91,6 +91,26 @@ function updateUI() {
     ui('btnLogoutTop').style.display = 'inline-block';
     ui('displayName').textContent = currentUser.coachName;
     ui('displayTeam').textContent = currentUser.teamName;
+    // 显示梦币余额
+    const dreamCoins = currentUser.dream_coins || 0;
+    let coinDisplay = document.getElementById('displayDreamCoins');
+    if (!coinDisplay) {
+      // 首次创建梦币显示元素
+      const sep = document.createElement('span');
+      sep.className = 'user-sep';
+      sep.style.color = 'var(--text-muted)';
+      sep.style.margin = '0 8px';
+      sep.textContent = '|';
+      ui('displayTeam').parentNode.insertBefore(sep, ui('displayTeam').nextSibling);
+      
+      coinDisplay = document.createElement('span');
+      coinDisplay.id = 'displayDreamCoins';
+      coinDisplay.style.cssText = 'color:var(--gradient-gold-stop3, #FFD700);font-weight:700;margin-left:8px;cursor:pointer;';
+      coinDisplay.title = '点击查看账户明细';
+      coinDisplay.onclick = () => { switchTab('profile'); setTimeout(() => { if (typeof switchProfileTab === 'function') switchProfileTab('account'); }, 200); };
+      sep.parentNode.insertBefore(coinDisplay, sep.nextSibling);
+    }
+    coinDisplay.textContent = '🪙 ' + dreamCoins.toLocaleString();
     document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="market"], #tabNav .tab-btn[data-tab="club"]').forEach(b => b.style.display = '');
     ui('notificationBell').style.display = 'flex';
     if (currentUser.id === 'mp4hmya7ad15v6') { ui('tabAdmin').style.display = ''; }
