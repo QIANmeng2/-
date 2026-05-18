@@ -1510,7 +1510,9 @@ async function renderClubPanel() {
     const memberships = raw.memberships || clubsData.memberships || [];
     const myMembershipMap = new Map(memberships.map(m => [m.club_id, m.role]));
     // 查找当前用户关联的俱乐部（老板或成员）
-    const myClubs = clubs.filter(c => c.owner_id === currentUser.id || myMembershipMap.has(c.id));
+    const myClubs = currentUser
+      ? clubs.filter(c => c.owner_id === currentUser.id || myMembershipMap.has(c.id))
+      : [];
 
     let html = '<div class="card"><h3>我的俱乐部</h3>';
     if (isAdmin) {
@@ -1518,7 +1520,7 @@ async function renderClubPanel() {
     }
     if (myClubs.length > 0) {
       html += myClubs.map(c => {
-        const isOwner = c.owner_id === currentUser.id;
+        const isOwner = currentUser && c.owner_id === currentUser.id;
         const roleLabel = isOwner ? '你 是老板' : (myMembershipMap.get(c.id) === 'member' ? '你 是成员' : '');
         return `
         <div class="club-card" onclick="renderClubDetail(${c.id})" style="cursor:pointer;">
@@ -1560,10 +1562,11 @@ async function renderClubDetail(clubId) {
   const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
   try {
     const data = await api('/api/club/' + clubId);
-    const c = data.club;
-    const members = data.members || [];
-    const transfers = data.transfers || [];
-    const isOwner = c.owner_id === currentUser.id;
+    const c = (data.data || data).club;
+    if (!c) { content.innerHTML = '<div class="card"><p>俱乐部不存在或加载失败</p><button class="btn btn-sm btn-primary" onclick="renderClubPanel()">返回</button></div>'; return; }
+    const members = (data.data || data).members || [];
+    const transfers = (data.data || data).transfers || [];
+    const isOwner = currentUser && c.owner_id === currentUser.id;
 
     // 获取大名单
     let rosters = { elite: [], secondary: [], free: [] };
