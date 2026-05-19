@@ -740,6 +740,13 @@ async function openSubmitResultModal(compId) {
     regs = (data.registrations || []).filter(r => r.status === 'confirmed' || r.status === 'reserved');
   } catch(e) { showToast('加载参赛人员失败','error'); return; }
   if (!regs.length) { showToast('暂无参赛人员','warn'); return; }
+  // 存储regs映射，供截图识别后回填使用
+  window._currentCompRegs = regs;
+  window._currentCompRegsMap = {};
+  regs.forEach(r => {
+    const gid = (r.gameid || r.gameId || r.game_id || '').toLowerCase().trim();
+    if (gid) window._currentCompRegsMap[gid] = r.player_user_id;
+  });
 
   const isFree = isFreeMode(c.tier || 'regular');
   const overlay = document.createElement('div');
@@ -761,6 +768,7 @@ async function openSubmitResultModal(compId) {
         <label style="display:flex;align-items:center;gap:4px;font-size:0.75rem;color:var(--text-muted);cursor:pointer;white-space:nowrap;">
           <input type="checkbox" class="result-win" style="accent-color:var(--primary);"> 胜
         </label>
+        <input type="number" class="result-coin-reward" placeholder="梦币" style="width:72px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:4px 6px;color:var(--text-warning);font-size:0.78rem;" value="0" min="0" title="梦币奖励（败方填0）">
       </div>
     `;
   }).join('');
@@ -797,6 +805,8 @@ async function openSubmitResultModal(compId) {
         <label style="font-size:0.82rem;color:var(--text-muted);display:block;margin-bottom:6px;">赛后截图（至少1张）</label>
         <input type="file" id="resultScreenshots" accept="image/*" multiple style="color:var(--text-primary);font-size:0.82rem;">
         <div id="resultScreenshotPreview" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"></div>
+        <button type="button" class="btn btn-sm" style="margin-top:8px;background:rgba(139,92,246,.12);border:1px solid rgba(139,92,246,.25);color:#8b5cf6;" onclick="recognizeResultScreenshot('${compId}')">🖼️ 识别截图</button>
+        <div id="recognizeStatus" style="font-size:0.72rem;color:var(--text-muted);margin-top:4px;"></div>
       </div>
       <div style="margin-bottom:16px;">
         <label style="font-size:0.82rem;color:var(--text-muted);display:block;margin-bottom:6px;">玩家数据</label>
@@ -824,6 +834,62 @@ async function openSubmitResultModal(compId) {
         r.readAsDataURL(file);
       });
     });
+  }
+}
+
+// ========== 截图AI识别 ==========
+async function recognizeResultScreenshot(compId) {
+  const fileInput = document.getElementById('resultScreenshots');
+  if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+    showToast('请先选择截图', 'error');
+    return;
+  }
+  const statusDiv = document.getElementById('recognizeStatus');
+  if (statusDiv) statusDiv.textContent = '正在识别截图...';
+  showToast('正在识别截图...', 'info');
+  try {
+    const file = fileInput.files[0];
+    const base64 = await compressImageToBase64(file, 1200, 0.7);
+    if (!base64) throw new Error('截图压缩失败');
+    const data = await api('/api/competitions/' + compId + '/recognize-screenshot', {
+      method: 'POST',
+      body: JSON.stringify({ screenshot: base64 })
+    });
+    if (statusDiv) statusDiv.textContent = '识别完成，请核对并修改不准确的信息';
+    showToast('识别完成，请核对数据', 'success');
+    // 回填获胜方
+    if (data.winner) {
+      const winnerRadio = document.querySelector('input[name="winnerSide"][value="' + data.winner + '"]');
+      if (winnerRadio) winnerRadio.checked = true;
+    }
+    // 回填玩家数据
+    if (data.players && Array.isArray(data.players)) {
+      const regsMap = window._currentCompRegsMap || {};
+      data.players.forEach(p => {
+        const gid = (p.game_id || '').toLowerCase().trim();
+        const uid = regsMap[gid];
+        if (!uid) { console.warn('无法匹配玩家:', p.game_id); return; }
+        const row = document.querySelector('#submitResultModal [data-uid="' + uid + '"]');
+        if (!row) return;
+        // 回填KDA
+        const kdaInput = row.querySelector('.result-kda');
+        if (kdaInput && p.kda) kdaInput.value = p.kda;
+        // 回填"胜"复选框
+        const winCheckbox = row.querySelector('.result-win');
+        if (winCheckbox) {
+          winCheckbox.checked = (p.is_mvp === true) || (p.team === data.winner);
+        }
+        // 回填MVP
+        if (p.is_mvp === true) {
+          const mvpSelect = document.getElementById('resultMvp');
+          if (mvpSelect) mvpSelect.value = uid;
+        }
+      });
+    }
+  } catch(e) {
+    const statusDiv = document.getElementById('recognizeStatus');
+    if (statusDiv) statusDiv.textContent = '识别失败: ' + e.message;
+    showToast('识别失败: ' + e.message, 'error');
   }
 }
 
@@ -857,10 +923,20 @@ async function submitCompResult(compId) {
 
   const mvp = document.getElementById('resultMvp')?.value || null;
 
+  // 收集梦币奖励
+  const coin_rewards = {};
+  rows.forEach(row => {
+    const uid = row.dataset.uid;
+    const rewardInput = row.querySelector('.result-coin-reward');
+    const reward = parseInt(rewardInput?.value) || 0;
+    if (reward > 0) coin_rewards[uid] = reward;
+  });
+
+
   try {
     await api('/api/competitions/'+compId+'/submit-result', {
       method: 'POST',
-      body: JSON.stringify({ winner, screenshots, players, mvp_player_id: mvp })
+      body: JSON.stringify({ winner, screenshots, players, mvp_player_id: mvp, coin_rewards })
     });
     showToast('结果已提交','success');
     document.getElementById('submitResultModal')?.remove();
