@@ -228,9 +228,24 @@ async function initDB() {
         initiated_by TEXT NOT NULL,
         initiated_club_id INTEGER NOT NULL,
         accepted_by TEXT,
+        initiator_id BIGINT NOT NULL,
+        recipient_id BIGINT NOT NULL,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       );
+    `);
+    // 迁移：补充 initiator_id / recipient_id 字段（向后兼容）
+    await client.query(`
+      ALTER TABLE player_trades
+        ADD COLUMN IF NOT EXISTS initiator_id BIGINT NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS recipient_id BIGINT NOT NULL DEFAULT 0
+    `);
+    // 回填历史数据：initiator_id = initiated_by，recipient_id = 源俱乐部老板
+    await client.query(`
+      UPDATE player_trades
+      SET initiator_id = CAST(initiated_by AS BIGINT),
+          recipient_id = COALESCE((SELECT owner_id FROM clubs WHERE id = player_trades.from_club_id LIMIT 1)::BIGINT, 0)
+      WHERE initiator_id = 0 AND recipient_id = 0
     `);
     // 交易比例配置（动态比例）
     await client.query(`
@@ -2502,11 +2517,13 @@ app.post('/api/trade/initiate', authMiddleware, async (req, res) => {
     // 检查目标俱乐部老板余额是否足够支付差价
     const owner = await pool.query('SELECT dream_coins FROM users WHERE id=$1', [req.userId]);
     if ((owner.rows[0]?.dream_coins || 0) < finalPriceDiff) return badRequest(res, '余额不足，需支付差价' + finalPriceDiff + '梦币');
+    // 源俱乐部老板（接收方）
+    const fromClubOwner = fromClub.rows[0].owner_id;
     // 创建交易记录
     const result = await pool.query(`INSERT INTO player_trades
-      (player_user_id, from_club_id, to_club_id, trade_type, swap_player_user_id, price_diff, status, initiated_by, initiated_club_id)
-      VALUES ($1,$2,$3,$4,$5,$6,'pending',$7,$8) RETURNING id`,
-      [player_user_id, from_club_id, to_club_id, trade_type || 'buy', swap_player_user_id || null, finalPriceDiff, req.userId, to_club_id]);
+      (player_user_id, from_club_id, to_club_id, trade_type, swap_player_user_id, price_diff, status, initiated_by, initiated_club_id, initiator_id, recipient_id)
+      VALUES ($1,$2,$3,$4,$5,$6,'pending',$7,$8, $9, $10) RETURNING id`,
+      [player_user_id, from_club_id, to_club_id, trade_type || 'buy', swap_player_user_id || null, finalPriceDiff, req.userId, to_club_id, req.userId, fromClubOwner]);
     // 标记选手交易中
     await pool.query("UPDATE players SET trade_status='pending_trade' WHERE user_id=$1", [player_user_id]);
     if (trade_type === 'swap' && swap_player_user_id) {

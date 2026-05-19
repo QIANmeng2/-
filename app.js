@@ -1857,50 +1857,78 @@ async function renderClubPanel() {
     const clubs = raw.clubs || clubsData.clubs || [];
     const memberships = raw.memberships || clubsData.memberships || [];
     const myMembershipMap = new Map(memberships.map(m => [m.club_id, m.role]));
-    // 查找当前用户关联的俱乐部（老板或成员）
+
+    // 分离：我的俱乐部（老板身份）vs 其他俱乐部
     const myClubs = currentUser
       ? clubs.filter(c => c.owner_id === currentUser.id || myMembershipMap.has(c.id))
       : [];
+    const myClub = myClubs.find(c => c.owner_id === currentUser.id) || myClubs[0] || null;
+    const otherClubs = clubs.filter(c => {
+      if (myClub && String(c.id) === String(myClub.id)) return false;
+      return true;
+    });
 
-    let html = '<div class="card"><h3>我的俱乐部</h3>';
-    if (isAdmin) {
-      html += `<button class="btn btn-primary btn-sm" style="margin-bottom:12px;" onclick="openCreateClubModal()">创建俱乐部</button>`;
-    }
-    if (myClubs.length > 0) {
-      html += myClubs.map(c => {
-        const isOwner = currentUser && c.owner_id === currentUser.id;
-        const roleLabel = isOwner ? '你 是老板' : (myMembershipMap.get(c.id) === 'member' ? '你 是成员' : '');
-        return `
-        <div class="club-card" onclick="renderClubDetail(${c.id})" style="cursor:pointer;">
-          <div><span style="font-weight:700;color:var(--text-primary);">${c.name}</span>
-            <span style="font-size:0.72rem;color:var(--text-muted);margin-left:8px;">${c.member_count || 0}名队员</span>
+    // 主区域：我自己的俱乐部
+    let mainHtml = '';
+    if (myClub) {
+      const isOwner = String(myClub.owner_id) === String(currentUser?.id);
+      const roleLabel = isOwner ? '你是老板' : (myMembershipMap.get(myClub.id) === 'member' ? '你是成员' : '');
+      mainHtml = `
+        <div class="club-main-card" onclick="renderClubDetail(${myClub.id})" style="cursor:pointer;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;">
+            <div>
+              <h3 style="margin:0;color:var(--text-primary);">${escapeHtml(myClub.name)}</h3>
+              ${roleLabel ? `<span class="pos-tag club-role-boss" style="margin-top:4px;display:inline-block;font-size:0.7rem;">${roleLabel}</span>` : ''}
+            </div>
+            <span style="font-size:0.78rem;color:var(--text-muted);">${myClub.member_count || 0}名队员</span>
           </div>
-          <div style="font-size:0.78rem;color:var(--warning);">${roleLabel}</div>
+          <p style="font-size:0.78rem;color:var(--text-secondary);margin:0;">老板：${myClub.owner_name || myClub.owner_username || myClub.owner_id}</p>
+          <div style="margin-top:12px;display:flex;align-items:center;gap:6px;">
+            <span style="font-size:0.72rem;color:var(--primary);">点击查看详情 →</span>
+          </div>
         </div>
       `;
-      }).join('');
     } else {
-      html += '<p style="color:var(--text-muted);">你还没有自己的俱乐部</p>';
+      mainHtml = `
+        <div class="club-main-empty">
+          <p style="color:var(--text-muted);font-size:0.85rem;">你还没有创建俱乐部</p>
+          ${isAdmin ? `<button class="btn btn-primary btn-sm" onclick="openCreateClubModal()" style="margin-top:12px;">创建俱乐部</button>` : ''}
+        </div>
+      `;
     }
-    html += '</div>';
 
-    // 所有俱乐部列表
-    html += `<div class="card" style="margin-top:16px;"><h3 style="margin-bottom:12px;">全部俱乐部</h3>`;
-    if (clubs.length === 0) {
-      html += '<p style="color:var(--text-muted);">暂无俱乐部</p>';
-    } else {
-      html += clubs.map(c => `
-        <div class="club-card" onclick="renderClubDetail(${c.id})" style="cursor:pointer;">
-          <div>
-            <span style="font-weight:600;color:var(--text-primary);">${c.name}</span>
-            <span style="font-size:0.72rem;color:var(--text-muted);margin-left:8px;">${c.member_count || 0}名队员</span>
-          </div>
-          <div style="font-size:0.78rem;color:var(--text-secondary);">老板：${c.owner_name || c.owner_username || c.owner_id}</div>
+    // 侧边栏：其他俱乐部
+    let sidebarHtml = '';
+    if (otherClubs.length > 0) {
+      sidebarHtml = otherClubs.map(c => `
+        <div class="club-sidebar-card" onclick="renderClubDetail(${c.id})" style="cursor:pointer;">
+          <div style="font-weight:600;color:var(--text-primary);font-size:0.82rem;">${escapeHtml(c.name)}</div>
+          <div style="font-size:0.7rem;color:var(--text-muted);margin-top:3px;">${c.member_count || 0}人 · ${c.owner_name || c.owner_username || c.owner_id}</div>
         </div>
       `).join('');
+    } else {
+      sidebarHtml = '<p style="color:var(--text-muted);font-size:0.78rem;text-align:center;padding:20px 0;">暂无其他俱乐部</p>';
     }
-    html += '</div>';
-    content.innerHTML = html;
+
+    content.innerHTML = `
+      <div class="club-panel-layout">
+        <div class="club-main-area">
+          <h3 style="margin:0 0 14px 0;font-size:0.95rem;color:var(--text-secondary);display:flex;align-items:center;gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            我的俱乐部
+          </h3>
+          ${mainHtml}
+        </div>
+        <div class="club-sidebar-area">
+          <h3 style="margin:0 0 12px 0;font-size:0.9rem;color:var(--text-secondary);display:flex;align-items:center;gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            其他俱乐部
+            <span style="font-size:0.7rem;font-weight:400;color:var(--text-muted);">(${otherClubs.length})</span>
+          </h3>
+          <div class="club-sidebar-list">${sidebarHtml}</div>
+        </div>
+      </div>
+    `;
   } catch(e) { content.innerHTML = `<div class="card"><p>加载失败：${e.message}</p></div>`; }
 }
 
@@ -2068,19 +2096,26 @@ async function renderClubDetail(clubId) {
         `).join('')}
 
         <h4 style="margin-top:20px;margin-bottom:8px;font-size:0.9rem;">选手交易记录</h4>
-        ${trades.length === 0 ? '<p style="color:var(--text-muted);">暂无选手交易记录</p>' : trades.map(t => `
+        ${trades.length === 0 ? '<p style="color:var(--text-muted);">暂无选手交易记录</p>' : trades.map(t => {
+          const isInitiator = String(t.initiator_id) === String(currentUser?.id);
+          const isRecipient = String(t.recipient_id) === String(currentUser?.id);
+          const myRole = isInitiator ? '<span class="pos-tag club-role-boss" style="font-size:0.62rem;">我发起</span>' : isRecipient ? '<span class="pos-tag club-role-player" style="font-size:0.62rem;">待我处理</span>' : '';
+          return `
           <div style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.04);font-size:0.8rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
             <div style="display:flex;flex-direction:column;gap:2px;">
-              <span><b>${t.player_name || t.player_user_id}</b> <span style="color:var(--text-muted);">${t.trade_type==='buy'?'购买':'互换'}</span></span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span><b>${t.player_name || t.player_user_id}</b> <span style="color:var(--text-muted);">${t.trade_type==='buy'?'购买':'互换'}</span></span>
+                ${myRole}
+              </div>
               <span style="font-size:0.72rem;color:var(--text-secondary);">${t.from_club_name} → ${t.to_club_name}</span>
-              ${t.price_diff > 0 ? `<span style="font-size:0.7rem;color:var(--warning);">${String(t.to_club_id) === String(clubId) ? '需支付差价' : '将获得差价'}: ${t.price_diff/10000}万</span>` : ''}
+              ${t.price_diff > 0 ? `<span style="font-size:0.7rem;color:var(--warning);">${isRecipient && t.price_diff > 0 ? '你将获得' : isInitiator && t.price_diff > 0 ? '需支付' : ''}差价: ${t.price_diff/10000}万</span>` : ''}
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-              ${t.status === 'pending' && String(t.to_club_id) === String(clubId) && isOwner ? `
+              ${t.status === 'pending' && String(t.initiator_id) === String(currentUser?.id) ? `
+                <button class="btn btn-sm btn-ghost" style="padding:4px 12px;font-size:0.72rem;color:var(--text-muted);" onclick="handleTrade(${t.id},'cancel',${clubId})">取消</button>
+              ` : t.status === 'pending' && String(t.recipient_id) === String(currentUser?.id) ? `
                 <button class="btn btn-sm" style="background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3);padding:4px 12px;font-size:0.72rem;" onclick="handleTrade(${t.id},'accept',${clubId})">接受</button>
                 <button class="btn btn-sm" style="background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.25);padding:4px 12px;font-size:0.72rem;" onclick="handleTrade(${t.id},'reject',${clubId})">拒绝</button>
-              ` : t.status === 'pending' && String(t.from_club_id) === String(clubId) && isOwner ? `
-                <button class="btn btn-sm btn-ghost" style="padding:4px 12px;font-size:0.72rem;color:var(--text-muted);" onclick="handleTrade(${t.id},'cancel',${clubId})">取消</button>
               ` : ''}
               <span class="trade-status-${t.status}">${t.status==='pending'?'待处理':t.status==='accepted'?'已接受':t.status==='rejected'?'已拒绝':'已取消'}</span>
               <span style="font-size:0.68rem;color:var(--text-muted);">${new Date(t.created_at).toLocaleDateString('zh-CN')}</span>

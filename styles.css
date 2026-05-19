@@ -2746,6 +2746,59 @@
   color: var(--danger);
 }
 
+/* ===== 俱乐部面板：主区+侧边栏布局 ===== */
+.club-panel-layout {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 20px;
+  align-items: start;
+}
+.club-main-area {
+  min-width: 0;
+}
+.club-sidebar-area {
+  min-width: 0;
+}
+.club-main-card {
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  padding: 18px 20px;
+  transition: border-color .2s;
+}
+.club-main-card:hover {
+  border-color: rgba(52,211,153,.3);
+}
+.club-main-empty {
+  background: rgba(255,255,255,.02);
+  border: 1px dashed rgba(255,255,255,.1);
+  border-radius: 12px;
+  padding: 30px 20px;
+  text-align: center;
+}
+.club-sidebar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.club-sidebar-list::-webkit-scrollbar { width: 3px; }
+.club-sidebar-list::-webkit-scrollbar-track { background: transparent; }
+.club-sidebar-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+.club-sidebar-card {
+  background: rgba(255,255,255,.02);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 8px;
+  padding: 10px 12px;
+  transition: border-color .15s, background .15s;
+}
+.club-sidebar-card:hover {
+  border-color: rgba(79,70,229,.3);
+  background: rgba(79,70,229,.05);
+}
+
 /* 响应式调整 */
 @media (max-width: 768px) {
   .chat-container {
@@ -2817,5 +2870,13 @@
   .chat-input {
     padding: 10px 12px;
     font-size: 16px; /* 防止iOS缩放 */
+  }
+  /* 俱乐部面板：移动端单列 */
+  .club-panel-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .club-sidebar-list {
+    max-height: 300px;
   }
 }
