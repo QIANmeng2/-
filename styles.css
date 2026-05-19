@@ -2773,4 +2773,40 @@
   .chat-target-team {
     display: none;
   }
+  .chat-search-box {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .chat-search-input {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .chat-search-btn {
+    width: 100%;
+  }
+  .chat-contacts-label {
+    display: none;
+  }
+  .chat-main {
+    min-height: 400px;
+  }
+  .chat-message {
+    max-width: 90%;
+  }
+  .chat-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
+  }
+  .chat-sender-name {
+    font-size: 0.65rem;
+  }
+  .chat-bubble {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+  }
+  .chat-input {
+    padding: 10px 12px;
+    font-size: 16px; /* 防止iOS缩放 */
+  }
 }
