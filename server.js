@@ -247,6 +247,18 @@ async function initDB() {
       VALUES ('transfer', 10, 40, 50), ('purchase', 10, 0, 90)
       ON CONFLICT (type) DO NOTHING
     `);
+    // 公告系统
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS announcements (
+        id SERIAL PRIMARY KEY,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        publisher_id TEXT NOT NULL,
+        pushed BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query('ALTER TABLE announcements ADD COLUMN IF NOT EXISTS pushed BOOLEAN DEFAULT false');
     // 赛事分级
     await client.query("ALTER TABLE competitions ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'regular'");
     await client.query("ALTER TABLE competitions ADD COLUMN IF NOT EXISTS description TEXT DEFAULT NULL");
@@ -372,6 +384,64 @@ app.put('/api/admin/transaction-ratios', authMiddleware, adminMiddleware, async 
     );
     ok(res, null, '比例更新成功');
   } catch(e) { serverError(res, '更新交易比例失败', e); }
+});
+
+// ========== 公告管理 ==========
+// 获取公告列表（管理员）
+app.get('/api/admin/announcements', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, title, content, publisher_id, pushed, created_at FROM announcements ORDER BY created_at DESC LIMIT 50'
+    );
+    ok(res, { announcements: result.rows });
+  } catch(e) { serverError(res, '获取公告列表失败', e); }
+});
+
+// 发布公告（管理员）
+app.post('/api/admin/announcements', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { title, content } = req.body;
+    if (!title || !content) return badRequest(res, '标题和内容不能为空');
+
+    // 写入公告表
+    const annResult = await pool.query(
+      'INSERT INTO announcements (title, content, publisher_id, pushed) VALUES ($1, $2, $3, $4) RETURNING id',
+      [title, content, req.userId, true]
+    );
+    const annId = annResult.rows[0].id;
+
+    // 推送给所有用户
+    const users = await pool.query('SELECT id FROM users');
+    const notifType = 'announcement';
+    const notifContent = '【公告】' + title;
+    for (const user of users.rows) {
+      await pool.query(
+        'INSERT INTO notifications (userId, type, content, relatedId, notification_id) VALUES ($1, $2, $3, $4, $5)',
+        [user.id, notifType, notifContent, annId, 'ann_' + annId + '_' + user.id]
+      );
+    }
+
+    ok(res, { id: annId, pushed_count: users.rows.length }, '公告发布成功，已推送至' + users.rows.length + '名用户');
+  } catch(e) { serverError(res, '发布公告失败', e); }
+});
+
+// 删除公告（管理员）
+app.delete('/api/admin/announcements/:id', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM announcements WHERE id=$1', [id]);
+    ok(res, null, '公告删除成功');
+  } catch(e) { serverError(res, '删除公告失败', e); }
+});
+
+// 获取公告列表（用户端 - 只返回已推送的）
+app.get('/api/announcements', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, title, content, created_at FROM announcements WHERE pushed=true ORDER BY created_at DESC LIMIT 20'
+    );
+    ok(res, { announcements: result.rows });
+  } catch(e) { serverError(res, '获取公告失败', e); }
 });
 
 async function sendNotification(userId, type, content, relatedId = null) {

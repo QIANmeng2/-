@@ -2093,7 +2093,26 @@ async function checkNotifications() {
   const existing = document.getElementById('notifPanel');
   if (existing) { existing.remove(); return; }
   const data = await api('/api/notifications', { skipCache: true });
+  const annData = await api('/api/announcements', { skipCache: true }).catch(() => ({ announcements: [] }));
   let html = '<div style="padding:14px 0;">';
+
+  // 公告模块
+  const announcements = annData.announcements || [];
+  if (announcements.length > 0) {
+    html += '<div style="margin-bottom:16px;">';
+    html += '<div style="font-size:0.78rem;font-weight:600;color:var(--accent);margin-bottom:10px;display:flex;align-items:center;gap:6px;">📢 平台公告</div>';
+    announcements.slice(0, 3).forEach(a => {
+      html += `<div class="ann-item" data-id="${a.id}" style="padding:12px;background:linear-gradient(135deg,rgba(245,158,11,.08),rgba(245,158,11,.03));border:1px solid rgba(245,158,11,.2);border-radius:var(--radius-md);margin-bottom:8px;cursor:pointer;">
+        <div style="font-weight:600;color:var(--text-primary);font-size:0.88rem;margin-bottom:4px;">${escapeHtml(a.title)}</div>
+        <div class="ann-preview" style="font-size:0.78rem;color:var(--text-muted);">${escapeHtml(a.content.substring(0, 60))}${a.content.length > 60 ? '…' : ''}</div>
+        <div class="ann-full" style="display:none;font-size:0.82rem;color:var(--text-secondary);white-space:pre-wrap;margin-top:8px;line-height:1.6;">${escapeHtml(a.content)}</div>
+        <small style="color:var(--text-muted);font-size:0.72rem;">${escapeHtml(new Date(a.created_at).toLocaleDateString('zh-CN'))}</small>
+      </div>`;
+    });
+    html += '</div>';
+    html += '<div style="border-top:1px solid var(--border-color);margin-bottom:12px;"></div>';
+  }
+
   if (data.notifications.length === 0) html += '<p style="text-align:center;color:var(--text-muted);padding:20px 0;">暂无通知</p>';
   else {
     data.notifications.forEach(n => {
@@ -2121,6 +2140,20 @@ async function checkNotifications() {
   panel.id = 'notifPanel';
   panel.style.cssText = 'position:fixed;top:80px;right:16px;width:340px;max-height:450px;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:var(--radius-xl);box-shadow:var(--shadow-lg);z-index:150;padding:20px;overflow-y:auto;';
   panel.innerHTML = `<div style="font-weight:700;font-size:1rem;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;color:var(--text-primary);">消息通知 <span id="notifPanelClose" style="cursor:pointer;font-size:1.4rem;color:var(--text-muted);width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-sm);transition:all 0.2s;">&times;</span></div>${html}`;
+  // 公告点击展开/收起
+  panel.querySelectorAll('.ann-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const preview = item.querySelector('.ann-preview');
+      const full = item.querySelector('.ann-full');
+      if (full.style.display === 'none') {
+        preview.style.display = 'none';
+        full.style.display = 'block';
+      } else {
+        preview.style.display = 'block';
+        full.style.display = 'none';
+      }
+    });
+  });
   // 事件代理：统一处理按钮点击，避免内联 onclick
   panel.addEventListener('click', (e) => {
     const btn = e.target.closest('.notif-action');
@@ -2689,6 +2722,7 @@ async function renderAdminPanel() {
         <button class="recruit-tab ${currentAdminSubTab==='clubs'?'active':''}" onclick="switchAdminSubTab('clubs')">俱乐部管理</button>
         <button class="recruit-tab ${currentAdminSubTab==='coins'?'active':''}" onclick="switchAdminSubTab('coins')">梦币管理</button>
         <button class="recruit-tab ${currentAdminSubTab==='ratios'?'active':''}" onclick="switchAdminSubTab('ratios')">交易比例</button>
+        <button class="recruit-tab ${currentAdminSubTab==='announcements'?'active':''}" onclick="switchAdminSubTab('announcements')">发布公告</button>
       </div>
       <div id="adminSubContent"><div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div></div>
     </div>
@@ -2723,6 +2757,7 @@ async function loadAdminSubTab() {
       case 'clubs': await loadAdminClubs(container); break;
       case 'coins': await loadAdminCoins(container); break;
       case 'ratios': await loadAdminRatios(container); break;
+      case 'announcements': await loadAdminAnnouncements(container); break;
     }
   } catch (err) {
     container.innerHTML = `<p style="color:var(--danger);">加载失败：${err.message}</p>`;
@@ -3505,6 +3540,91 @@ async function loadAdminRatios(container) {
     });
   } catch(e) {
     container.innerHTML = `<p style="color:var(--danger);">加载失败：${escapeHtml(e.message)}</p>`;
+  }
+}
+
+async function loadAdminAnnouncements(container) {
+  try {
+    const data = await api('/api/admin/announcements');
+    const announcements = data.announcements || [];
+
+    container.innerHTML = `
+      <div style="max-width:700px;">
+        <h3 style="margin-bottom:16px;">发布公告</h3>
+
+        <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius);padding:20px;margin-bottom:24px;">
+          <h4 style="margin-bottom:16px;">📢 撰写新公告</h4>
+          <div style="margin-bottom:12px;">
+            <label style="font-size:0.82rem;color:var(--text-muted);display:block;margin-bottom:6px;">公告标题</label>
+            <input type="text" id="ann_title" class="form-input" placeholder="请输入公告标题" style="width:100%;">
+          </div>
+          <div style="margin-bottom:16px;">
+            <label style="font-size:0.82rem;color:var(--text-muted);display:block;margin-bottom:6px;">公告内容</label>
+            <textarea id="ann_content" class="form-input" rows="4" placeholder="请输入公告内容" style="width:100%;resize:vertical;"></textarea>
+          </div>
+          <button class="btn btn-primary" id="publish_ann_btn" onclick="publishAnnouncement()">
+            🚀 发布公告
+          </button>
+        </div>
+
+        <h4 style="margin-bottom:12px;">📋 历史公告</h4>
+        ${announcements.length === 0 ? '<p style="color:var(--text-muted);">暂无公告记录</p>' : ''}
+        ${announcements.map(a => `
+          <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius);padding:16px;margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">
+              <div>
+                <span style="font-weight:600;color:var(--text-primary);font-size:0.95rem;">${escapeHtml(a.title)}</span>
+                ${a.pushed ? '<span style="margin-left:8px;font-size:0.72rem;background:var(--success);color:#fff;padding:2px 6px;border-radius:4px;">已推送</span>' : '<span style="margin-left:8px;font-size:0.72rem;background:var(--warning);color:#000;padding:2px 6px;border-radius:4px;">未推送</span>'}
+              </div>
+              <button class="btn btn-sm btn-danger" onclick="deleteAnnouncement(${a.id})" style="padding:4px 10px;">删除</button>
+            </div>
+            <p style="font-size:0.82rem;color:var(--text-secondary);margin:0 0 8px 0;white-space:pre-wrap;">${escapeHtml(a.content)}</p>
+            <div style="font-size:0.72rem;color:var(--text-muted);">
+              发布于：${new Date(a.created_at).toLocaleString('zh-CN')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch(e) {
+    container.innerHTML = `<p style="color:var(--danger);">加载失败：${escapeHtml(e.message)}</p>`;
+  }
+}
+
+async function publishAnnouncement() {
+  const title = document.getElementById('ann_title').value.trim();
+  const content = document.getElementById('ann_content').value.trim();
+  if (!title || !content) {
+    showToast('请填写标题和内容', 'error');
+    return;
+  }
+  const btn = document.getElementById('publish_ann_btn');
+  btn.disabled = true;
+  btn.textContent = '发布中…';
+  try {
+    const result = await api('/api/admin/announcements', {
+      method: 'POST',
+      body: JSON.stringify({ title, content })
+    });
+    showToast(result.message || '公告发布成功', 'success');
+    document.getElementById('ann_title').value = '';
+    document.getElementById('ann_content').value = '';
+    await loadAdminAnnouncements(document.getElementById('adminSubContent'));
+  } catch(e) {
+    showToast(e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = '🚀 发布公告';
+  }
+}
+
+async function deleteAnnouncement(id) {
+  if (!confirm('确定要删除这条公告吗？')) return;
+  try {
+    await api('/api/admin/announcements/' + id, { method: 'DELETE' });
+    showToast('公告已删除', 'success');
+    await loadAdminAnnouncements(document.getElementById('adminSubContent'));
+  } catch(e) {
+    showToast(e.message, 'error');
   }
 }
 
