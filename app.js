@@ -2121,7 +2121,7 @@ async function renderClubDetail(clubId) {
               <span style="font-size:0.68rem;color:var(--text-muted);">${new Date(t.created_at).toLocaleDateString('zh-CN')}</span>
             </div>
           </div>
-        `).join('')}
+        `}).join('')}
       </div>`;
     content.innerHTML = html;
   } catch(e) { content.innerHTML = `<div class="card"><p>加载失败：${e.message}</p></div>`; }
