@@ -12,10 +12,10 @@ module.exports = function(app, pool, authMiddleware, ok, badRequest, serverError
           SELECT 
             p.id,
             p.player_score,
-            p.player_value,
+            p.market_value AS player_value,
             u.username,
             u.dream_coins,
-            c.club_name
+            c.name AS club_name
           FROM players p
           LEFT JOIN users u ON p.user_id = u.id
           LEFT JOIN clubs c ON p.club_id = c.id
@@ -35,11 +35,11 @@ module.exports = function(app, pool, authMiddleware, ok, badRequest, serverError
         const sql = `
           SELECT 
             c.id,
-            c.club_name,
+            c.name AS club_name,
             c.club_score,
             u.username as boss_name
           FROM clubs c
-          LEFT JOIN users u ON c.boss_id = u.id
+          LEFT JOIN users u ON c.owner_id = u.id
           ORDER BY c.club_score DESC
           LIMIT $1`;
         const { rows } = await pool.query(sql, [parseInt(limit)]);
