@@ -39,7 +39,8 @@ function serverError(res, message, error) {
 
 
 
-// 更新选手player_score：0.5 * market_value + 0.5 * dream_coins
+// 更新选手player_score：0.5 * market_value + 0.5 * (dream_coins / 10000)
+// 单位统一为"万"，即：身价(万)*0.5 + 梦币(万)*0.5
 async function updatePlayerScore(userId) {
   try {
     const result = await pool.query(`
@@ -50,9 +51,9 @@ async function updatePlayerScore(userId) {
     `, [userId]);
     if (result.rows.length === 0) return;
     const { market_value, dream_coins } = result.rows[0];
-    const playerValue = market_value || 0;
-    const dreamcoinValue = dream_coins || 0;
-    const playerScore = Math.round(0.5 * playerValue + 0.5 * dreamcoinValue);
+    const mv = market_value || 0;
+    const dc = (dream_coins || 0) / 10000; // 梦币转万单位
+    const playerScore = Math.round(0.5 * mv + 0.5 * dc);
     await pool.query('UPDATE players SET player_score = $1 WHERE user_id = $2', [playerScore, userId]);
     const playerClub = await pool.query('SELECT club_id FROM players WHERE user_id = $1', [userId]);
     if (playerClub.rows.length > 0 && playerClub.rows[0].club_id) {
@@ -2138,6 +2139,8 @@ app.post('/api/club/:id/player/:userId/update', authMiddleware, async (req, res)
     if (updates.length === 0) return badRequest(res, '无有效更新字段');
     params.push(userId);
     await pool.query(`UPDATE players SET ${updates.join(', ')} WHERE user_id = $${paramIdx}`, params);
+    // 更新榜单分数
+    await updatePlayerScore(userId);
     ok(res, {message: '选手信息已更新' });
   } catch(e) { console.error(e); serverError(res, '更新失败'); }
 });
@@ -2158,6 +2161,10 @@ app.post('/api/player/:userId/buyout', authMiddleware, async (req, res) => {
     await pool.query('UPDATE players SET club_id=NULL, buyout_fee=$1 WHERE user_id=$2', [buyout, req.userId]);
     await pool.query('DELETE FROM club_members WHERE club_id=$1 AND user_id=$2', [oldClubId, req.userId]);
     await pool.query('DELETE FROM club_rosters WHERE player_user_id=$1', [req.userId]);
+    // 更新榜单分数
+    await updatePlayerScore(req.userId);
+    // 更新原俱乐部分数
+    if (oldClubId) await updateClubScore(oldClubId);
     ok(res, {buyout });
   } catch(e) { console.error(e); serverError(res, '解约失败'); }
 });
