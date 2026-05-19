@@ -6,6 +6,7 @@ let currentTab = 'square';
 let authMode = 'login';
 let unreadNotifs = 0;
 let currentMatchId = null;
+let currentLeaderboardTab = 'player';
 
 const LANES = ['对抗路', '打野', '中路', '发育路', '游走'];
 const LANE_ICONS = { '对抗路': '对抗', '打野': '打野', '中路': '中路', '发育路': '发育', '游走': '游走' };
@@ -2178,6 +2179,92 @@ async function acceptTeamInvite(teamId) {
   } catch(e) { showToast(e.message, 'error'); }
 }
 
+// ==================== 榜单 ====================
+async function renderLeaderboardPanel() {
+  const content = document.getElementById('tabContent');
+  content.innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
+  try {
+    const type = currentLeaderboardTab;
+    const data = await api('/api/leaderboard?type=' + type + '&limit=50');
+    const list = (data.data || data).list || [];
+
+    let html = '<div class="card">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px;">';
+    html += '<h3 style="margin:0;">' + (type === 'player' ? '选手榜单' : '俱乐部榜单') + '</h3>';
+    html += '<div style="display:flex;gap:8px;">';
+    html += `<button class="btn btn-sm ${type==='player'?'btn-primary':'btn-secondary'}" onclick="switchLeaderboardTab('player')">选手榜</button>`;
+    html += `<button class="btn btn-sm ${type==='club'?'btn-primary':'btn-secondary'}" onclick="switchLeaderboardTab('club')">俱乐部榜</button>`;
+    html += '</div></div>';
+
+    if (list.length === 0) {
+      html += '<p style="color:var(--text-muted);text-align:center;padding:24px 0;">暂无数据</p>';
+    } else {
+      if (type === 'player') {
+        html += renderPlayerLeaderboard(list);
+      } else {
+        html += renderClubLeaderboard(list);
+      }
+    }
+    html += '</div>';
+    content.innerHTML = html;
+  } catch(e) { content.innerHTML = `<div class="card"><p>加载失败：${e.message}</p><button class="btn btn-sm btn-primary" onclick="renderLeaderboardPanel()">重试</button></div>`; }
+}
+
+function renderPlayerLeaderboard(list) {
+  return list.map((item, idx) => {
+    const rank = item.rank || idx + 1;
+    let rankBadge = '';
+    if (rank === 1) { rankBadge = '<span style="display:inline-block;width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#FFD700,#FFA500);color:#1a1a2e;font-weight:700;text-align:center;line-height:28px;font-size:0.85rem;">1</span>'; }
+    else if (rank === 2) { rankBadge = '<span style="display:inline-block;width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#C0C0C0,#A0A0A0);color:#1a1a2e;font-weight:700;text-align:center;line-height:28px;font-size:0.85rem;">2</span>'; }
+    else if (rank === 3) { rankBadge = '<span style="display:inline-block;width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#CD7F32,#B87333);color:#1a1a2e;font-weight:700;text-align:center;line-height:28px;font-size:0.85rem;">3</span>'; }
+    else { rankBadge = `<span style="display:inline-block;width:28px;height:28px;border-radius:50%;background:var(--surface-2);color:var(--text-secondary);font-weight:600;text-align:center;line-height:28px;font-size:0.85rem;">${rank}</span>`; }
+
+    return `
+      <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--surface-2);${rank<=3?'background:rgba(255,215,0,0.03);margin:0 -16px;padding:12px 16px;':''}">
+        <div style="flex-shrink:0;">${rankBadge}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;color:var(--text-primary);font-size:0.95rem;">${escapeHtml(item.username || '未知选手')}</div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">${item.club_name ? escapeHtml(item.club_name) : '自由选手'}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-weight:700;color:var(--accent);font-size:1.05rem;">${item.player_score || 0}</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">身价 ${item.player_value || 0}万 · 梦币 ${(item.dreamcoin_value || 0).toLocaleString()}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderClubLeaderboard(list) {
+  return list.map((item, idx) => {
+    const rank = item.rank || idx + 1;
+    let rankBadge = '';
+    if (rank === 1) { rankBadge = '<span style="display:inline-block;width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#FFD700,#FFA500);color:#1a1a2e;font-weight:700;text-align:center;line-height:28px;font-size:0.85rem;">1</span>'; }
+    else if (rank === 2) { rankBadge = '<span style="display:inline-block;width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#C0C0C0,#A0A0A0);color:#1a1a2e;font-weight:700;text-align:center;line-height:28px;font-size:0.85rem;">2</span>'; }
+    else if (rank === 3) { rankBadge = '<span style="display:inline-block;width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#CD7F32,#B87333);color:#1a1a2e;font-weight:700;text-align:center;line-height:28px;font-size:0.85rem;">3</span>'; }
+    else { rankBadge = `<span style="display:inline-block;width:28px;height:28px;border-radius:50%;background:var(--surface-2);color:var(--text-secondary);font-weight:600;text-align:center;line-height:28px;font-size:0.85rem;">${rank}</span>`; }
+
+    return `
+      <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--surface-2);${rank<=3?'background:rgba(255,215,0,0.03);margin:0 -16px;padding:12px 16px;':''}">
+        <div style="flex-shrink:0;">${rankBadge}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;color:var(--text-primary);font-size:0.95rem;">${escapeHtml(item.club_name || '未知俱乐部')}</div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">老板：${escapeHtml(item.boss_name || '未知')}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-weight:700;color:var(--accent);font-size:1.05rem;">${item.club_score || 0}</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">榜单分数</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function switchLeaderboardTab(tab) {
+  currentLeaderboardTab = tab;
+  await renderLeaderboardPanel();
+}
+
 // ---------- Tab 切换 ----------
 async function switchTab(tab) {
   currentTab = tab; updateUI();
@@ -2601,6 +2688,7 @@ async function renderAdminPanel() {
         <button class="recruit-tab ${currentAdminSubTab==='players'?'active':''}" onclick="switchAdminSubTab('players')">选手审核</button>
         <button class="recruit-tab ${currentAdminSubTab==='clubs'?'active':''}" onclick="switchAdminSubTab('clubs')">俱乐部管理</button>
         <button class="recruit-tab ${currentAdminSubTab==='coins'?'active':''}" onclick="switchAdminSubTab('coins')">梦币管理</button>
+        <button class="recruit-tab ${currentAdminSubTab==='ratios'?'active':''}" onclick="switchAdminSubTab('ratios')">交易比例</button>
       </div>
       <div id="adminSubContent"><div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div></div>
     </div>
@@ -2614,7 +2702,7 @@ async function switchAdminSubTab(tab) {
     t.classList.toggle('active', t.textContent.includes({
       dashboard: '仪表盘', competitions: '赛事管理',
       users: '用户管理', teams: '队伍管理', logs: '操作日志', security: '权限安全',
-      players: '选手审核', clubs: '俱乐部管理'
+      players: '选手审核', clubs: '俱乐部管理', coins: '梦币管理', ratios: '交易比例'
     }[tab]));
   });
   document.getElementById('adminSubContent').innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
@@ -2634,6 +2722,7 @@ async function loadAdminSubTab() {
       case 'players': await loadAdminPlayers(container); break;
       case 'clubs': await loadAdminClubs(container); break;
       case 'coins': await loadAdminCoins(container); break;
+      case 'ratios': await loadAdminRatios(container); break;
     }
   } catch (err) {
     container.innerHTML = `<p style="color:var(--danger);">加载失败：${err.message}</p>`;
@@ -3346,6 +3435,115 @@ async function adminDeleteUser(id) {
   await api(`/api/admin/users/${id}`, { method:'DELETE' });
   showToast('已删除','info');
   loadAdminSubTab();
+}
+
+// ==================== 管理员 - 交易比例管理 ====================
+async function loadAdminRatios(container) {
+  try {
+    const data = await api('/api/admin/transaction-ratios');
+    const ratios = data.ratios || {};
+    const transfer = ratios.transfer || { player_ratio: 10, club_ratio: 40, admin_ratio: 50 };
+    const purchase = ratios.purchase || { player_ratio: 10, club_ratio: 0, admin_ratio: 90 };
+
+    container.innerHTML = `
+      <div style="max-width:600px;">
+        <h3 style="margin-bottom:16px;">交易比例配置</h3>
+        <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:20px;">
+          设置选手交易时差价梦币的分配比例。比例总和必须等于100%。
+        </p>
+
+        <div style="display:grid;gap:24px;">
+          ${renderRatioCard('transfer', '转会交易', transfer)}
+          ${renderRatioCard('purchase', '采买选手', purchase)}
+        </div>
+      </div>
+    `;
+
+    // 绑定保存按钮事件
+    document.querySelectorAll('.ratio-save-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const type = btn.dataset.type;
+        const player_ratio = parseFloat(document.getElementById(`player_ratio_${type}`).value) || 0;
+        const club_ratio = parseFloat(document.getElementById(`club_ratio_${type}`).value) || 0;
+        const admin_ratio = parseFloat(document.getElementById(`admin_ratio_${type}`).value) || 0;
+        const total = player_ratio + club_ratio + admin_ratio;
+
+        if (Math.abs(total - 100) > 0.01) {
+          showToast(`比例总和必须为100%，当前：${total}%`, 'error');
+          return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = '保存中…';
+        try {
+          await api('/api/admin/transaction-ratios', {
+            method: 'PUT',
+            body: JSON.stringify({ type, player_ratio, club_ratio, admin_ratio })
+          });
+          showToast('比例更新成功', 'success');
+          loadAdminRatios(container);
+        } catch(e) {
+          showToast(e.message, 'error');
+          btn.disabled = false;
+          btn.textContent = '保存';
+        }
+      });
+    });
+
+    // 绑定实时计算总和
+    document.querySelectorAll('.ratio-input').forEach(input => {
+      input.addEventListener('input', () => {
+        const type = input.dataset.type;
+        const p = parseFloat(document.getElementById(`player_ratio_${type}`).value) || 0;
+        const c = parseFloat(document.getElementById(`club_ratio_${type}`).value) || 0;
+        const a = parseFloat(document.getElementById(`admin_ratio_${type}`).value) || 0;
+        const total = p + c + a;
+        const totalEl = document.getElementById(`total_${type}`);
+        totalEl.textContent = total.toFixed(2) + '%';
+        totalEl.style.color = Math.abs(total - 100) < 0.01 ? 'var(--success)' : 'var(--danger)';
+      });
+    });
+  } catch(e) {
+    container.innerHTML = `<p style="color:var(--danger);">加载失败：${escapeHtml(e.message)}</p>`;
+  }
+}
+
+function renderRatioCard(type, label, ratio) {
+  return `
+    <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius);padding:20px;">
+      <h4 style="margin-bottom:16px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:1rem;">${type === 'transfer' ? '🔄' : '💰'}</span>
+        ${escapeHtml(label)}
+      </h4>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end;">
+        <div>
+          <label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:4px;">选手比例 (%)</label>
+          <input type="number" id="player_ratio_${type}" class="ratio-input form-input" data-type="${type}"
+            value="${ratio.player_ratio}" min="0" max="100" step="0.5" style="width:100%;">
+        </div>
+        <div>
+          <label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:4px;">俱乐部比例 (%)</label>
+          <input type="number" id="club_ratio_${type}" class="ratio-input form-input" data-type="${type}"
+            value="${ratio.club_ratio}" min="0" max="100" step="0.5" style="width:100%;">
+        </div>
+        <div>
+          <label style="font-size:0.72rem;color:var(--text-muted);display:block;margin-bottom:4px;">平台比例 (%)</label>
+          <input type="number" id="admin_ratio_${type}" class="ratio-input form-input" data-type="${type}"
+            value="${ratio.admin_ratio}" min="0" max="100" step="0.5" style="width:100%;">
+        </div>
+        <button class="ratio-save-btn btn btn-primary btn-sm" data-type="${type}" style="white-space:nowrap;">保存</button>
+      </div>
+      <div style="margin-top:12px;display:flex;justify-content:space-between;font-size:0.8rem;">
+        <span style="color:var(--text-muted);">总和：<span id="total_${type}" style="font-weight:600;">${(ratio.player_ratio + ratio.club_ratio + ratio.admin_ratio).toFixed(2)}%</span></span>
+        <span id="hint_${type}" style="color:var(--text-muted);"></span>
+      </div>
+      <p style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">
+        ${type === 'transfer'
+          ? '转会交易：选手从A俱乐部转会到B俱乐部，原俱乐部获得分成'
+          : '采买选手：直接购买选手（不涉及俱乐部间的转会流程）'}
+      </p>
+    </div>
+  `;
 }
 
 // ==================== 管理员 - 梦币管理 ====================
