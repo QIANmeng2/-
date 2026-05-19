@@ -8,6 +8,111 @@ let unreadNotifs = 0;
 let currentMatchId = null;
 let currentLeaderboardTab = 'player';
 
+// ====== Socket.IO 聊天客户端 ======
+let chatSocket = null;
+let chatSocketConnected = false;
+let chatCurrentType = 'public';
+let chatCurrentTarget = null;
+let chatMessageCallbacks = [];
+let chatUnreadCounts = { public: 0, private: 0, team: 0, club: 0 };
+
+function initChatSocket() {
+  if (chatSocket) return;
+  try {
+    chatSocket = io(API_BASE, {
+      path: '/socket.io',
+      transports: ['polling', 'websocket'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5
+    });
+
+    chatSocket.on('connect', () => {
+      console.log('[Chat] Socket.IO 已连接');
+      chatSocketConnected = true;
+      if (authToken) {
+        chatSocket.emit('authenticate', authToken);
+      }
+      // 更新聊天图标状态
+      updateChatIconStatus();
+    });
+
+    chatSocket.on('authenticated', (data) => {
+      console.log('[Chat] 已认证:', data.userId);
+    });
+
+    chatSocket.on('auth_error', (data) => {
+      console.error('[Chat] 认证失败:', data.message);
+    });
+
+    chatSocket.on('new_message', (msg) => {
+      console.log('[Chat] 新消息:', msg);
+      // 通知所有监听器
+      chatMessageCallbacks.forEach(cb => cb(msg));
+      // 更新未读数
+      if (msg.type === chatCurrentType) {
+        // 当前聊天窗口有新消息，可能需要刷新
+      } else {
+        chatUnreadCounts[msg.type] = (chatUnreadCounts[msg.type] || 0) + 1;
+        updateChatBadge();
+      }
+    });
+
+    chatSocket.on('disconnect', () => {
+      console.log('[Chat] Socket.IO 断开连接');
+      chatSocketConnected = false;
+      updateChatIconStatus();
+    });
+
+    chatSocket.on('reconnect', () => {
+      console.log('[Chat] Socket.IO 重连');
+      chatSocketConnected = true;
+      if (authToken) {
+        chatSocket.emit('authenticate', authToken);
+      }
+      updateChatIconStatus();
+    });
+  } catch (e) {
+    console.error('[Chat] Socket.IO 初始化失败:', e);
+  }
+}
+
+function updateChatIconStatus() {
+  const icon = document.getElementById('chatStatusIcon');
+  if (icon) {
+    icon.style.background = chatSocketConnected ? '#10b981' : '#6b7280';
+    icon.title = chatSocketConnected ? '在线' : '离线';
+  }
+}
+
+function updateChatBadge() {
+  const badge = document.getElementById('chatUnreadBadge');
+  if (badge) {
+    const total = Object.values(chatUnreadCounts).reduce((a, b) => a + b, 0);
+    if (total > 0) {
+      badge.style.display = 'inline-flex';
+      badge.textContent = total > 99 ? '99+' : total;
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+}
+
+function joinChatRoom(type, targetId) {
+  if (!chatSocket || !chatSocketConnected) return;
+  chatSocket.emit('leave_room', { type: chatCurrentType, team_id: chatCurrentTarget?.team_id, club_id: chatCurrentTarget?.club_id });
+  chatCurrentType = type;
+  chatCurrentTarget = targetId;
+  chatSocket.emit('join_room', { type, team_id: targetId?.team_id, club_id: targetId?.club_id });
+}
+
+function onChatMessage(callback) {
+  chatMessageCallbacks.push(callback);
+  return () => {
+    chatMessageCallbacks = chatMessageCallbacks.filter(cb => cb !== callback);
+  };
+}
+
 const LANES = ['对抗路', '打野', '中路', '发育路', '游走'];
 const LANE_ICONS = { '对抗路': '对抗', '打野': '打野', '中路': '中路', '发育路': '发育', '游走': '游走' };
 
@@ -83,6 +188,7 @@ async function fetchUserInfo() {
   try { const data = await api('/api/auth/me'); if (data && data.user) currentUser = data.user; } catch { logout(); }
   updateUI();
   checkNotifications();
+  initChatSocket(); // 初始化聊天 Socket
 }
 function openAuthModal(mode) {
   authMode = mode;
@@ -148,7 +254,7 @@ function updateUI() {
       sep.parentNode.insertBefore(coinDisplay, sep.nextSibling);
     }
     coinDisplay.textContent = '🪙 ' + dreamCoins.toLocaleString();
-    document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="market"], #tabNav .tab-btn[data-tab="club"]').forEach(b => b.style.display = '');
+    document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="market"], #tabNav .tab-btn[data-tab="club"], #tabNav .tab-btn[data-tab="chat"]').forEach(b => b.style.display = '');
     ui('notificationBell').style.display = 'flex';
     if (currentUser.id === 'mp4hmya7ad15v6') { ui('tabAdmin').style.display = ''; }
     ui('tabCompetition').style.display = '';
@@ -2329,6 +2435,327 @@ async function switchLeaderboardTab(tab) {
   await renderLeaderboardPanel();
 }
 
+// ==================== 在线聊天系统 ====================
+let chatPanelData = {
+  currentChatType: 'public',
+  currentChatTarget: null,
+  myTeams: [],
+  myClubs: [],
+  contacts: []
+};
+
+async function renderChatPanel() {
+  const content = document.getElementById('tabContent');
+  const userId = currentUser?.id;
+
+  // 加载数据
+  try {
+    const [teamsData, clubsData, contactsData] = await Promise.all([
+      api('/api/chat/my-teams', { skipCache: true }).catch(() => ({ teams: [] })),
+      api('/api/chat/my-clubs', { skipCache: true }).catch(() => ({ clubs: [] })),
+      api('/api/chat/contacts', { skipCache: true }).catch(() => ({ contacts: [] }))
+    ]);
+    chatPanelData.myTeams = teamsData.teams || [];
+    chatPanelData.myClubs = clubsData.clubs || [];
+    chatPanelData.contacts = contactsData.contacts || [];
+  } catch (e) {
+    console.error('[Chat] 加载数据失败:', e);
+  }
+
+  content.innerHTML = `
+    <div class="chat-container">
+      <div class="chat-sidebar">
+        <div class="chat-type-tabs">
+          <button class="chat-type-btn active" data-type="public" onclick="switchChatType('public')">
+            <span class="chat-type-icon">📢</span>
+            <span>公聊</span>
+          </button>
+          <button class="chat-type-btn" data-type="private" onclick="switchChatType('private')">
+            <span class="chat-type-icon">💬</span>
+            <span>私聊</span>
+            <span class="chat-badge" id="chat-private-badge" style="display:none;">0</span>
+          </button>
+          <button class="chat-type-btn" data-type="team" onclick="switchChatType('team')">
+            <span class="chat-type-icon">👥</span>
+            <span>队伍</span>
+          </button>
+          <button class="chat-type-btn" data-type="club" onclick="switchChatType('club')">
+            <span class="chat-type-icon">🏠</span>
+            <span>俱乐部</span>
+          </button>
+        </div>
+        <div class="chat-target-list" id="chatTargetList">
+          <div class="chat-loading">加载中...</div>
+        </div>
+      </div>
+      <div class="chat-main">
+        <div class="chat-header" id="chatHeader">
+          <span class="chat-status-dot" id="chatStatusIcon" style="background:#6b7280;width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;"></span>
+          <span id="chatHeaderTitle">公聊大厅</span>
+          <span id="chatHeaderSub" style="font-size:0.75rem;color:var(--text-muted);margin-left:8px;"></span>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+          <div class="chat-loading">加载消息中...</div>
+        </div>
+        <div class="chat-input-area">
+          <input type="text" class="chat-input" id="chatInput" placeholder="输入消息..." onkeydown="handleChatKeydown(event)">
+          <button class="btn btn-primary chat-send-btn" onclick="sendChatMessage()">发送</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // 初始化聊天Socket
+  initChatSocket();
+
+  // 注册消息监听
+  const unsubscribe = onChatMessage((msg) => {
+    if (msg.type === chatPanelData.currentChatType) {
+      appendChatMessage(msg);
+      scrollChatToBottom();
+    }
+  });
+
+  // 切换到公聊
+  await switchChatType('public');
+
+  // 清理监听器
+  const cleanup = () => {
+    unsubscribe();
+    chatMessageCallbacks = chatMessageCallbacks.filter(cb => cb !== unsubscribe);
+  };
+}
+
+async function switchChatType(type) {
+  chatPanelData.currentChatType = type;
+
+  // 更新按钮状态
+  document.querySelectorAll('.chat-type-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.type === type);
+  });
+
+  // 离开旧的聊天室
+  if (chatSocketConnected) {
+    const oldTarget = chatPanelData.currentChatTarget;
+    chatSocket.emit('leave_room', {
+      type: type,
+      team_id: oldTarget?.team_id,
+      club_id: oldTarget?.club_id
+    });
+  }
+
+  const targetList = document.getElementById('chatTargetList');
+  const headerTitle = document.getElementById('chatHeaderTitle');
+  const headerSub = document.getElementById('chatHeaderSub');
+  chatPanelData.currentChatTarget = null;
+
+  if (type === 'public') {
+    headerTitle.textContent = '公聊大厅';
+    headerSub.textContent = '所有人可见';
+    targetList.innerHTML = '<div class="chat-target-item active" onclick="selectChatTarget(null)"><span>🌐</span><span>公聊大厅</span></div>';
+    joinChatRoom('public', null);
+    await loadChatMessages('public', null, null, null);
+  } else if (type === 'private') {
+    headerTitle.textContent = '私聊';
+    headerSub.textContent = '选择联系人';
+    await renderPrivateTargets(targetList);
+    document.getElementById('chatMessages').innerHTML = '<div class="chat-empty">请选择一个联系人开始私聊</div>';
+  } else if (type === 'team') {
+    headerTitle.textContent = '队伍聊天';
+    headerSub.textContent = '选择队伍';
+    await renderTeamTargets(targetList);
+    document.getElementById('chatMessages').innerHTML = '<div class="chat-empty">请选择一个队伍开始聊天</div>';
+  } else if (type === 'club') {
+    headerTitle.textContent = '俱乐部聊天';
+    headerSub.textContent = '选择俱乐部';
+    await renderClubTargets(targetList);
+    document.getElementById('chatMessages').innerHTML = '<div class="chat-empty">请选择一个俱乐部开始聊天</div>';
+  }
+
+  updateChatBadge();
+}
+
+async function renderPrivateTargets(container) {
+  const contacts = chatPanelData.contacts;
+  if (contacts.length === 0) {
+    container.innerHTML = '<div class="chat-empty">暂无私聊记录</div>';
+    return;
+  }
+  container.innerHTML = contacts.map(c => `
+    <div class="chat-target-item" data-id="${c.id}" onclick="selectChatTarget({ receiver_id: '${c.id}', name: '${escapeHtml(c.coachname || c.username || '未知')}' })">
+      <span class="chat-avatar">${(c.coachname || c.username || '?')[0]}</span>
+      <span class="chat-target-name">${escapeHtml(c.coachname || c.username || '未知')}</span>
+      <span class="chat-target-team">${escapeHtml(c.teamname || '')}</span>
+    </div>
+  `).join('');
+}
+
+async function renderTeamTargets(container) {
+  const teams = chatPanelData.myTeams;
+  if (teams.length === 0) {
+    container.innerHTML = '<div class="chat-empty">你还没有加入任何队伍</div>';
+    return;
+  }
+  container.innerHTML = teams.map(t => `
+    <div class="chat-target-item" data-id="${t.id}" onclick="selectChatTarget({ team_id: '${t.id}', name: '${escapeHtml(t.name)}' })">
+      <span class="chat-avatar">👥</span>
+      <span class="chat-target-name">${escapeHtml(t.name)}</span>
+    </div>
+  `).join('');
+}
+
+async function renderClubTargets(container) {
+  const clubs = chatPanelData.myClubs;
+  if (clubs.length === 0) {
+    container.innerHTML = '<div class="chat-empty">你还没有加入任何俱乐部</div>';
+    return;
+  }
+  container.innerHTML = clubs.map(c => `
+    <div class="chat-target-item" data-id="${c.id}" onclick="selectChatTarget({ club_id: '${c.id}', name: '${escapeHtml(c.name)}' })">
+      <span class="chat-avatar">🏠</span>
+      <span class="chat-target-name">${escapeHtml(c.name)}</span>
+    </div>
+  `).join('');
+}
+
+async function selectChatTarget(target) {
+  const type = chatPanelData.currentChatType;
+  chatPanelData.currentChatTarget = target;
+
+  // 更新选中状态
+  document.querySelectorAll('.chat-target-item').forEach(item => {
+    item.classList.toggle('active', target && item.dataset.id === (target.receiver_id || target.team_id || target.club_id));
+  });
+
+  const headerTitle = document.getElementById('chatHeaderTitle');
+  const headerSub = document.getElementById('chatHeaderSub');
+
+  if (target) {
+    headerTitle.textContent = target.name;
+    headerSub.textContent = type === 'private' ? '私聊' : type === 'team' ? '队伍聊天' : '俱乐部聊天';
+  } else {
+    headerTitle.textContent = '公聊大厅';
+    headerSub.textContent = '所有人可见';
+  }
+
+  // 加入新聊天室
+  joinChatRoom(type, target);
+
+  // 加载消息
+  const params = {};
+  if (type === 'private') params.receiver_id = target.receiver_id;
+  else if (type === 'team') params.team_id = target.team_id;
+  else if (type === 'club') params.club_id = target.club_id;
+
+  await loadChatMessages(type, params.receiver_id, params.team_id, params.club_id);
+
+  // 清除未读
+  chatUnreadCounts[type] = 0;
+  updateChatBadge();
+}
+
+async function loadChatMessages(type, receiverId, teamId, clubId) {
+  const container = document.getElementById('chatMessages');
+  container.innerHTML = '<div class="chat-loading">加载消息中...</div>';
+
+  try {
+    let url = `/api/chat/fetch?type=${type}`;
+    if (receiverId) url += `&receiver_id=${receiverId}`;
+    if (teamId) url += `&team_id=${teamId}`;
+    if (clubId) url += `&club_id=${clubId}`;
+
+    const data = await api(url, { skipCache: true });
+    const messages = data.messages || [];
+
+    if (messages.length === 0) {
+      container.innerHTML = '<div class="chat-empty">暂无消息，来说点什么吧~</div>';
+      return;
+    }
+
+    container.innerHTML = messages.map(msg => createChatMessageHTML(msg)).join('');
+    scrollChatToBottom();
+  } catch (e) {
+    container.innerHTML = '<div class="chat-error">加载消息失败: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+function createChatMessageHTML(msg) {
+  const isMe = msg.sender_id === currentUser?.id;
+  const time = new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+
+  return `
+    <div class="chat-message ${isMe ? 'chat-message-me' : 'chat-message-other'}">
+      ${!isMe ? `<div class="chat-avatar">${(msg.sender_name || '?')[0]}</div>` : ''}
+      <div class="chat-message-content">
+        ${!isMe ? `<div class="chat-sender-name">${escapeHtml(msg.sender_name || '未知')}${msg.sender_team ? ' · ' + escapeHtml(msg.sender_team) : ''}</div>` : ''}
+        <div class="chat-bubble">${escapeHtml(msg.content)}</div>
+        <div class="chat-time">${time}</div>
+      </div>
+    </div>
+  `;
+}
+
+function appendChatMessage(msg) {
+  const container = document.getElementById('chatMessages');
+  const empty = container.querySelector('.chat-empty');
+  if (empty) empty.remove();
+
+  const html = createChatMessageHTML(msg);
+  container.insertAdjacentHTML('beforeend', html);
+}
+
+function scrollChatToBottom() {
+  const container = document.getElementById('chatMessages');
+  setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chatInput');
+  const content = input.value.trim();
+  if (!content) return;
+
+  input.value = '';
+  const type = chatPanelData.currentChatType;
+  const target = chatPanelData.currentChatTarget;
+
+  try {
+    const body = { type, content };
+    if (type === 'private' && target) body.receiver_id = target.receiver_id;
+    else if (type === 'team' && target) body.team_id = target.team_id;
+    else if (type === 'club' && target) body.club_id = target.club_id;
+
+    const data = await api('/api/chat/send', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    });
+
+    if (data && data.message) {
+      appendChatMessage(data.message);
+      scrollChatToBottom();
+    }
+  } catch (e) {
+    showToast('发送失败: ' + e.message, 'error');
+    input.value = content; // 恢复输入
+  }
+}
+
+function handleChatKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendChatMessage();
+  }
+}
+
+function updateChatBadge() {
+  const type = chatPanelData.currentChatType;
+  const badge = document.getElementById('chat-private-badge');
+  if (badge) {
+    const count = chatUnreadCounts.private || 0;
+    badge.style.display = count > 0 ? 'inline-flex' : 'none';
+    badge.textContent = count > 99 ? '99+' : count;
+  }
+}
+
 // ---------- Tab 切换 ----------
 async function switchTab(tab) {
   currentTab = tab; updateUI();
@@ -2343,14 +2770,15 @@ async function switchTab(tab) {
     else if (tab === 'market') await renderMarketPanel();
     else if (tab === 'club') await renderClubPanel();
     else if (tab === 'leaderboard') await renderLeaderboardPanel();
-  } catch {
+    else if (tab === 'chat') await renderChatPanel();
+  } catch (e) {
     content.innerHTML = '<div class="card"><p>加载失败</p><button class="btn btn-sm btn-primary" onclick="switchTab(\''+tab+'\')">重试</button></div>';
   }
 }
 
 document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => {
   const tab = b.dataset.tab;
-  if (['publish','profile','admin'].includes(tab) && !currentUser) { showToast('请先登录','info'); openAuthModal('login'); return; }
+  if (['publish','profile','admin','chat'].includes(tab) && !currentUser) { showToast('请先登录','info'); openAuthModal('login'); return; }
   switchTab(tab);
 }));
 

@@ -1,6 +1,8 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const http = require('http');
+const { Server } = require('socket.io');
 // deploy trigger
 const cors = require('cors');
 const { Pool } = require('pg');
@@ -326,6 +328,23 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
+    // 在线聊天消息
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id SERIAL PRIMARY KEY,
+        sender_id TEXT NOT NULL,
+        receiver_id TEXT DEFAULT NULL,
+        team_id TEXT DEFAULT NULL,
+        club_id INTEGER DEFAULT NULL,
+        type TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_chat_messages_type ON chat_messages(type)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_chat_messages_team ON chat_messages(team_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_chat_messages_club ON chat_messages(club_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_chat_messages_receiver ON chat_messages(receiver_id)`);
   } finally { client.release(); }
 }
 
@@ -442,6 +461,198 @@ app.get('/api/announcements', async (req, res) => {
     );
     ok(res, { announcements: result.rows });
   } catch(e) { serverError(res, '获取公告失败', e); }
+});
+
+// ====================== 在线聊天系统 ======================
+
+// 发送消息
+app.post('/api/chat/send', authMiddleware, async (req, res) => {
+  try {
+    const { receiver_id, team_id, club_id, type, content } = req.body;
+    if (!type || !content) return badRequest(res, '缺少必要参数');
+    if (!['public', 'private', 'team', 'club'].includes(type)) return badRequest(res, '无效的消息类型');
+    if (!content.trim()) return badRequest(res, '消息内容不能为空');
+    if (content.length > 1000) return badRequest(res, '消息内容过长（最多1000字）');
+
+    const sender_id = req.userId;
+    let rv = null, tid = null, cid = null;
+
+    if (type === 'private') {
+      if (!receiver_id) return badRequest(res, '私聊需要指定接收者');
+      rv = receiver_id;
+      // 验证私聊权限：只能发给已存在用户
+      const userCheck = await pool.query('SELECT id FROM users WHERE id = $1', [receiver_id]);
+      if (userCheck.rows.length === 0) return badRequest(res, '接收者不存在');
+    } else if (type === 'team') {
+      if (!team_id) return badRequest(res, '队伍聊天需要指定队伍ID');
+      tid = team_id;
+      // 验证是否为队伍成员
+      const memberCheck = await pool.query('SELECT 1 FROM team_members WHERE teamId=$1 AND userId=$2', [team_id, sender_id]);
+      if (memberCheck.rows.length === 0) return forbidden(res, '你不是该队伍成员');
+    } else if (type === 'club') {
+      if (!club_id) return badRequest(res, '俱乐部聊天需要指定俱乐部ID');
+      cid = club_id;
+      // 验证是否为俱乐部成员
+      const memberCheck = await pool.query('SELECT 1 FROM club_members WHERE club_id=$1 AND user_id=$2', [club_id, sender_id]);
+      if (memberCheck.rows.length === 0) return forbidden(res, '你不是该俱乐部成员');
+    }
+    // public 无需额外验证
+
+    const result = await pool.query(
+      `INSERT INTO chat_messages (sender_id, receiver_id, team_id, club_id, type, content) 
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, sender_id, receiver_id, team_id, club_id, type, content, created_at`,
+      [sender_id, rv, tid, cid, type, content.trim()]
+    );
+
+    const msg = result.rows[0];
+    // 获取发送者信息
+    const senderInfo = await pool.query('SELECT id, coachname, teamname FROM users WHERE id=$1', [sender_id]);
+    const sender = senderInfo.rows[0];
+    const messageData = {
+      id: msg.id,
+      sender_id: msg.sender_id,
+      sender_name: sender?.coachname || sender?.username || '未知',
+      sender_team: sender?.teamname || '',
+      receiver_id: msg.receiver_id,
+      team_id: msg.team_id,
+      club_id: msg.club_id,
+      type: msg.type,
+      content: msg.content,
+      created_at: msg.created_at
+    };
+
+    // Socket.IO 推送（通过全局 io 对象）
+    if (global._io) {
+      if (type === 'public') {
+        global._io.emit('new_message', messageData);
+      } else if (type === 'private') {
+        global._io.to('user_' + receiver_id).emit('new_message', messageData);
+        global._io.to('user_' + sender_id).emit('new_message', messageData);
+      } else if (type === 'team') {
+        global._io.to('team_' + team_id).emit('new_message', messageData);
+      } else if (type === 'club') {
+        global._io.to('club_' + club_id).emit('new_message', messageData);
+      }
+    }
+
+    ok(res, { message: messageData });
+  } catch(e) { serverError(res, '发送消息失败', e); }
+});
+
+// 获取消息历史
+app.get('/api/chat/fetch', authMiddleware, async (req, res) => {
+  try {
+    const { type, team_id, club_id, receiver_id, limit = 100 } = req.query;
+    const userId = req.userId;
+    const limitNum = Math.min(parseInt(limit) || 100, 200);
+
+    let query, params;
+
+    if (type === 'public') {
+      // 公聊：所有用户可见
+      query = `
+        SELECT m.*, u.coachname as sender_name, u.teamname as sender_team
+        FROM chat_messages m
+        LEFT JOIN users u ON m.sender_id = u.id
+        WHERE m.type = 'public'
+        ORDER BY m.created_at DESC LIMIT $1`;
+      params = [limitNum];
+    } else if (type === 'private') {
+      if (!receiver_id) return badRequest(res, '获取私聊需要指定 receiver_id');
+      // 私聊：只有发送者和接收者可见
+      query = `
+        SELECT m.*, u.coachname as sender_name, u.teamname as sender_team
+        FROM chat_messages m
+        LEFT JOIN users u ON m.sender_id = u.id
+        WHERE m.type = 'private' AND ((m.sender_id = $1 AND m.receiver_id = $2) OR (m.sender_id = $2 AND m.receiver_id = $1))
+        ORDER BY m.created_at DESC LIMIT $3`;
+      params = [userId, receiver_id, limitNum];
+    } else if (type === 'team') {
+      if (!team_id) return badRequest(res, '获取队伍聊天需要指定 team_id');
+      // 验证是否为队伍成员
+      const memberCheck = await pool.query('SELECT 1 FROM team_members WHERE teamId=$1 AND userId=$2', [team_id, userId]);
+      if (memberCheck.rows.length === 0) return forbidden(res, '你不是该队伍成员');
+      query = `
+        SELECT m.*, u.coachname as sender_name, u.teamname as sender_team
+        FROM chat_messages m
+        LEFT JOIN users u ON m.sender_id = u.id
+        WHERE m.type = 'team' AND m.team_id = $1
+        ORDER BY m.created_at DESC LIMIT $2`;
+      params = [team_id, limitNum];
+    } else if (type === 'club') {
+      if (!club_id) return badRequest(res, '获取俱乐部聊天需要指定 club_id');
+      // 验证是否为俱乐部成员
+      const memberCheck = await pool.query('SELECT 1 FROM club_members WHERE club_id=$1 AND user_id=$2', [club_id, userId]);
+      if (memberCheck.rows.length === 0) return forbidden(res, '你不是该俱乐部成员');
+      query = `
+        SELECT m.*, u.coachname as sender_name, u.teamname as sender_team
+        FROM chat_messages m
+        LEFT JOIN users u ON m.sender_id = u.id
+        WHERE m.type = 'club' AND m.club_id = $1
+        ORDER BY m.created_at DESC LIMIT $2`;
+      params = [club_id, limitNum];
+    } else {
+      return badRequest(res, '缺少或无效的 type 参数');
+    }
+
+    const result = await pool.query(query, params);
+    const messages = result.rows.reverse().map(m => ({
+      id: m.id,
+      sender_id: m.sender_id,
+      sender_name: m.sender_name || m.coachname || '未知',
+      sender_team: m.sender_team || '',
+      receiver_id: m.receiver_id,
+      team_id: m.team_id,
+      club_id: m.club_id,
+      type: m.type,
+      content: m.content,
+      created_at: m.created_at
+    }));
+
+    ok(res, { messages });
+  } catch(e) { serverError(res, '获取消息失败', e); }
+});
+
+// 获取我的队伍列表（用于聊天侧边栏）
+app.get('/api/chat/my-teams', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT t.id, t.name, t.bio
+      FROM teams t
+      JOIN team_members tm ON t.id = tm.teamId
+      WHERE tm.userId = $1
+    `, [req.userId]);
+    ok(res, { teams: result.rows });
+  } catch(e) { serverError(res, '获取队伍失败', e); }
+});
+
+// 获取我的俱乐部列表（用于聊天侧边栏）
+app.get('/api/chat/my-clubs', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT c.id, c.name
+      FROM clubs c
+      JOIN club_members cm ON c.id = cm.club_id
+      WHERE cm.user_id = $1
+    `, [req.userId]);
+    ok(res, { clubs: result.rows });
+  } catch(e) { serverError(res, '获取俱乐部失败', e); }
+});
+
+// 获取私聊联系人列表
+app.get('/api/chat/contacts', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT DISTINCT u.id, u.coachname, u.teamname,
+        (SELECT created_at FROM chat_messages WHERE type='private' AND ((sender_id=$1 AND receiver_id=u.id) OR (sender_id=u.id AND receiver_id=$1)) ORDER BY created_at DESC LIMIT 1) as last_time
+      FROM users u
+      WHERE u.id != $1 AND (
+        EXISTS (SELECT 1 FROM chat_messages WHERE type='private' AND ((sender_id=$1 AND receiver_id=u.id) OR (sender_id=u.id AND receiver_id=$1)))
+      )
+      ORDER BY last_time DESC NULLS LAST
+    `, [req.userId]);
+    ok(res, { contacts: result.rows });
+  } catch(e) { serverError(res, '获取联系人失败', e); }
 });
 
 async function sendNotification(userId, type, content, relatedId = null) {
@@ -2479,9 +2690,78 @@ async function startServer() {
     client.release();
     console.log("✅ 数据库连接池就绪");
 
-    app.listen(PORT, '0.0.0.0', () => {
+    // 创建 HTTP 服务器并集成 Socket.IO
+    const server = http.createServer(app);
+    const io = new Server(server, {
+      cors: {
+        origin: '*',
+        methods: ['GET', 'POST']
+      },
+      path: '/socket.io'
+    });
+
+    // 将 io 实例存到全局变量，供 API 路由使用
+    global._io = io;
+
+    // Socket.IO 事件处理
+    io.on('connection', (socket) => {
+      console.log('[Socket.IO] 新连接:', socket.id);
+      let authenticatedUserId = null;
+
+      // 认证：传入 token 验证身份
+      socket.on('authenticate', (token) => {
+        try {
+          const payload = jwt.verify(token, JWT_SECRET);
+          authenticatedUserId = payload.userId;
+          socket.userId = authenticatedUserId;
+          socket.join('user_' + authenticatedUserId);
+          console.log('[Socket.IO] 用户已认证:', authenticatedUserId);
+          socket.emit('authenticated', { userId: authenticatedUserId });
+        } catch (e) {
+          socket.emit('auth_error', { message: '认证失败' });
+        }
+      });
+
+      // 加入聊天室
+      socket.on('join_room', (data) => {
+        if (!socket.userId) {
+          socket.emit('error', { message: '请先认证' });
+          return;
+        }
+        const { type, team_id, club_id } = data;
+        if (type === 'team' && team_id) {
+          socket.join('team_' + team_id);
+          console.log('[Socket.IO] 用户', socket.userId, '加入队伍聊天室:', team_id);
+        } else if (type === 'club' && club_id) {
+          socket.join('club_' + club_id);
+          console.log('[Socket.IO] 用户', socket.userId, '加入俱乐部聊天室:', club_id);
+        } else if (type === 'public') {
+          socket.join('public');
+          console.log('[Socket.IO] 用户', socket.userId, '加入公聊室');
+        }
+      });
+
+      // 离开聊天室
+      socket.on('leave_room', (data) => {
+        const { type, team_id, club_id } = data;
+        if (type === 'team' && team_id) {
+          socket.leave('team_' + team_id);
+        } else if (type === 'club' && club_id) {
+          socket.leave('club_' + club_id);
+        } else if (type === 'public') {
+          socket.leave('public');
+        }
+      });
+
+      socket.on('disconnect', () => {
+        console.log('[Socket.IO] 断开连接:', socket.id);
+      });
+    });
+
+    server.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 服务启动成功，端口: ${PORT}`);
       console.log(`📝 健康检查: http://localhost:${PORT}/health`);
+      console.log(`💬 Socket.IO: http://localhost:${PORT}/socket.io`);
     });
   } catch (e) {
     console.error("❌ 服务启动失败:", e.message);
