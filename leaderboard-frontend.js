@@ -73,7 +73,7 @@ async function loadLeaderboardData() {
                   <td style="padding:8px 12px;color:var(--text-primary);">${escapeHtml(p.username||'')}</td>
                   <td style="padding:8px 12px;color:var(--text-secondary);">${escapeHtml(p.club_name||'自由选手')}</td>
                   <td style="padding:8px 12px;text-align:right;color:var(--warning);">${p.player_value||0}</td>
-                  <td style="padding:8px 12px;text-align:right;color:${p.dreamcoin_value>=0?'var(--success)':'var(--danger')}">${p.dreamcoin_value||0}</td>
+                  <td style="padding:8px 12px;text-align:right;color:${p.dreamcoin_value>=0?'var(--success)':'var(--danger)'};">${p.dreamcoin_value||0}</td>
                   <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--primary);">${p.player_score||0}</td>
                 </tr>`).join('')}
             </tbody>
