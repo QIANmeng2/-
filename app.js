@@ -425,11 +425,13 @@ async function openCompetitionDetail(id) {
     infoHtml +
     '<div id="compPlayerList" style="margin-bottom:16px;"><div style="color:var(--text-muted);font-size:0.78rem;">加载参赛人员...</div></div>'+
     '<div id="compRegActions"></div>'+
+    '<div id="compAdminActions"></div>'+
   '</div>';
   document.body.appendChild(overlay);
 
   await loadCompPlayerList(id, actualTier === 'regular', isFree);
   if (needsRegUI) await loadCompRegUI(id, c);
+  await loadCompAdminActions(id, c);
 }
 
 // 加载赛事参赛人员列表（所有人可见）
@@ -576,7 +578,7 @@ function onCompTierChange() {
     const label = startWrap.querySelector('label');
     if (label) label.textContent = free ? '开始时间' : '开赛时间';
   }
-  if (endWrap) endWrap.style.display = free ? 'block' : 'none';
+  if (endWrap) endWrap.style.display = 'none';
   if (arenaHint) arenaHint.style.display = free ? 'block' : 'none';
   if (free) {
     const boSel = document.getElementById('compBo');
@@ -589,7 +591,6 @@ async function handleCreateCompetition(e) {
   const name = document.getElementById('compName').value.trim();
   const tier = document.getElementById('compTierSel').value;
   const start_time = document.getElementById('compStartTime').value;
-  const end_time = document.getElementById('compEndTime')?.value || null;
   const bo = parseInt(document.getElementById('compBo').value);
   const description = (document.getElementById('compDesc')?.value || '').trim();
   if (!name) { showToast('请输入赛事名称','error'); return; }
@@ -602,7 +603,6 @@ async function handleCreateCompetition(e) {
     } catch(err) { showToast('图片处理失败','error'); return; }
   }
   const payload = { name, tier, start_time: start_time || null, bo, description, qr_code_url };
-  if (free) payload.end_time = end_time;
   try {
     await api('/api/admin/competitions', { method:'POST', body: JSON.stringify(payload) });
     showToast('赛事已创建','success');
@@ -705,6 +705,168 @@ async function loadCompRegUI(compId, c) {
     '<button class="btn btn-primary btn-sm" onclick="showEntryFeeRulesThen(()=>loadTeamRegisterFlow(\''+compId+'\'))" style="flex:1;min-width:120px;">以队伍报名</button>'+
     '<button class="btn btn-ghost btn-sm" onclick="showEntryFeeRulesThen(()=>loadClubRegisterFlow(\''+compId+'\'))" style="flex:1;min-width:120px;border-color:rgba(245,158,11,.3);color:#f59e0b;">以俱乐部报名</button>'+
     '</div>';
+}
+
+// 加载赛事管理操作（仅管理员）
+async function loadCompAdminActions(compId, c) {
+  const container = document.getElementById('compAdminActions');
+  if (!container) return;
+  const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
+  if (!isAdmin) { container.innerHTML = ''; return; }
+  const s = c.comp_status || c.status || '';
+  // 已结束或审核中，不显示操作按钮
+  if (s === 'finished' || s === 'review') {
+    container.innerHTML = '';
+    return;
+  }
+  // 有参赛人员时显示"提交结果"按钮
+  const rs = c.reg_stats || {};
+  if ((rs.count || 0) === 0) { container.innerHTML = ''; return; }
+  container.innerHTML = '<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06);">'+
+    '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:8px;">管理员操作</div>'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+    '<button class="btn btn-sm" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#ef4444;" onclick="openSubmitResultModal(\''+compId+'\')">比赛结束，提交结果</button>'+
+    '</div></div>';
+}
+
+// ========== 比赛结果提交弹窗 ==========
+async function openSubmitResultModal(compId) {
+  const c = window._compCache[compId];
+  if (!c) return;
+  // 加载参赛人员
+  let regs = [];
+  try {
+    const data = await api('/api/competitions/'+compId+'/registrations');
+    regs = (data.registrations || []).filter(r => r.status === 'confirmed' || r.status === 'reserved');
+  } catch(e) { showToast('加载参赛人员失败','error'); return; }
+  if (!regs.length) { showToast('暂无参赛人员','warn'); return; }
+
+  const isFree = isFreeMode(c.tier || 'regular');
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.style.zIndex = '10001';
+  overlay.id = 'submitResultModal';
+
+  // 构建玩家列表HTML（自由模式默认全归为red方，便于后端兼容）
+  const playerRows = regs.map((r, idx) => {
+    const name = escapeHtml(r.gameid || r.gameId || r.game_id || r.coachname || r.username || r.player_user_id || '未知');
+    const side = isFree ? 'red' : (r.side || 'red');
+    const sideColor = side === 'red' ? '#ef4444' : '#3b82f6';
+    const sideLabel = isFree ? (r.team_id ? '队伍' : (r.club_id ? '俱乐部' : '')) : (side==='red'?'红':'蓝');
+    return `
+      <div style="display:flex;align-items:center;gap:8px;padding:8px;background:rgba(255,255,255,.03);border-radius:6px;margin-bottom:6px;" data-uid="${r.player_user_id}" data-side="${side}">
+        <span style="font-size:0.72rem;font-weight:700;color:${sideColor};width:36px;">${sideLabel}</span>
+        <span style="font-size:0.82rem;color:var(--text-primary);flex:1;min-width:80px;">${name}</span>
+        <input type="text" class="result-kda" placeholder="KDA" style="width:70px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:4px 6px;color:var(--text-primary);font-size:0.78rem;" value="">
+        <label style="display:flex;align-items:center;gap:4px;font-size:0.75rem;color:var(--text-muted);cursor:pointer;white-space:nowrap;">
+          <input type="checkbox" class="result-win" style="accent-color:var(--primary);"> 胜
+        </label>
+      </div>
+    `;
+  }).join('');
+
+  // MVP选项（从参赛人员中生成）
+  const mvpOptions = '<option value="">不选MVP</option>' +
+    regs.map(r => {
+      const name = escapeHtml(r.gameid || r.gameId || r.game_id || r.coachname || r.username || r.player_user_id || '未知');
+      return `<option value="${r.player_user_id}">${name}</option>`;
+    }).join('');
+
+  overlay.innerHTML = `
+    <div class="modal modal-md" style="max-width:520px;max-height:85vh;overflow-y:auto;">
+      <h3 style="margin-bottom:12px;font-size:1rem;">提交比赛结果 - ${escapeHtml(c.name)}</h3>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.82rem;color:var(--text-muted);display:block;margin-bottom:6px;">获胜方</label>
+        <div style="display:flex;gap:8px;">
+          <label style="flex:1;padding:10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:8px;text-align:center;cursor:pointer;">
+            <input type="radio" name="winnerSide" value="red" style="accent-color:#ef4444;"> <span style="color:#ef4444;font-weight:600;font-size:0.88rem;">红方胜</span>
+          </label>
+          <label style="flex:1;padding:10px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);border-radius:8px;text-align:center;cursor:pointer;">
+            <input type="radio" name="winnerSide" value="blue" style="accent-color:#3b82f6;"> <span style="color:#3b82f6;font-weight:600;font-size:0.88rem;">蓝方胜</span>
+          </label>
+          <label style="flex:1;padding:10px;background:rgba(148,163,184,.1);border:1px solid rgba(148,163,184,.2);border-radius:8px;text-align:center;cursor:pointer;">
+            <input type="radio" name="winnerSide" value="draw" style="accent-color:#94a3b8;"> <span style="color:#94a3b8;font-weight:600;font-size:0.88rem;">平局</span>
+          </label>
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.82rem;color:var(--text-muted);display:block;margin-bottom:6px;">MVP</label>
+        <select class="form-select" id="resultMvp" style="width:100%;">${mvpOptions}</select>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.82rem;color:var(--text-muted);display:block;margin-bottom:6px;">赛后截图（至少1张）</label>
+        <input type="file" id="resultScreenshots" accept="image/*" multiple style="color:var(--text-primary);font-size:0.82rem;">
+        <div id="resultScreenshotPreview" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"></div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="font-size:0.82rem;color:var(--text-muted);display:block;margin-bottom:6px;">玩家数据</label>
+        <div style="max-height:280px;overflow-y:auto;padding-right:4px;">${playerRows}</div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-primary btn-sm" style="flex:1;" onclick="submitCompResult('${compId}')">提交结果</button>
+        <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="document.getElementById('submitResultModal')?.remove()">取消</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  // 截图预览
+  const fileInput = document.getElementById('resultScreenshots');
+  const previewContainer = document.getElementById('resultScreenshotPreview');
+  if (fileInput) {
+    fileInput.addEventListener('change', () => {
+      previewContainer.innerHTML = '';
+      Array.from(fileInput.files).forEach(file => {
+        const r = new FileReader();
+        r.onload = (e) => {
+          previewContainer.innerHTML += `<img src="${e.target.result}" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid rgba(255,255,255,.1);">`;
+        };
+        r.readAsDataURL(file);
+      });
+    });
+  }
+}
+
+async function submitCompResult(compId) {
+  const winner = document.querySelector('input[name="winnerSide"]:checked')?.value;
+  if (!winner) { showToast('请选择获胜方','error'); return; }
+
+  const files = document.getElementById('resultScreenshots')?.files;
+  if (!files || files.length === 0) { showToast('请上传至少1张截图','error'); return; }
+
+  // 压缩截图
+  showToast('正在处理截图…','info');
+  const screenshots = [];
+  try {
+    for (const file of Array.from(files)) {
+      const base64 = await compressImageToBase64(file, 1200, 0.7);
+      if (base64) screenshots.push(base64);
+    }
+  } catch(e) { showToast('截图处理失败','error'); return; }
+
+  // 收集玩家数据
+  const players = [];
+  const rows = document.querySelectorAll('#submitResultModal [data-uid]');
+  rows.forEach(row => {
+    const uid = row.dataset.uid;
+    const side = row.dataset.side;
+    const kda = row.querySelector('.result-kda')?.value?.trim() || '';
+    const win = row.querySelector('.result-win')?.checked || false;
+    if (uid) players.push({ player_user_id: uid, team: side, kda: kda, win: win });
+  });
+
+  const mvp = document.getElementById('resultMvp')?.value || null;
+
+  try {
+    await api('/api/competitions/'+compId+'/submit-result', {
+      method: 'POST',
+      body: JSON.stringify({ winner, screenshots, players, mvp_player_id: mvp })
+    });
+    showToast('结果已提交','success');
+    document.getElementById('submitResultModal')?.remove();
+    document.querySelector('.comp-detail-overlay')?.remove();
+    loadCompetitionList();
+  } catch(e) { showToast(e.message || '提交失败','error'); }
 }
 
 // 队伍报名流程（点击后展示）
