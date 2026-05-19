@@ -2556,7 +2556,10 @@ app.post('/api/trade/:id/accept', authMiddleware, async (req, res) => {
     // 转账差价：从数据库读取动态比例
     const ratioType = t.trade_type === 'swap' ? 'transfer' : 'purchase';
     const ratioResult = await pool.query('SELECT * FROM transaction_ratios WHERE type=$1', [ratioType]);
-    const ratios = ratioResult.rows[0] || { player_ratio: 10, club_ratio: 50, admin_ratio: 40 };
+    const _defaults = ratioType === 'transfer'
+      ? { player_ratio: 10, club_ratio: 40, admin_ratio: 50 }
+      : { player_ratio: 10, club_ratio: 0, admin_ratio: 90 };
+    const ratios = ratioResult.rows[0] || _defaults;
     const playerRatio = parseFloat(ratios.player_ratio) / 100;
     const clubRatio = parseFloat(ratios.club_ratio || 0) / 100;
     const adminRatio = parseFloat(ratios.admin_ratio) / 100;
