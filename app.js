@@ -274,9 +274,21 @@ let compTier = 'regular';
 const TIER_CONFIG = {
   elite: { label: '顶级联赛', desc: 'S/A级俱乐部大名单参赛' },
   secondary: { label: '次级联赛', desc: 'B级俱乐部大名单参赛' },
-  regular: { label: '常规赛事', desc: '消耗梦币入场，10人对战，赢方瓜分奖池' },
-  arena: { label: '擂台赛', desc: '无限制报名，整队参赛，无需入场券，首队为擂主，默认BO1' }
+  regular: { label: '常规赛事', desc: '包含入场奖池、擂台赛、训练赛三种模式' }
 };
+// 常规赛事子模式标签
+const SUB_MODE_LABELS = {
+  regular: '入场奖池',
+  arena: '擂台赛',
+  training: '训练赛'
+};
+const SUB_MODE_BADGE = {
+  regular: { bg: 'rgba(139,92,246,.15)', color: '#a78bfa', border: 'rgba(139,92,246,.3)' },
+  arena:   { bg: 'rgba(16,185,129,.15)', color: '#10b981', border: 'rgba(16,185,129,.3)' },
+  training:{ bg: 'rgba(56,189,248,.15)', color: '#38bdf8', border: 'rgba(56,189,248,.3)' }
+};
+// 判断是否为自由模式（无需入场券、不限人数）
+function isFreeMode(tier) { return tier === 'arena' || tier === 'training'; }
 
 async function renderCompetitionPanel() {
   const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
@@ -292,7 +304,7 @@ async function renderCompetitionPanel() {
         ${isAdmin ? '<button class="btn btn-primary btn-sm" onclick="openCreateCompetitionModal()">+ 创建赛事</button>' : ''}
       </div>
       <div class="comp-tier-tabs" style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
-        ${['elite','secondary','regular','arena'].map(t => {
+        ${['elite','secondary','regular'].map(t => {
           const cfg = TIER_CONFIG[t];
           return '<button class="comp-tier-tab '+(compTier===t?'active-'+t:'')+'" onclick="switchCompTier(\''+t+'\')">'+cfg.label+'</button>';
         }).join('')}
@@ -310,13 +322,15 @@ async function loadCompetitionList() {
     const all = data.competitions || [];
     window._compCache = {};
     all.forEach(c => { window._compCache[c.id] = c; });
-    const comps = all.filter(c => (c.tier || 'regular') === compTier);
+    const tierMatch = compTier === 'regular'
+      ? ['regular','arena','training']
+      : [compTier];
+    const comps = all.filter(c => tierMatch.includes(c.tier || 'regular'));
     if (!comps.length) {
       container.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:40px;">暂无'+TIER_CONFIG[compTier].label+'，请管理员创建</p>';
       return;
     }
-    const isRegular = compTier === 'regular';
-    const isArena = compTier === 'arena';
+    const isRegularTab = compTier === 'regular';
     container.innerHTML = comps.map(c => {
       const rs = c.reg_stats || {};
       const s = c.comp_status || c.status || '';
@@ -325,29 +339,23 @@ async function loadCompetitionList() {
       const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
       const adminBtn = isAdmin ? '<button class="btn btn-xs btn-danger" style="margin-left:8px;" onclick="event.stopPropagation();adminDeleteCompetition(\''+c.id+'\')">删除</button>' : '';
       const timeStr = c.start_time ? new Date(c.start_time).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
-      // 常规赛事卡片
-      if (isRegular) {
+      const subBadge = SUB_MODE_BADGE[c.tier || 'regular'];
+      const subLabel = SUB_MODE_LABELS[c.tier || 'regular'];
+      const modeTag = '<span style="font-size:0.68rem;padding:2px 8px;border-radius:4px;margin-left:6px;font-weight:600;background:'+subBadge.bg+';color:'+subBadge.color+';border:1px solid '+subBadge.border+';">'+subLabel+'</span>';
+      // 常规赛事tab内的卡片（包含入场奖池/擂台赛/训练赛）
+      if (isRegularTab) {
+        const freeMode = isFreeMode(c.tier);
         return '<div style="padding:14px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:10px;margin-bottom:8px;cursor:pointer;" onclick="openCompetitionDetail(\''+c.id+'\')">'+
           '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">'+
-            '<div><span style="font-weight:700;color:var(--text-primary);font-size:0.95rem;">'+c.name+'</span><span style="color:'+statusColor+';font-size:0.72rem;margin-left:8px;font-weight:600;">'+statusLabel+'</span>'+adminBtn+'</div>'+
+            '<div><span style="font-weight:700;color:var(--text-primary);font-size:0.95rem;">'+c.name+'</span>'+modeTag+'<span style="color:'+statusColor+';font-size:0.72rem;margin-left:8px;font-weight:600;">'+statusLabel+'</span>'+adminBtn+'</div>'+
             '<span style="font-size:0.75rem;color:var(--text-muted);">'+timeStr+'</span>'+
           '</div>'+
           '<div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap;">'+
-            '<span style="font-size:0.78rem;color:var(--text-secondary);">👥 '+rs.count+'/10人</span>'+
-            (rs.prizePool>0?'<span style="font-size:0.78rem;color:var(--warning);">💰 '+rs.prizePool+'梦币</span>':'')+
-            '<span style="font-size:0.72rem;color:var(--text-muted);">500×'+(rs.fee500||0)+' | 1000×'+(rs.fee1000||0)+' | 2000×'+(rs.fee2000||0)+'</span>'+
-          '</div></div>';
-      }
-      // 擂台赛卡片
-      if (isArena) {
-        return '<div style="padding:14px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:10px;margin-bottom:8px;cursor:pointer;" onclick="openCompetitionDetail(\''+c.id+'\')">'+
-          '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">'+
-            '<div><span style="font-weight:700;color:var(--text-primary);font-size:0.95rem;">'+c.name+'</span><span style="color:'+statusColor+';font-size:0.72rem;margin-left:8px;font-weight:600;">'+statusLabel+'</span>'+adminBtn+'</div>'+
-            '<span style="font-size:0.75rem;color:var(--text-muted);">'+timeStr+'</span>'+
-          '</div>'+
-          '<div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap;">'+
-            '<span style="font-size:0.78rem;color:var(--text-secondary);">👥 '+rs.count+'人已报名</span>'+
-            '<span style="font-size:0.72rem;color:var(--text-muted);">不限人数 · 无需入场券</span>'+
+            (freeMode
+              ? '<span style="font-size:0.78rem;color:var(--text-secondary);">👥 '+rs.count+'人已报名</span><span style="font-size:0.72rem;color:var(--text-muted);">不限人数 · 无需入场券</span>'
+              : '<span style="font-size:0.78rem;color:var(--text-secondary);">👥 '+rs.count+'/10人</span>'+
+                (rs.prizePool>0?'<span style="font-size:0.78rem;color:var(--warning);">💰 '+rs.prizePool+'梦币</span>':'')+
+                '<span style="font-size:0.72rem;color:var(--text-muted);">500×'+(rs.fee500||0)+' | 1000×'+(rs.fee1000||0)+' | 2000×'+(rs.fee2000||0)+'</span>')+
           '</div></div>';
       }
       // 顶级/次级联赛卡片（简洁版）
@@ -365,9 +373,9 @@ async function loadCompetitionList() {
 async function openCompetitionDetail(id) {
   const c = window._compCache[id];
   if (!c) return;
-  const isRegular = (c.tier || 'regular') === 'regular';
-  const isArena = c.tier === 'arena';
-  const needsRegUI = isRegular || isArena;
+  const actualTier = c.tier || 'regular';
+  const isFree = isFreeMode(actualTier);
+  const needsRegUI = actualTier === 'regular' || isFree;
   const rs = c.reg_stats || {};
   const overlay = document.createElement('div');
   overlay.className = 'comp-detail-overlay';
@@ -379,7 +387,7 @@ async function openCompetitionDetail(id) {
   const et = c.end_time ? new Date(c.end_time).toLocaleString('zh-CN') : '';
 
   let infoHtml = '';
-  if (isRegular) {
+  if (actualTier === 'regular') {
     infoHtml =
       '<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;padding:12px;background:rgba(255,255,255,.03);border-radius:8px;">'+
         '<div><span style="color:var(--text-muted);font-size:0.72rem;">状态</span><div style="font-weight:700;color:#fff;">'+statusLabel+'</div></div>'+
@@ -389,7 +397,7 @@ async function openCompetitionDetail(id) {
         '<div><span style="color:var(--text-muted);font-size:0.72rem;">1000&times;'+(rs.fee1000||0)+'</span></div>'+
         '<div><span style="color:var(--text-muted);font-size:0.72rem;">2000&times;'+(rs.fee2000||0)+'</span></div>'+
       '</div>';
-  } else if (isArena) {
+  } else if (isFree) {
     infoHtml =
       '<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;padding:12px;background:rgba(255,255,255,.03);border-radius:8px;">'+
         '<div><span style="color:var(--text-muted);font-size:0.72rem;">状态</span><div style="font-weight:700;color:#fff;">'+statusLabel+'</div></div>'+
@@ -404,7 +412,7 @@ async function openCompetitionDetail(id) {
       '</div>';
   }
 
-  const timeLine = isArena && et
+  const timeLine = isFree && et
     ? '<div style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:12px;">开始时间：'+st+' &nbsp;→&nbsp; 结束时间：'+et+'</div>'
     : '<div style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:12px;">开赛时间：'+st+'</div>';
 
@@ -420,12 +428,12 @@ async function openCompetitionDetail(id) {
   '</div>';
   document.body.appendChild(overlay);
 
-  await loadCompPlayerList(id, isRegular, isArena);
+  await loadCompPlayerList(id, actualTier === 'regular', isFree);
   if (needsRegUI) await loadCompRegUI(id, c);
 }
 
 // 加载赛事参赛人员列表（所有人可见）
-async function loadCompPlayerList(compId, isRegular, isArena) {
+async function loadCompPlayerList(compId, isRegular, isFreeMode) {
   const container = document.getElementById('compPlayerList');
   if (!container) return;
   try {
@@ -457,8 +465,8 @@ async function loadCompPlayerList(compId, isRegular, isArena) {
         }).join('')+
         '</div></div>';
     };
-    // 擂台赛：不区分红蓝方，按队伍/俱乐部分组展示
-    if (isArena) {
+    // 自由模式（擂台赛/训练赛）：不区分红蓝方，按队伍/俱乐部分组展示
+    if (isFreeMode) {
       const groups = {};
       regs.forEach(r => {
         const key = r.team_id || r.club_id || '其他';
@@ -507,6 +515,7 @@ function openCreateCompetitionModal() {
           <select class="form-select" id="compTierSel" onchange="onCompTierChange()">
             <option value="regular">常规赛事（梦币入场+奖池）</option>
             <option value="arena">常规赛事（擂台赛）</option>
+            <option value="training">常规赛事（训练赛）</option>
             <option value="elite">顶级联赛（S/A级俱乐部大名单）</option>
             <option value="secondary">次级联赛（B级俱乐部大名单）</option>
           </select>
@@ -557,18 +566,19 @@ function openCreateCompetitionModal() {
 
 function onCompTierChange() {
   const tier = document.getElementById('compTierSel').value;
+  const free = isFreeMode(tier);
   const extra = document.getElementById('compExtraFields');
   const startWrap = document.getElementById('compStartTimeWrap');
   const endWrap = document.getElementById('compEndTimeWrap');
   const arenaHint = document.getElementById('arenaHint');
-  if (extra) extra.style.display = (tier === 'regular' || tier === 'arena') ? 'none' : 'block';
+  if (extra) extra.style.display = (tier === 'regular' || free) ? 'none' : 'block';
   if (startWrap) {
     const label = startWrap.querySelector('label');
-    if (label) label.textContent = tier === 'arena' ? '开始时间' : '开赛时间';
+    if (label) label.textContent = free ? '开始时间' : '开赛时间';
   }
-  if (endWrap) endWrap.style.display = tier === 'arena' ? 'block' : 'none';
-  if (arenaHint) arenaHint.style.display = tier === 'arena' ? 'block' : 'none';
-  if (tier === 'arena') {
+  if (endWrap) endWrap.style.display = free ? 'block' : 'none';
+  if (arenaHint) arenaHint.style.display = free ? 'block' : 'none';
+  if (free) {
     const boSel = document.getElementById('compBo');
     if (boSel) boSel.value = '1';
   }
@@ -585,13 +595,14 @@ async function handleCreateCompetition(e) {
   if (!name) { showToast('请输入赛事名称','error'); return; }
   let qr_code_url = null;
   const file = document.getElementById('compImage')?.files?.[0];
-  if (file && tier !== 'regular' && tier !== 'arena') {
+  const free = isFreeMode(tier);
+  if (file && tier !== 'regular' && !free) {
     try {
       qr_code_url = await compressImageToBase64(file, 800, 0.6);
     } catch(err) { showToast('图片处理失败','error'); return; }
   }
   const payload = { name, tier, start_time: start_time || null, bo, description, qr_code_url };
-  if (tier === 'arena') payload.end_time = end_time;
+  if (free) payload.end_time = end_time;
   try {
     await api('/api/admin/competitions', { method:'POST', body: JSON.stringify(payload) });
     showToast('赛事已创建','success');
@@ -651,7 +662,7 @@ function showEntryFeeRulesThen(callback) {
 async function loadCompRegUI(compId, c) {
   const container = document.getElementById('compRegActions');
   if (!container) return;
-  const isArena = c.tier === 'arena';
+  const freeMode = isFreeMode(c.tier);
   if (!currentUser) {
     container.innerHTML = '<div style="padding:12px;background:rgba(255,255,255,.03);border-radius:8px;color:var(--text-muted);font-size:0.82rem;text-align:center;">登录后可报名参赛</div>';
     return;
@@ -667,11 +678,11 @@ async function loadCompRegUI(compId, c) {
     myReg = allRegs.find(r => r.player_user_id === currentUser.id);
   } catch(e) {}
   if (myReg && myReg.status === 'confirmed') {
-    const feeLine = isArena ? '' : '<span style="color:var(--text-muted);margin-left:8px;font-size:0.78rem;">入场费：'+(myReg.entry_fee||0)+'梦币</span>';
+    const feeLine = freeMode ? '' : '<span style="color:var(--text-muted);margin-left:8px;font-size:0.78rem;">入场费：'+(myReg.entry_fee||0)+'梦币</span>';
     container.innerHTML = '<div style="padding:12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:8px;"><span style="color:#10b981;font-weight:600;">已确认入场</span>'+feeLine+'</div>';
     return;
   } else if (myReg && myReg.status === 'reserved') {
-    if (isArena) {
+    if (freeMode) {
       container.innerHTML = '<div style="padding:12px;background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.2);border-radius:8px;"><span style="color:var(--warning);font-weight:600;">待确认入场</span><div style="margin-top:8px;"><button class="btn btn-sm btn-primary" onclick="confirmCompetitionEntry(\''+compId+'\',0)">确认入场</button></div></div>';
     } else {
       container.innerHTML = '<div style="padding:12px;background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.2);border-radius:8px;"><span style="color:var(--warning);font-weight:600;">待确认入场</span><div style="display:flex;gap:8px;margin-top:8px;"><button class="btn btn-sm" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:#10b981;" onclick="confirmCompetitionEntry(\''+compId+'\',500)">500梦币</button><button class="btn btn-sm" style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);color:#f59e0b;" onclick="confirmCompetitionEntry(\''+compId+'\',1000)">1000梦币</button><button class="btn btn-sm" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#ef4444;" onclick="confirmCompetitionEntry(\''+compId+'\',2000)">2000梦币</button></div></div>';
@@ -682,8 +693,8 @@ async function loadCompRegUI(compId, c) {
     container.innerHTML = '<div style="padding:12px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:8px;color:var(--text-muted);font-size:0.82rem;">当前赛事状态为 <b style="color:var(--text-primary);">'+statusCN+'</b>，不可报名（仅"即将开始"和"报名中"可报名）</div>';
     return;
   }
-  // 两入口选择（擂台赛跳过入场券说明）
-  if (isArena) {
+  // 两入口选择（自由模式跳过入场券说明）
+  if (freeMode) {
     container.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
       '<button class="btn btn-primary btn-sm" onclick="loadTeamRegisterFlow(\''+compId+'\')" style="flex:1;min-width:120px;">以队伍报名</button>'+
       '<button class="btn btn-ghost btn-sm" onclick="loadClubRegisterFlow(\''+compId+'\')" style="flex:1;min-width:120px;border-color:rgba(245,158,11,.3);color:#f59e0b;">以俱乐部报名</button>'+
