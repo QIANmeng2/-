@@ -291,6 +291,11 @@ async function initDB() {
     await client.query('ALTER TABLE players ADD COLUMN IF NOT EXISTS buyout_fee INTEGER DEFAULT NULL');
     await client.query('ALTER TABLE players ADD COLUMN IF NOT EXISTS custom_salary INTEGER DEFAULT NULL');
     await client.query("ALTER TABLE players ADD COLUMN IF NOT EXISTS trade_status TEXT DEFAULT NULL");
+    // 比赛身价波动
+    await client.query("ALTER TABLE players ADD COLUMN IF NOT EXISTS last_match_result TEXT DEFAULT NULL");
+    await client.query("ALTER TABLE players ADD COLUMN IF NOT EXISTS last_match_mvp BOOLEAN DEFAULT false");
+    await client.query("ALTER TABLE players ADD COLUMN IF NOT EXISTS last_change_percentage DECIMAL(5,2) DEFAULT 0");
+    await client.query("ALTER TABLE players ADD COLUMN IF NOT EXISTS last_match_id INTEGER DEFAULT NULL");
     // 薪资记录
     await client.query(`
       CREATE TABLE IF NOT EXISTS salary_records (
@@ -345,11 +350,13 @@ async function initDB() {
         winner TEXT NOT NULL,
         screenshot_urls JSONB DEFAULT '[]',
         player_data JSONB DEFAULT '[]',
+        mvp_player_id TEXT DEFAULT NULL,
         confirmed_by TEXT,
         confirmed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
+    await client.query("ALTER TABLE competition_results ADD COLUMN IF NOT EXISTS mvp_player_id TEXT DEFAULT NULL");
     // 在线聊天消息
     await client.query(`
       CREATE TABLE IF NOT EXISTS chat_messages (
@@ -1763,12 +1770,12 @@ app.get('/api/competitions/:id/results', authMiddleware, adminMiddleware, async 
 
 // 提交赛后截图
 app.post('/api/competitions/:id/submit-result', authMiddleware, async (req, res) => {
-  const { winner, screenshots, players } = req.body;
+  const { winner, screenshots, players, mvp_player_id } = req.body;
   if (!winner || !screenshots || !players) return badRequest(res, '参数不完整');
   try {
     await pool.query(
-      'INSERT INTO competition_results (competition_id, winner, screenshot_urls, player_data) VALUES ($1,$2,$3,$4)',
-      [req.params.id, winner, JSON.stringify(screenshots), JSON.stringify(players)]
+      'INSERT INTO competition_results (competition_id, winner, screenshot_urls, player_data, mvp_player_id) VALUES ($1,$2,$3,$4,$5)',
+      [req.params.id, winner, JSON.stringify(screenshots), JSON.stringify(players), mvp_player_id || null]
     );
     await pool.query("UPDATE competitions SET comp_status = 'review' WHERE id = $1", [req.params.id]);
     ok(res, {message: '结果已提交，等待管理员审核' });
@@ -1812,12 +1819,58 @@ app.post('/api/admin/competitions/:id/confirm-result', authMiddleware, adminMidd
         [req.params.id, p.player_user_id, p.team, p.lane, p.kda || '', p.win || false]
       );
     }
+    // === 比赛结算 → 身价波动 + MVP加成 ===
+    const mvpId = r.mvp_player_id || null;
+    const compResultId = r.id;
+    for (const p of playerData) {
+      if (!p.player_user_id) continue;
+      const pl = await client.query('SELECT market_value, last_match_id FROM players WHERE user_id=$1', [p.player_user_id]);
+      if (pl.rows.length === 0) continue;
+      // 防重复：同一比赛结果不重复更新身价
+      if (pl.rows[0].last_match_id === compResultId) continue;
+      let oldValue = pl.rows[0].market_value || 0;
+      if (oldValue <= 0) continue; // 身价为0不处理
+      const isWin = p.win === true || p.win === 'true' || String(p.player_user_id) && winnerIds.has(p.player_user_id);
+      const isMvp = mvpId && String(p.player_user_id) === String(mvpId);
+      // 胜+2%, 负-2%
+      let newValue = isWin ? Math.floor(oldValue * 1.02) : Math.floor(oldValue * 0.98);
+      // MVP额外+2%
+      if (isMvp) newValue = Math.floor(newValue * 1.02);
+      // 身价不低于1
+      newValue = Math.max(1, newValue);
+      const changePct = oldValue > 0 ? parseFloat((((newValue - oldValue) / oldValue) * 100).toFixed(2)) : 0;
+      await client.query(
+        `UPDATE players SET market_value=$1, grade=$2, last_match_result=$3, last_match_mvp=$4,
+         last_change_percentage=$5, last_match_id=$6 WHERE user_id=$7`,
+        [newValue, calcGrade(newValue), isWin ? 'win' : 'lose', isMvp || false, changePct, compResultId, p.player_user_id]
+      );
+      // 异步更新排行榜（不影响主事务）
+      setImmediate(() => updatePlayerScore(p.player_user_id));
+    }
     // 更新状态
     await client.query('UPDATE competition_results SET confirmed_by = $1, confirmed_at = NOW() WHERE id = $2', [req.userId, r.id]);
     await client.query("UPDATE competitions SET comp_status = 'finished' WHERE id = $1", [req.params.id]);
     await client.query('COMMIT');
     ok(res, {totalPool, winnerCount: winnerFees.length });
   } catch(e) { await client.query('ROLLBACK'); console.error(e); serverError(res, '结算失败'); } finally { client.release(); }
+});
+
+// 管理员设置/修改比赛 MVP（审核阶段）
+app.put('/api/admin/competitions/:resultId/set-mvp', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { mvp_player_id } = req.body;
+    const result = await pool.query('SELECT * FROM competition_results WHERE id=$1', [req.params.resultId]);
+    if (result.rows.length === 0) return notFound(res, '比赛结果不存在');
+    if (result.rows[0].confirmed_by) return badRequest(res, '比赛已结算，无法修改 MVP');
+    // 如果指定了 mvp_player_id，校验该选手确实在比赛 player_data 中
+    if (mvp_player_id) {
+      const pd = result.rows[0].player_data || [];
+      const found = pd.some(p => String(p.player_user_id) === String(mvp_player_id));
+      if (!found) return badRequest(res, '所选选手不在本场比赛参赛名单中');
+    }
+    await pool.query('UPDATE competition_results SET mvp_player_id=$1 WHERE id=$2', [mvp_player_id || null, req.params.resultId]);
+    ok(res, { message: mvp_player_id ? 'MVP 已设置' : 'MVP 已清除' });
+  } catch(e) { console.error(e); serverError(res, '设置 MVP 失败', e); }
 });
 
 // ==================== 梦币系统 ====================

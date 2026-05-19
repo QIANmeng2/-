@@ -1457,6 +1457,11 @@ function renderMarketPlayerList() {
       <div class="market-player-value">
         ${p.grade ? `<span class="grade-badge grade-${p.grade.toLowerCase()}">${p.grade}级</span>` : ''}
         <span style="font-size:1.2rem;font-weight:700;color:var(--warning);">${p.market_value}万</span>
+        ${(p.last_change_percentage && parseFloat(p.last_change_percentage) !== 0) ? `
+        <span style="font-size:0.7rem;font-weight:600;${parseFloat(p.last_change_percentage)>0?'color:#10b981':'color:#ef4444'};">
+          ${parseFloat(p.last_change_percentage)>0?'\u25B2':'\u25BC'}${Math.abs(parseFloat(p.last_change_percentage))}%
+        </span>` : ''}
+        ${p.last_match_mvp ? '<span style="font-size:0.68rem;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#1a1a2e;padding:1px 6px;border-radius:4px;font-weight:700;">MVP</span>' : ''}
         <span style="font-size:0.7rem;color:var(--text-muted);">${p.club_name ? '已签约: '+p.club_name : '自由选手'}</span>
         ${canBuy ? `<button class="market-buy-btn" onclick="event.stopPropagation();buyPlayer('${p.user_id}',${p.market_value})">采买</button>` : ''}
         ${canTrade ? `<button class="market-trade-btn" onclick="event.stopPropagation();showTradeDialog('${p.user_id}',${p.club_id},'${p.club_name}','${p.game_id}',${p.market_value})">交易</button>` : ''}
@@ -3580,16 +3585,21 @@ async function adminReviewCompetition(compId) {
     const winnerLabel = r.winner === 'blue' ? '蓝方胜' : '红方胜';
     const players = r.player_data || [];
     const screenshots = r.screenshot_urls || [];
+    const currentMvp = r.mvp_player_id || '';
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
-      <div class="modal modal-md" style="max-width:550px;">
+      <div class="modal modal-md" style="max-width:580px;">
         <h3 style="margin-bottom:12px;">比赛结果审核</h3>
         <p style="color:var(--warning);font-weight:600;">胜方：${winnerLabel}</p>
         ${screenshots.length ? '<p style="font-size:0.78rem;">截图：'+screenshots.map((s,i)=>'<a href="'+s+'" target="_blank" style="color:var(--accent);">#'+(i+1)+'</a>').join(' ')+'</p>' : ''}
-        ${players.length ? '<div style="margin-top:8px;max-height:200px;overflow-y:auto;background:rgba(255,255,255,.02);padding:8px;border-radius:6px;"><table style="width:100%;font-size:0.72rem;">'+players.map(p=>'<tr><td style="padding:2px 4px;">'+(p.win?'&#x2705;':'&#x274C;')+'</td><td>'+p.lane+'</td><td>'+p.kda+'</td></tr>').join('')+'</table></div>' : ''}
+        ${players.length ? '<div style="margin-top:8px;max-height:220px;overflow-y:auto;background:rgba(255,255,255,.02);padding:8px;border-radius:6px;"><table style="width:100%;font-size:0.72rem;border-collapse:collapse;"><tr style="color:var(--text-muted);"><th style="padding:2px 4px;text-align:left;"></th><th style="padding:2px 4px;text-align:left;">分路</th><th style="padding:2px 4px;text-align:left;">KDA</th><th style="padding:2px 4px;text-align:left;">MVP</th></tr>'+players.map(p=>`<tr><td style="padding:2px 4px;">${p.win?'&#x2705;':'&#x274C;'}</td><td>${p.lane||'-'}</td><td>${p.kda||'-'}</td><td><input type="radio" name="mvp_select" value="${p.player_user_id||''}" ${currentMvp && String(currentMvp) === String(p.player_user_id) ? 'checked' : ''} style="accent-color:var(--warning);"/></td></tr>`).join('')+'</table></div>' : ''}
+        <div style="margin-top:10px;padding:10px;background:rgba(255,193,7,.06);border:1px solid rgba(255,193,7,.15);border-radius:6px;font-size:0.75rem;color:var(--text-secondary);">
+          &#x1F3C6; 选择 MVP → 该选手额外 <b style="color:var(--warning);">+2%</b> 身价加成（不选则无 MVP）
+        </div>
         <div style="margin-top:16px;display:flex;gap:8px;">
-          <button class="btn btn-primary btn-sm" onclick="adminConfirmCompResult('${compId}')">确认发放奖池</button>
+          <button class="btn btn-primary btn-sm" onclick="adminConfirmCompResult('${compId}')">确认发放奖池+结算身价</button>
+          <button class="btn btn-sm" onclick="adminSaveMvp('${compId}','${r.id||''}')" style="background:rgba(79,70,229,.15);color:#818cf8;border:1px solid rgba(79,70,229,.25);">先保存 MVP</button>
           <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-overlay').remove()">关闭</button>
         </div>
       </div>`;
@@ -3604,6 +3614,23 @@ async function adminConfirmCompResult(compId) {
     document.querySelector('.modal-overlay')?.remove();
     loadAdminCompList();
   } catch(e) { showToast(e.message,'error'); }
+}
+
+// 保存 MVP 选择（审核阶段）
+async function adminSaveMvp(compId, resultId) {
+  if (!resultId) { showToast('结果 ID 缺失','error'); return; }
+  const selected = document.querySelector('input[name="mvp_select"]:checked');
+  const mvpId = selected ? selected.value : null;
+  try {
+    const res = await api('/api/admin/competitions/'+resultId+'/set-mvp', {
+      method: 'PUT',
+      body: JSON.stringify({ mvp_player_id: mvpId })
+    });
+    showToast(res.message || 'MVP 已保存','success');
+    // 刷新弹窗以显示最新状态
+    document.querySelector('.modal-overlay')?.remove();
+    adminReviewCompetition(compId);
+  } catch(e) { showToast(e.message || '保存 MVP 失败','error'); }
 }
 
 // 管理员用户名片总览
