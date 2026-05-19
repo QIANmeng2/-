@@ -1071,7 +1071,7 @@ app.get('/api/teams', async (req, res) => {
       const tm = members.rows.filter(m => m.teamid === t.id);
       const memberList = tm.map(m => {
         const u = userMap[m.userid] || {};
-        return { userId: m.userid, role: m.role, joinedAt: m.joinedat, username: u.username, teamName: u.teamname, coachName: u.coachname, level: u.level };
+        return { userId: m.userid, role: m.role, joinedAt: m.joinedat, username: u.username, teamName: u.teamname, coachName: u.coachname, level: u.level, gameId: u.gameId };
       });
       // 根据实际人数计算真实状态（自动修复历史脏数据）
       const actualStatus = tm.length >= t.maxmembers ? 'closed' : 'open';
@@ -1097,16 +1097,17 @@ app.get('/api/teams/mine', authMiddleware, async (req, res) => {
 
     const members = await pool.query('SELECT * FROM team_members WHERE teamId = $1', [teamId]);
     const userIds = members.rows.map(m => m.userid);
-    const usersRes = await pool.query('SELECT id, username, teamName, coachName, level, gameRank, peakScore, heroPool FROM users WHERE id = ANY($1)', [userIds]);
+    const usersRes = await pool.query('SELECT id, username, teamName, coachName, level, gameRank, peakScore, heroPool, "gameId" FROM users WHERE id = ANY($1)', [userIds]);
     const userMap = {};
     usersRes.rows.forEach(u => { userMap[u.id] = u; });
-
+    
     const memberList = members.rows.map(m => {
       const u = userMap[m.userid] || {};
       return {
         userId: m.userid, role: m.role, joinedAt: m.joinedat,
         username: u.username, coachName: u.coachname, level: u.level,
-        gameRank: u.gamerank, peakScore: u.peakscore, heroPool: u.heropool
+        gameRank: u.gamerank, peakScore: u.peakscore, heroPool: u.heropool,
+        gameId: u.gameId
       };
     });
 
@@ -1129,13 +1130,13 @@ app.get('/api/teams/:id', async (req, res) => {
 
     const members = await pool.query('SELECT * FROM team_members WHERE teamId = $1', [req.params.id]);
     const userIds = members.rows.map(m => m.userid);
-    const usersRes = await pool.query('SELECT id, username, teamName, coachName, level, gameRank, peakScore, heroPool FROM users WHERE id = ANY($1)', [userIds]);
+    const usersRes = await pool.query('SELECT id, username, teamName, coachName, level, gameRank, peakScore, heroPool, "gameId" FROM users WHERE id = ANY($1)', [userIds]);
     const userMap = {};
     usersRes.rows.forEach(u => { userMap[u.id] = u; });
-
+    
     const memberList = members.rows.map(m => {
       const u = userMap[m.userid] || {};
-      return { userId: m.userid, role: m.role, joinedAt: m.joinedat, username: u.username, coachName: u.coachname, level: u.level, gameRank: u.gamerank, peakScore: u.peakscore, heroPool: u.heropool };
+      return { userId: m.userid, role: m.role, joinedAt: m.joinedat, username: u.username, coachName: u.coachname, level: u.level, gameRank: u.gamerank, peakScore: u.peakscore, heroPool: u.heropool, gameId: u.gameId };
     });
     res.json({ team: { id: t.id, name: t.name, bio: t.bio, captainId: t.captainid, status: t.status, memberCount: members.rows.length, maxMembers: t.maxmembers, members: memberList, createdAt: t.createdat } });
   } catch (e) { console.error(e); serverError(res, '加载失败'); }
@@ -1681,7 +1682,7 @@ app.get('/api/competitions/:id/my-reg', authMiddleware, async (req, res) => {
 app.get('/api/competitions/:id/registrations', async (req, res) => {
   try {
     const regs = await pool.query(`
-      SELECT r.*, u.coachName, u.username, u.teamName
+      SELECT r.*, u.coachName, u.username, u.teamName, u."gameId"
       FROM competition_registrations r
       LEFT JOIN users u ON u.id = r.player_user_id
       WHERE r.competition_id = $1 AND r.status != 'cancelled'
@@ -2163,7 +2164,7 @@ app.put('/api/admin/clubs/:id', authMiddleware, adminMiddleware, async (req, res
 app.get('/api/clubs', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT c.*, u.username AS owner_username, u.coachName AS owner_name,
+      SELECT c.*, u.username AS owner_username, u.coachName AS owner_name, u."gameId" AS owner_game_id,
         (SELECT COUNT(*) FROM club_members WHERE club_id = c.id) AS member_count
       FROM clubs c
       LEFT JOIN users u ON c.owner_id = u.id
@@ -2182,7 +2183,7 @@ app.get('/api/club/:id', authMiddleware, async (req, res) => {
   const { id } = req.params;
   try {
     const club = await pool.query(`
-      SELECT c.*, u.username AS owner_username, u.coachName AS owner_name
+      SELECT c.*, u.username AS owner_username, u.coachName AS owner_name, u."gameId" AS owner_game_id
       FROM clubs c LEFT JOIN users u ON c.owner_id = u.id WHERE c.id = $1
     `, [id]);
     if (club.rows.length === 0) return notFound(res, '俱乐部不存在');

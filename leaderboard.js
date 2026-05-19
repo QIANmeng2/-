@@ -12,10 +12,11 @@ module.exports = function(app, pool, authMiddleware, ok, badRequest, serverError
           SELECT 
             p.id,
             p.player_score,
-            p.market_value AS player_value,
+            p.player_value,
             u.username,
+            u."gameId",
             u.dream_coins,
-            c.name AS club_name
+            c.club_name
           FROM players p
           LEFT JOIN users u ON p.user_id = u.id
           LEFT JOIN clubs c ON p.club_id = c.id
@@ -25,6 +26,7 @@ module.exports = function(app, pool, authMiddleware, ok, badRequest, serverError
         const list = rows.map((row, idx) => ({
           rank: idx + 1,
           username: row.username,
+          game_id: row.gameId,
           club_name: row.club_name,
           player_value: row.player_value,
           player_score: row.player_score,
@@ -35,11 +37,12 @@ module.exports = function(app, pool, authMiddleware, ok, badRequest, serverError
         const sql = `
           SELECT 
             c.id,
-            c.name AS club_name,
+            c.club_name,
             c.club_score,
-            u.username as boss_name
+            u.username as boss_name,
+            u."gameId" as boss_game_id
           FROM clubs c
-          LEFT JOIN users u ON c.owner_id = u.id
+          LEFT JOIN users u ON c.boss_id = u.id
           ORDER BY c.club_score DESC
           LIMIT $1`;
         const { rows } = await pool.query(sql, [parseInt(limit)]);
@@ -47,6 +50,7 @@ module.exports = function(app, pool, authMiddleware, ok, badRequest, serverError
           rank: idx + 1,
           club_name: row.club_name,
           boss_name: row.boss_name,
+          boss_game_id: row.boss_game_id,
           club_score: row.club_score
         }));
         return ok(res, { list });

@@ -448,7 +448,7 @@ async function loadCompPlayerList(compId, isRegular, isArena) {
         '</div>'+
         '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">'+
         sideRegs.map(r => {
-          const name = r.coachname || r.username || r.player_user_id;
+          const name = r.gameid || r.gameId || r.game_id || r.coachname || r.username || r.player_user_id;
           return '<div style="padding:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:8px;">'+
             '<div style="font-size:0.82rem;color:var(--text-primary);font-weight:600;">'+name+'</div>'+
             '<div style="font-size:0.72rem;color:var(--text-muted);margin-top:2px;">'+(isRegular && r.entry_fee ? r.entry_fee+'梦币入场' : '')+'</div>'+
@@ -471,7 +471,7 @@ async function loadCompPlayerList(compId, isRegular, isArena) {
             '<div style="font-size:0.78rem;font-weight:700;color:var(--text-primary);margin-bottom:8px;">'+g.label+'</div>'+
             '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;">'+
             g.regs.map(r => {
-              const name = r.coachname || r.username || r.player_user_id;
+              const name = r.gameid || r.gameId || r.game_id || r.coachname || r.username || r.player_user_id;
               return '<div style="padding:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:8px;">'+
                 '<div style="font-size:0.82rem;color:var(--text-primary);font-weight:600;">'+name+'</div>'+
                 '<div style="margin-top:4px;">'+statusBadge(r)+'</div>'+
@@ -1887,7 +1887,7 @@ async function renderClubPanel() {
             </div>
             <span style="font-size:0.78rem;color:var(--text-muted);">${myClub.member_count || 0}名队员</span>
           </div>
-          <p style="font-size:0.78rem;color:var(--text-secondary);margin:0;">老板：${myClub.owner_name || myClub.owner_username || myClub.owner_id}</p>
+          <p style="font-size:0.78rem;color:var(--text-secondary);margin:0;">老板：${myClub.owner_game_id || myClub.owner_name || myClub.owner_username || myClub.owner_id}</p>
           <div style="margin-top:12px;display:flex;align-items:center;gap:6px;">
             <span style="font-size:0.72rem;color:var(--primary);">点击查看详情 →</span>
           </div>
@@ -1908,7 +1908,7 @@ async function renderClubPanel() {
       sidebarHtml = otherClubs.map(c => `
         <div class="club-sidebar-card" onclick="renderClubDetail(${c.id})" style="cursor:pointer;">
           <div style="font-weight:600;color:var(--text-primary);font-size:0.82rem;">${escapeHtml(c.name)}</div>
-          <div style="font-size:0.7rem;color:var(--text-muted);margin-top:3px;">${c.member_count || 0}人 · ${c.owner_name || c.owner_username || c.owner_id}</div>
+          <div style="font-size:0.7rem;color:var(--text-muted);margin-top:3px;">${c.member_count || 0}人 · ${c.owner_game_id || c.owner_name || c.owner_username || c.owner_id}</div>
         </div>
       `).join('');
     } else {
@@ -2436,7 +2436,7 @@ function renderPlayerLeaderboard(list) {
       <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--surface-2);${rank<=3?'background:rgba(255,215,0,0.03);margin:0 -16px;padding:12px 16px;':''}">
         <div style="flex-shrink:0;">${rankBadge}</div>
         <div style="flex:1;min-width:0;">
-          <div style="font-weight:600;color:var(--text-primary);font-size:0.95rem;">${escapeHtml(item.username || '未知选手')}</div>
+          <div style="font-weight:600;color:var(--text-primary);font-size:0.95rem;">${escapeHtml(item.game_id || item.username || '未知选手')}</div>
           <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">${item.club_name ? escapeHtml(item.club_name) : '自由选手'}</div>
         </div>
         <div style="text-align:right;flex-shrink:0;">
@@ -2462,7 +2462,7 @@ function renderClubLeaderboard(list) {
         <div style="flex-shrink:0;">${rankBadge}</div>
         <div style="flex:1;min-width:0;">
           <div style="font-weight:600;color:var(--text-primary);font-size:0.95rem;">${escapeHtml(item.club_name || '未知俱乐部')}</div>
-          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">老板：${escapeHtml(item.boss_name || '未知')}</div>
+          <div style="font-size:0.78rem;color:var(--text-muted);margin-top:2px;">老板：${escapeHtml(item.boss_game_id || item.boss_name || '未知')}</div>
         </div>
         <div style="text-align:right;flex-shrink:0;">
           <div style="font-weight:700;color:var(--accent);font-size:1.05rem;">${item.club_score || 0}</div>
@@ -2634,9 +2634,9 @@ async function renderPrivateTargets(container) {
     html += '<div class="chat-empty">暂无私聊记录</div>';
   } else {
     html += contacts.map(c => `
-      <div class="chat-target-item" data-id="${c.id}" onclick="selectChatTarget({ receiver_id: '${c.id}', name: '${escapeHtml(c.coachname || c.username || '未知')}' })">
-        <span class="chat-avatar">${(c.coachname || c.username || '?')[0]}</span>
-        <span class="chat-target-name">${escapeHtml(c.coachname || c.username || '未知')}</span>
+      <div class="chat-target-item" data-id="${c.id}" onclick="selectChatTarget({ receiver_id: '${c.id}', name: '${escapeHtml(c.gameid || c.coachname || c.username || '未知')}' })">
+        <span class="chat-avatar">${(c.gameid || c.coachname || c.username || '?')[0]}</span>
+        <span class="chat-target-name">${escapeHtml(c.gameid || c.coachname || c.username || '未知')}</span>
         <span class="chat-target-team">${escapeHtml(c.teamname || '')}</span>
       </div>
     `).join('');
@@ -2676,9 +2676,9 @@ async function handlePrivateSearch(e) {
         return;
       }
       resultsContainer.innerHTML = users.map(u => `
-        <div class="chat-target-item" data-id="${u.id}" onclick="selectChatTarget({ receiver_id: '${u.id}', name: '${escapeHtml(u.coachname || u.username || '未知')}' })">
-          <span class="chat-avatar">${(u.coachname || u.username || '?')[0]}</span>
-          <span class="chat-target-name">${escapeHtml(u.coachname || u.username || '未知')}</span>
+        <div class="chat-target-item" data-id="${u.id}" onclick="selectChatTarget({ receiver_id: '${u.id}', name: '${escapeHtml(u.gameid || u.coachname || u.username || '未知')}' })">
+          <span class="chat-avatar">${(u.gameid || u.coachname || u.username || '?')[0]}</span>
+          <span class="chat-target-name">${escapeHtml(u.gameid || u.coachname || u.username || '未知')}</span>
           <span class="chat-target-team">${escapeHtml(u.teamname || '')}</span>
         </div>
       `).join('');
@@ -3100,7 +3100,7 @@ function renderMyTeam(team) {
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:#1A1A2E;border:1px solid rgba(22,93,255,0.2);border-radius:var(--radius-md);margin-bottom:8px;">
         <div style="display:flex;align-items:center;gap:10px;">
           <div>
-            <div style="font-weight:700;color:#fff;cursor:pointer;" onclick="${isSelf ? `switchTab('profile')` : `openPlayerDetailModal('${m.userId}')`}">${m.coachName || m.username} ${isSelf ? '<span style="font-size:0.75rem;color:var(--text-muted);">（你）</span>' : ''}</div>
+            <div style="font-weight:700;color:#fff;cursor:pointer;" onclick="${isSelf ? `switchTab('profile')` : `openPlayerDetailModal('${m.userId}')`}">${m.gameId || m.coachName || m.username} ${isSelf ? '<span style="font-size:0.75rem;color:var(--text-muted);">（你）</span>' : ''}</div>
             <div style="font-size:0.78rem;color:var(--text-secondary);">
               ${roleBadge}
               <span class="badge badge-level" style="margin-left:4px;">${m.level || ''}</span>
@@ -3359,8 +3359,8 @@ function buildAdminTeamCard(t, users, unassignedUsers) {
           <span class="badge ${t.status==='open'?'badge-recruiting':'badge-closed'}">${t.status==='open'?'招人中':'已满'}</span>
           <span style="font-size:0.8rem;color:var(--text-secondary);">${t.memberCount}/${t.maxMembers}人</span>
         </div>
-        <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:4px;">
-          名称：<span style="color:var(--primary);">${captain?.coachName || captain?.username || '未设置'}</span>
+          <div style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:4px;">
+            名称：<span style="color:var(--primary);">${captain?.gameId || captain?.coachName || captain?.username || '未设置'}</span>
           ${t.bio ? ` · ${t.bio}` : ''}
         </div>
       </div>
@@ -3375,7 +3375,7 @@ function buildAdminTeamCard(t, users, unassignedUsers) {
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
       ${t.members.map(m => `
         <span style="font-size:0.78rem;background:rgba(22,93,255,0.12);color:${m.role==='captain'?'var(--primary)':'var(--text-primary)'};padding:4px 10px;border-radius:12px;border:1px solid rgba(22,93,255,${m.role==='captain'?'0.4':'0.2'});">
-          ${m.coachName || m.username}${m.role==='captain'?' [队长]':''}
+          ${m.gameId || m.coachName || m.username}${m.role==='captain'?' [队长]':''}
           <button onclick="adminRemoveMember('${t.id}','${m.userId}','${(m.coachName||m.username).replace(/'/g,"\\'")}')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.7rem;padding:0 0 0 4px;" title="移出队伍">×</button>
         </span>`).join('')}
     </div>` : '<p style="font-size:0.78rem;color:var(--text-muted);margin-bottom:8px;">暂无成员</p>'}
@@ -3416,12 +3416,12 @@ async function adminSetCaptain(teamId, teamName, currentCaptainId, members) {
   const otherMembers = members.filter(m => m.userId !== currentCaptainId);
   overlay.innerHTML = `<div class="modal modal-md" style="max-width:420px;">
     <h3 style="margin-bottom:16px;">换队长 — ${escapeHtml(teamName)}</h3>
-    <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;">当前队长：${escapeHtml(currentCaptain?.coachName || currentCaptain?.username || currentCaptainId)}</p>
+    <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;">当前队长：${escapeHtml(currentCaptain?.gameId || currentCaptain?.coachName || currentCaptain?.username || currentCaptainId)}</p>
     <div class="form-group">
       <label style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:6px;display:block;">搜索新队长</label>
       <input class="form-input" id="captainSearchInput" placeholder="输入用户名搜索..." style="margin-bottom:8px;">
       <select id="captainSelect" class="form-select" size="6" style="width:100%;padding:8px;border-radius:6px;background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border-color);font-size:0.88rem;cursor:pointer;">
-        ${otherMembers.map(m => `<option value="${m.userId}">${escapeHtml(m.coachName || m.username || m.userId)}${m.gameRank ? ' — ' + m.gameRank : ''}</option>`).join('')}
+        ${otherMembers.map(m => `<option value="${m.userId}">${escapeHtml(m.gameId || m.coachName || m.username || m.userId)}${m.gameRank ? ' — ' + m.gameRank : ''}</option>`).join('')}
       </select>
     </div>
     <div style="display:flex;gap:8px;margin-top:16px;">
@@ -3438,10 +3438,10 @@ async function adminSetCaptain(teamId, teamName, currentCaptainId, members) {
     const q = searchInput.value.trim().toLowerCase();
     select.innerHTML = otherMembers
       .filter(m => {
-        const name = (m.coachName || m.username || m.userId || '').toLowerCase();
+        const name = (m.gameId || m.coachName || m.username || m.userId || '').toLowerCase();
         return !q || name.includes(q);
       })
-      .map(m => `<option value="${m.userId}">${escapeHtml(m.coachName || m.username || m.userId)}${m.gameRank ? ' — ' + m.gameRank : ''}</option>`)
+      .map(m => `<option value="${m.userId}">${escapeHtml(m.gameId || m.coachName || m.username || m.userId)}${m.gameRank ? ' — ' + m.gameRank : ''}</option>`)
       .join('');
   };
   searchInput.addEventListener('input', filterMembers);
