@@ -17,6 +17,10 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+// Railway 健康检查端点（无需认证，放在所有路由最前）
+app.get('/health', (req, res) => res.status(200).send('OK'));
+app.get('/', (req, res) => res.status(200).send('QIANmeng API Running'));
+
 // 统一响应助手函数
 function ok(res, data, message) {
   const resp = { success: true };
@@ -234,7 +238,7 @@ async function initDB() {
         updated_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    // 迁移：补充 initiator_id / recipient_id 字段（向后兼容）
+    // 迁移：补充 initiator_id / recipient_id 字段（向后兼容，先加列再回填）
     await client.query(`
       ALTER TABLE player_trades
         ADD COLUMN IF NOT EXISTS initiator_id BIGINT NOT NULL DEFAULT 0,
@@ -244,8 +248,11 @@ async function initDB() {
     await client.query(`
       UPDATE player_trades
       SET initiator_id = CAST(initiated_by AS BIGINT),
-          recipient_id = COALESCE((SELECT owner_id FROM clubs WHERE id = player_trades.from_club_id LIMIT 1)::BIGINT, 0)
-      WHERE initiator_id = 0 AND recipient_id = 0
+          recipient_id = COALESCE(
+            (SELECT CAST(owner_id AS BIGINT) FROM clubs WHERE id = player_trades.from_club_id LIMIT 1),
+            0::BIGINT
+          )
+      WHERE initiator_id = 0
     `);
     // 交易比例配置（动态比例）
     await client.query(`
