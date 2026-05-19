@@ -1,0 +1,40 @@
+{
+  "parserOptions": {
+    "ecmaVersion": 2020,
+    "sourceType": "script"
+  },
+  "rules": {
+    "no-undef": ["error"],
+    "no-unused-vars": ["off"]
+  },
+  "env": {
+    "browser": true,
+    "es2020": true
+  },
+  "globals": {
+    "API_BASE": "readonly",
+    "currentUser": "writable",
+    "authToken": "writable",
+    "currentTab": "writable",
+    "authMode": "writable",
+    "unreadNotifs": "writable",
+    "LANES": "readonly",
+    "LANE_ICONS": "readonly",
+    "cacheStore": "readonly",
+    "compTier": "writable",
+    "TIER_CONFIG": "readonly",
+    "escapeHtml": "readonly",
+    "statusBadge": "readonly",
+    "api": "readonly",
+    "fetchUserInfo": "readonly",
+    "openAuthModal": "readonly",
+    "closeAuthModal": "readonly",
+    "switchAuthMode": "readonly",
+    "handleAuth": "readonly",
+    "logout": "readonly",
+    "updateUI": "readonly",
+    "renderCompetitionPanel": "readonly",
+    "switchCompTier": "readonly",
+    "loadCompetitionList": "readonly"
+  }
+}

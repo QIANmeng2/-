@@ -1,3 +1,4 @@
+"use strict";
 const API_BASE = 'https://perpetual-enchantment-production-b163.up.railway.app';
 let currentUser = null;
 let authToken = localStorage.getItem('local_current_user') || null;

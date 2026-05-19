@@ -14,6 +14,7 @@ module.exports = function(app, pool, authMiddleware, ok, badRequest, serverError
             p.player_score,
             p.player_value,
             u.username,
+            u.dream_coins,
             c.club_name
           FROM players p
           LEFT JOIN users u ON p.user_id = u.id
@@ -27,7 +28,7 @@ module.exports = function(app, pool, authMiddleware, ok, badRequest, serverError
           club_name: row.club_name,
           player_value: row.player_value,
           player_score: row.player_score,
-          dreamcoin_value: row.dreamcoin_value || 0
+          dreamcoin_value: row.dream_coins || 0
         }));
         return ok(res, { list });
       } else if (type === 'club') {
