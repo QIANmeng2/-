@@ -308,16 +308,18 @@ async function initDB() {
         paid_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    // 俱乐部大名单（顶级/次级各≤5人）
+    // 俱乐部大名单（顶级/次级各≤5人，自由名单支持多队伍分组）
     await client.query(`
       CREATE TABLE IF NOT EXISTS club_rosters (
         id SERIAL PRIMARY KEY,
         club_id INTEGER NOT NULL,
         tier TEXT NOT NULL,
         player_user_id TEXT NOT NULL,
+        team_id TEXT DEFAULT '',
         UNIQUE(club_id, tier, player_user_id)
       );
     `);
+    await client.query("ALTER TABLE club_rosters ADD COLUMN IF NOT EXISTS team_id TEXT DEFAULT ''");
     // 赛事扩展字段
     await client.query("ALTER TABLE competitions ADD COLUMN IF NOT EXISTS start_time TIMESTAMP");
     await client.query("ALTER TABLE competitions ADD COLUMN IF NOT EXISTS end_time TIMESTAMP");
@@ -2420,14 +2422,28 @@ app.get('/api/club/:id/roster', authMiddleware, async (req, res) => {
 });
 
 app.put('/api/club/:id/roster', authMiddleware, async (req, res) => {
-  const { tier, players } = req.body; // tier: 'elite'|'secondary'|'free', players: [userId,...]
+  const { tier, players, teamId } = req.body; // tier: 'elite'|'secondary'|'free', players: [{userId, teamId?}, ...] 或 [userId,...]
   try {
     if (!['elite','secondary','free'].includes(tier)) return badRequest(res, '无效联赛等级');
-    if (!Array.isArray(players) || players.length > 5) return badRequest(res, '大名单最多5人');
-    // elite: S/A级，secondary: B/C/D级，free: 不限等级（老板不受限）
+    // 兼容两种格式：新格式 [{userId, teamId?}] 或旧格式 [userId]
+    const playerEntries = players.map(p => (typeof p === 'string' ? { userId: p, teamId: teamId || '' } : { userId: p.userId || p, teamId: p.teamId || teamId || '' }));
+    // 自由名单：每支队伍最多5人（不设总人数上限）
+    // elite/secondary：保持原有每等级最多5人限制
+    if (!['free'].includes(tier) && playerEntries.length > 5) return badRequest(res, tier + '大名单最多5人');
+    // 自由名单：按 team_id 分组校验，每组不超过5人
+    if (tier === 'free') {
+      const teamGroups = {};
+      for (const entry of playerEntries) {
+        const tid = entry.teamId || '';
+        teamGroups[tid] = (teamGroups[tid] || 0) + 1;
+        if (teamGroups[tid] > 5) return badRequest(res, '自由名单每支队伍最多5人（队伍：' + (tid || '默认') + '）');
+      }
+    }
+    // 等级校验
     const gradeMap = { elite: ['S','A'], secondary: ['B','C','D'], free: [] };
     const allowedGrades = gradeMap[tier];
-    for (const uid of players) {
+    for (const entry of playerEntries) {
+      const uid = entry.userId;
       const cm = await pool.query('SELECT * FROM club_members WHERE club_id=$1 AND user_id=$2', [req.params.id, uid]);
       if (cm.rows.length === 0) return badRequest(res, '选手' + uid + '未签约该俱乐部');
       const role = cm.rows[0].role;
@@ -2439,9 +2455,13 @@ app.put('/api/club/:id/roster', authMiddleware, async (req, res) => {
         }
       }
     }
+    // 删除旧记录再批量插入
     await pool.query('DELETE FROM club_rosters WHERE club_id=$1 AND tier=$2', [req.params.id, tier]);
-    for (const uid of players) {
-      await pool.query('INSERT INTO club_rosters (club_id, tier, player_user_id) VALUES ($1,$2,$3) ON CONFLICT (club_id, tier, player_user_id) DO UPDATE SET player_user_id=EXCLUDED.player_user_id', [req.params.id, tier, uid]);
+    for (const entry of playerEntries) {
+      await pool.query(
+        "INSERT INTO club_rosters (club_id, tier, player_user_id, team_id) VALUES ($1,$2,$3,$4) ON CONFLICT (club_id, tier, player_user_id) DO UPDATE SET team_id=EXCLUDED.team_id",
+        [req.params.id, tier, entry.userId, entry.teamId || '']
+      );
     }
     ok(res);
   } catch(e) { console.error(e); serverError(res, '设置失败'); }

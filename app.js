@@ -2007,77 +2007,43 @@ async function renderClubDetail(clubId) {
             顶级联赛 (${eliteIds.size}/5) <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;margin-left:4px;">限S/A级选手，老板不受限</span>
           </div>
           ${members.length === 0 ? '<p style="font-size:0.76rem;color:var(--text-muted);">无可用队员</p>' : `
-          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
+          <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <label style="font-size:0.72rem;color:var(--text-muted);white-space:nowrap;">当前队伍：</label>
+            <input type="text" id="rosterTeamInput" placeholder="输入队伍名（如：一队/二队）" style="min-width:140px;padding:4px 8px;font-size:0.76rem;background:rgba(255,255,255,.04);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);" value="${(rosters.free||[]).find(r=>r.team_id)?.team_id || ''}">
+            <button class="btn btn-xs btn-ghost" onclick="document.querySelectorAll('.roster-free-check:not(:checked)').forEach(cb=>cb.dataset.team=document.getElementById('rosterTeamInput').value.trim())" style="font-size:0.68rem;padding:3px 8px;">应用到新选</button>
+          </div>
+          <div id="freeRosterContainer" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
+            ${(function(){
+              const freeList = rosters.free || [];
+              const teams = {}; const unassigned = [];
+              for (const r of freeList) { const tid = r.team_id || ''; if (tid) { if (!teams[tid]) teams[tid] = []; teams[tid].push(r); } else unassigned.push(r); }
+              let html = '';
+              Object.keys(teams).sort().forEach(tid => {
+                html += '<div style=\"background:rgba(52,211,153,.04);border:1px solid rgba(52,211,153,.12);border-radius:6px;padding:6px 10px;margin-bottom:4px;\"><div style=\"font-size:0.7rem;color:#34d399;font-weight:600;margin-bottom:4px;\">' + escapeHtml(tid) + '（' + teams[tid].length + '/5人）</div>' + teams[tid].map(r => '<div style=\"font-size:0.72rem;color:var(--text-secondary);padding:2px 0;display:flex;align-items:center;gap:4px;\"><span style=\"color:#34d399;\">✅</span><b>' + escapeHtml(r.game_id || r.player_user_id) + '</b>' + (r.grade?'<span class=\"grade-badge '+(gradeCls[r.grade]||'grade-c')+ '\" style=\"font-size:0.62rem;margin-left:4px;\">'+r.grade+'</span>':'') + (r.market_value?'<span style=\"color:var(--warning);font-size:0.68rem;margin-left:4px;\">'+r.market_value+'万</span>':'') + '</div>').join('') + '</div>';
+              });
+              if (unassigned.length) {
+                html += '<div style=\"background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:6px 10px;margin-bottom:4px;\"><div style=\"font-size:0.7rem;color:var(--text-muted);font-weight:600;margin-bottom:4px;\">未分组（'+unassigned.length+'/5人）</div>' + unassigned.map(r => '<div style=\"font-size:0.72rem;color:var(--text-secondary);padding:2px 0;\"><span>✅</span><b>'+escapeHtml(r.game_id || r.player_user_id)+'</b></div>').join('') + '</div>';
+              }
+              return html;
+            })()}
+            <div style="border-top:1px solid rgba(255,255,255,.05);padding-top:6px;margin-top:4px;">
+            <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">添加成员：</div>
             ${members.map(m => {
               const g = m.grade;
               const gCls = gradeCls[g] || 'grade-c';
               const isBoss = m.role === 'boss';
-              const allowed = isBoss || ['S','A'].includes(g);
-              const disabledAttr = allowed ? '' : 'disabled';
-              const opacityStyle = allowed ? '' : 'opacity:0.45;';
-              return `<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer;padding:6px 8px;border-radius:6px;transition:background 0.15s;${opacityStyle}" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
-                <input type="checkbox" class="roster-elite-check" value="${m.user_id}" ${eliteIds.has(m.user_id) ? 'checked' : ''} ${disabledAttr} style="accent-color:#fbbf24;width:14px;height:14px;cursor:pointer;">
+              const existingTeam = (rosters.free||[]).find(r=>r.player_user_id===m.user_id)?.team_id || '';
+              return `<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer;padding:6px 8px;border-radius:6px;transition:background .15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                <input type="checkbox" class="roster-free-check" value="${m.user_id}" data-team="${existingTeam}" ${freeIds.has(m.user_id) ? 'checked' : ''} onchange="if(this.checked&&!this.dataset.team)this.dataset.team=(document.getElementById('rosterTeamInput')&&document.getElementById('rosterTeamInput').value.trim())||''" style="accent-color:#34d399;width:14px;height:14px;cursor:pointer;">
                 <span style="font-weight:600;color:var(--text-primary);">${m.coachname || m.username}</span>
                 ${m.gameid ? `<span style="font-size:0.7rem;color:var(--text-muted);">${m.gameid}</span>` : ''}
-                ${g ? `<span class="grade-badge ${gCls}">${g}</span>` : ''}
+                ${g ? `<span class="grade-badge ${gCls}" style="font-size:0.65rem;">${g}</span>` : ''}
                 ${m.market_value ? `<span style="font-size:0.7rem;color:var(--warning);font-weight:700;">${m.market_value}万</span>` : ''}
                 ${isBoss ? '<span class="pos-tag club-role-boss" style="font-size:0.65rem;">老板</span>' : ''}
-                ${!allowed && !isBoss ? '<span style="font-size:0.65rem;color:var(--danger);">需S/A级</span>' : ''}
+                ${existingTeam ? `<span style="font-size:0.62rem;color:#34d399;background:rgba(52,211,153,.1);padding:1px 5px;border-radius:3px;">${escapeHtml(existingTeam)}</span>` : ''}
               </label>`;
             }).join('')}
-          </div>
-          <button class="btn btn-sm" onclick="saveClubRoster(${clubId},'elite')" style="background:rgba(245,158,11,0.12);color:#fbbf24;border:1px solid rgba(245,158,11,0.25);">保存顶级联赛名单</button>`}
-        </div>
-
-        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;padding:16px;margin-bottom:16px;">
-          <div style="font-size:0.82rem;font-weight:700;color:#a78bfa;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-            次级联赛 (${secondaryIds.size}/5) <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;margin-left:4px;">限B/C/D级选手，老板不受限</span>
-          </div>
-          ${members.length === 0 ? '<p style="font-size:0.76rem;color:var(--text-muted);">无可用队员</p>' : `
-          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
-            ${members.map(m => {
-              const g = m.grade;
-              const gCls = gradeCls[g] || 'grade-c';
-              const isBoss = m.role === 'boss';
-              const allowed = isBoss || ['B','C','D'].includes(g);
-              const disabledAttr = allowed ? '' : 'disabled';
-              const opacityStyle = allowed ? '' : 'opacity:0.45;';
-              return `<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer;padding:6px 8px;border-radius:6px;transition:background 0.15s;${opacityStyle}" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
-                <input type="checkbox" class="roster-secondary-check" value="${m.user_id}" ${secondaryIds.has(m.user_id) ? 'checked' : ''} ${disabledAttr} style="accent-color:#a78bfa;width:14px;height:14px;cursor:pointer;">
-                <span style="font-weight:600;color:var(--text-primary);">${m.coachname || m.username}</span>
-                ${m.gameid ? `<span style="font-size:0.7rem;color:var(--text-muted);">${m.gameid}</span>` : ''}
-                ${g ? `<span class="grade-badge ${gCls}">${g}</span>` : ''}
-                ${m.market_value ? `<span style="font-size:0.7rem;color:var(--warning);font-weight:700;">${m.market_value}万</span>` : ''}
-                ${isBoss ? '<span class="pos-tag club-role-boss" style="font-size:0.65rem;">老板</span>' : ''}
-                ${!allowed && !isBoss ? '<span style="font-size:0.65rem;color:var(--danger);">需B/C/D级</span>' : ''}
-              </label>`;
-            }).join('')}
-          </div>
-          <button class="btn btn-sm" onclick="saveClubRoster(${clubId},'secondary')" style="background:rgba(123,47,253,0.12);color:#c4b5fd;border:1px solid rgba(123,47,253,0.25);">保存次级联赛名单</button>`}
-        </div>
-
-        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;padding:16px;margin-bottom:16px;">
-          <div style="font-size:0.82rem;font-weight:700;color:#34d399;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            自由名单 (${freeIds.size}/5) <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;margin-left:4px;">不限等级，可参加常规赛事，老板可加入，1人可加入多个名单</span>
-          </div>
-          ${members.length === 0 ? '<p style="font-size:0.76rem;color:var(--text-muted);">无可用队员</p>' : `
-          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
-            ${members.map(m => {
-              const g = m.grade;
-              const gCls = gradeCls[g] || 'grade-c';
-              const isBoss = m.role === 'boss';
-              // 自由名单不限等级，所有人都可加入
-              return `<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer;padding:6px 8px;border-radius:6px;transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
-                <input type="checkbox" class="roster-free-check" value="${m.user_id}" ${freeIds.has(m.user_id) ? 'checked' : ''} style="accent-color:#34d399;width:14px;height:14px;cursor:pointer;">
-                <span style="font-weight:600;color:var(--text-primary);">${m.coachname || m.username}</span>
-                ${m.gameid ? `<span style="font-size:0.7rem;color:var(--text-muted);">${m.gameid}</span>` : ''}
-                ${g ? `<span class="grade-badge ${gCls}">${g}</span>` : ''}
-                ${m.market_value ? `<span style="font-size:0.7rem;color:var(--warning);font-weight:700;">${m.market_value}万</span>` : ''}
-                ${isBoss ? '<span class="pos-tag club-role-boss" style="font-size:0.65rem;">老板</span>' : ''}
-              </label>`;
-            }).join('')}
+            </div>
           </div>
           <button class="btn btn-sm" onclick="saveClubRoster(${clubId},'free')" style="background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.25);">保存自由名单</button>`}
         </div>
@@ -2170,10 +2136,21 @@ async function removeClubMember(clubId, userId) {
 
 async function saveClubRoster(clubId, tier) {
   const cls = tier === 'elite' ? '.roster-elite-check' : tier === 'secondary' ? '.roster-secondary-check' : '.roster-free-check';
-  const checked = Array.from(document.querySelectorAll(cls + ':checked')).map(cb => cb.value);
-  if (checked.length > 5) { showToast('大名单最多5人','error'); return; }
+  const checked = Array.from(document.querySelectorAll(cls + ':checked'));
+  // 自由名单：发送 [{userId, teamId}] 格式支持多队伍
+  // 其他名单：发送 [userId] 格式
+  let players;
+  if (tier === 'free') {
+    players = checked.map(cb => ({ userId: cb.value, teamId: cb.dataset.team || '' }));
+    // 按队伍分组校验每队不超过5人
+    const teamGroups = {};
+    for (const p of players) { const tid = p.teamId || ''; teamGroups[tid] = (teamGroups[tid]||0)+1; if (teamGroups[tid]>5){ showToast('自由名单「'+ (tid||'默认') +'」已满5人','error'); return; } }
+  } else {
+    players = checked.map(cb => cb.value);
+    if (players.length > 5) { showToast(tier + '大名单最多5人','error'); return; }
+  }
   try {
-    await api('/api/club/' + clubId + '/roster', { method:'PUT', body: JSON.stringify({ tier, players: checked }) });
+    await api('/api/club/' + clubId + '/roster', { method:'PUT', body: JSON.stringify({ tier, players }) });
     showToast('大名单已保存','success');
     await renderClubDetail(clubId);
   } catch(e) { showToast(e.message,'error'); }
