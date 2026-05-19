@@ -27,6 +27,20 @@ function switchLeaderboardTab(type) {
   loadLeaderboardData();
 }
 
+// 计算并列排名（标准竞争排名：相同分数同排名，下一名次顺延）
+function calcDenseRanking(list, scoreField) {
+  let currentRank = 1;
+  let prevScore = null;
+  return list.map((item, idx) => {
+    const score = item[scoreField];
+    if (prevScore !== null && score !== prevScore) {
+      currentRank = idx + 1;
+    }
+    prevScore = score;
+    return { ...item, displayRank: currentRank };
+  });
+}
+
 async function loadLeaderboardData() {
   const container = document.getElementById('leaderboardContent');
   const type = currentLeaderboardType;
@@ -38,6 +52,7 @@ async function loadLeaderboardData() {
       return;
     }
     if (type === 'player') {
+      const rankedList = calcDenseRanking(list, 'player_score');
       container.innerHTML = `
         <div style="overflow-x:auto;">
           <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
@@ -52,19 +67,20 @@ async function loadLeaderboardData() {
               </tr>
             </thead>
             <tbody>
-              ${list.map(p => `
+              ${rankedList.map(p => `
                 <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                  <td style="padding:8px 12px;font-weight:700;color:${p.rank<=3?'var(--warning)':'var(--text-primary)'};">${p.rank}</td>
+                  <td style="padding:8px 12px;font-weight:700;color:${p.displayRank<=3?'var(--warning)':'var(--text-primary)'};">${p.displayRank}</td>
                   <td style="padding:8px 12px;color:var(--text-primary);">${escapeHtml(p.username||'')}</td>
                   <td style="padding:8px 12px;color:var(--text-secondary);">${escapeHtml(p.club_name||'自由选手')}</td>
                   <td style="padding:8px 12px;text-align:right;color:var(--warning);">${p.player_value||0}</td>
-                  <td style="padding:8px 12px;text-align:right;color:${p.dreamcoin_value>=0?'var(--success)':'var(--danger)'};">${p.dreamcoin_value||0}</td>
+                  <td style="padding:8px 12px;text-align:right;color:${p.dreamcoin_value>=0?'var(--success)':'var(--danger')}">${p.dreamcoin_value||0}</td>
                   <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--primary);">${p.player_score||0}</td>
                 </tr>`).join('')}
             </tbody>
           </table>
         </div>`;
     } else {
+      const rankedList = calcDenseRanking(list, 'club_score');
       container.innerHTML = `
         <div style="overflow-x:auto;">
           <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
@@ -77,9 +93,9 @@ async function loadLeaderboardData() {
               </tr>
             </thead>
             <tbody>
-              ${list.map(c => `
+              ${rankedList.map(c => `
                 <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                  <td style="padding:8px 12px;font-weight:700;color:${c.rank<=3?'var(--warning)':'var(--text-primary)'};">${c.rank}</td>
+                  <td style="padding:8px 12px;font-weight:700;color:${c.displayRank<=3?'var(--warning)':'var(--text-primary)'};">${c.displayRank}</td>
                   <td style="padding:8px 12px;color:var(--text-primary);">${escapeHtml(c.club_name||'')}</td>
                   <td style="padding:8px 12px;color:var(--text-secondary);">${escapeHtml(c.boss_name||'')}</td>
                   <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--primary);">${c.club_score||0}</td>
