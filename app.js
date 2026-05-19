@@ -2577,17 +2577,72 @@ async function switchChatType(type) {
 
 async function renderPrivateTargets(container) {
   const contacts = chatPanelData.contacts;
+
+  let html = `
+    <div class="chat-search-box">
+      <input type="text" class="chat-search-input" id="chatPrivateSearch" placeholder="搜索用户..." oninput="handlePrivateSearch(event)">
+      <button class="chat-search-btn" onclick="handlePrivateSearch({target:document.getElementById('chatPrivateSearch')})">🔍</button>
+    </div>
+    <div id="chatPrivateSearchResults" style="display:none;"></div>
+    <div class="chat-contacts-label">已有聊天记录</div>
+  `;
+
   if (contacts.length === 0) {
-    container.innerHTML = '<div class="chat-empty">暂无私聊记录</div>';
+    html += '<div class="chat-empty">暂无私聊记录</div>';
+  } else {
+    html += contacts.map(c => `
+      <div class="chat-target-item" data-id="${c.id}" onclick="selectChatTarget({ receiver_id: '${c.id}', name: '${escapeHtml(c.coachname || c.username || '未知')}' })">
+        <span class="chat-avatar">${(c.coachname || c.username || '?')[0]}</span>
+        <span class="chat-target-name">${escapeHtml(c.coachname || c.username || '未知')}</span>
+        <span class="chat-target-team">${escapeHtml(c.teamname || '')}</span>
+      </div>
+    `).join('');
+  }
+
+  container.innerHTML = html;
+}
+
+let chatSearchDebounceTimer = null;
+async function handlePrivateSearch(e) {
+  const query = e.target.value.trim();
+  const resultsContainer = document.getElementById('chatPrivateSearchResults');
+  const contactsLabel = document.querySelector('.chat-contacts-label');
+  const contactsItems = document.querySelectorAll('.chat-target-item');
+
+  if (!query) {
+    resultsContainer.style.display = 'none';
+    resultsContainer.innerHTML = '';
+    if (contactsLabel) contactsLabel.style.display = 'block';
+    contactsItems.forEach(el => el.style.display = 'flex');
     return;
   }
-  container.innerHTML = contacts.map(c => `
-    <div class="chat-target-item" data-id="${c.id}" onclick="selectChatTarget({ receiver_id: '${c.id}', name: '${escapeHtml(c.coachname || c.username || '未知')}' })">
-      <span class="chat-avatar">${(c.coachname || c.username || '?')[0]}</span>
-      <span class="chat-target-name">${escapeHtml(c.coachname || c.username || '未知')}</span>
-      <span class="chat-target-team">${escapeHtml(c.teamname || '')}</span>
-    </div>
-  `).join('');
+
+  // 显示加载中
+  resultsContainer.style.display = 'block';
+  resultsContainer.innerHTML = '<div class="chat-loading" style="padding:12px;">搜索中...</div>';
+  if (contactsLabel) contactsLabel.style.display = 'none';
+  contactsItems.forEach(el => el.style.display = 'none');
+
+  clearTimeout(chatSearchDebounceTimer);
+  chatSearchDebounceTimer = setTimeout(async () => {
+    try {
+      const data = await api('/api/users/search?q=' + encodeURIComponent(query), { skipCache: true });
+      const users = data.users || [];
+      if (users.length === 0) {
+        resultsContainer.innerHTML = '<div class="chat-empty" style="padding:12px;">未找到匹配用户</div>';
+        return;
+      }
+      resultsContainer.innerHTML = users.map(u => `
+        <div class="chat-target-item" data-id="${u.id}" onclick="selectChatTarget({ receiver_id: '${u.id}', name: '${escapeHtml(u.coachname || u.username || '未知')}' })">
+          <span class="chat-avatar">${(u.coachname || u.username || '?')[0]}</span>
+          <span class="chat-target-name">${escapeHtml(u.coachname || u.username || '未知')}</span>
+          <span class="chat-target-team">${escapeHtml(u.teamname || '')}</span>
+        </div>
+      `).join('');
+    } catch (err) {
+      resultsContainer.innerHTML = '<div class="chat-empty" style="padding:12px;">搜索失败</div>';
+    }
+  }, 300);
 }
 
 async function renderTeamTargets(container) {
@@ -2682,12 +2737,15 @@ async function loadChatMessages(type, receiverId, teamId, clubId) {
 function createChatMessageHTML(msg) {
   const isMe = msg.sender_id === currentUser?.id;
   const time = new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  const avatarChar = (msg.sender_name || '?')[0];
+  const senderName = escapeHtml(msg.sender_name || '未知');
+  const senderTeam = msg.sender_team ? ' · ' + escapeHtml(msg.sender_team) : '';
 
   return `
     <div class="chat-message ${isMe ? 'chat-message-me' : 'chat-message-other'}">
-      ${!isMe ? `<div class="chat-avatar">${(msg.sender_name || '?')[0]}</div>` : ''}
+      <div class="chat-avatar">${avatarChar}</div>
       <div class="chat-message-content">
-        ${!isMe ? `<div class="chat-sender-name">${escapeHtml(msg.sender_name || '未知')}${msg.sender_team ? ' · ' + escapeHtml(msg.sender_team) : ''}</div>` : ''}
+        <div class="chat-sender-name">${senderName}${senderTeam}</div>
         <div class="chat-bubble">${escapeHtml(msg.content)}</div>
         <div class="chat-time">${time}</div>
       </div>

@@ -655,6 +655,22 @@ app.get('/api/chat/contacts', authMiddleware, async (req, res) => {
   } catch(e) { serverError(res, '获取联系人失败', e); }
 });
 
+// 搜索用户（用于私聊添加联系人）
+app.get('/api/users/search', authMiddleware, async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.trim().length < 1) return badRequest(res, '搜索关键词不能为空');
+    const keyword = '%' + q.trim() + '%';
+    const result = await pool.query(
+      `SELECT id, username, coachname, teamname FROM users
+       WHERE id != $1 AND (coachname ILIKE $2 OR username ILIKE $2 OR teamname ILIKE $2)
+       ORDER BY coachname NULLS LAST LIMIT 20`,
+      [req.userId, keyword]
+    );
+    ok(res, { users: result.rows });
+  } catch(e) { serverError(res, '搜索用户失败', e); }
+});
+
 async function sendNotification(userId, type, content, relatedId = null) {
   const result = await pool.query(
     'INSERT INTO notifications (userId, type, content, relatedId, notification_id) VALUES ($1,$2,$3,$4,$5) RETURNING id',

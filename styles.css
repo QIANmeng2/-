@@ -2504,10 +2504,54 @@
   color: #fff;
 }
 
+.chat-search-box {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.chat-search-input {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.chat-search-input:focus {
+  border-color: var(--primary);
+}
+
+.chat-search-btn {
+  padding: 6px 10px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.15s;
+}
+
+.chat-search-btn:hover {
+  background: var(--bg-glass-hover);
+}
+
+.chat-contacts-label {
+  padding: 8px 12px 4px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 .chat-target-list {
   flex: 1;
   overflow-y: auto;
-  padding: 8px;
+  padding: 0 8px 8px;
 }
 
 .chat-target-item {
@@ -2596,6 +2640,10 @@
 .chat-message-me {
   align-self: flex-end;
   flex-direction: row-reverse;
+}
+
+.chat-message-me .chat-avatar {
+  background: var(--gradient-gold);
 }
 
 .chat-message-other {
