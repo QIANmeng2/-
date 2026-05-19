@@ -52,9 +52,11 @@ async function api(path, options = {}, retries = 2) {
     const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 12000);
     const res = await fetch(url, { ...options, headers, signal: controller.signal });
     clearTimeout(timeout);
-    const data = await res.json();
+    let data = await res.json();
     if (res.status === 401) { logout(); return null; }
     if (!res.ok) throw new Error(data.message || '请求失败');
+    // 自动解包统一响应格式 {success:true, data:{...}}
+    if (data && data.success === true && data.data !== undefined) data = data.data;
     if (isGet) cacheStore.set(cacheKey, { data, time: Date.now() });
     return data;
   } catch (err) {
