@@ -229,6 +229,23 @@ async function initDB() {
         updated_at TIMESTAMP DEFAULT NOW()
       );
     `);
+    // 交易比例配置（动态比例）
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS transaction_ratios (
+        id SERIAL PRIMARY KEY,
+        type TEXT NOT NULL UNIQUE,
+        player_ratio DECIMAL(5,2) NOT NULL DEFAULT 10,
+        club_ratio DECIMAL(5,2) DEFAULT 0,
+        admin_ratio DECIMAL(5,2) NOT NULL DEFAULT 50,
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    // 初始化默认交易比例
+    await client.query(`
+      INSERT INTO transaction_ratios (type, player_ratio, club_ratio, admin_ratio)
+      VALUES ('transfer', 10, 40, 50), ('purchase', 10, 0, 90)
+      ON CONFLICT (type) DO NOTHING
+    `);
     // 赛事分级
     await client.query("ALTER TABLE competitions ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'regular'");
     await client.query("ALTER TABLE competitions ADD COLUMN IF NOT EXISTS description TEXT DEFAULT NULL");
@@ -322,6 +339,39 @@ function adminMiddleware(req, res, next) {
   if (req.userId !== ADMIN_USER_ID) return forbidden(res, '无权限');
   next();
 }
+
+// 获取交易比例配置
+app.get('/api/admin/transaction-ratios', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, type, player_ratio, club_ratio, admin_ratio, updated_at FROM transaction_ratios');
+    const ratios = {};
+    result.rows.forEach(r => {
+      ratios[r.type] = {
+        player_ratio: parseFloat(r.player_ratio),
+        club_ratio: parseFloat(r.club_ratio || 0),
+        admin_ratio: parseFloat(r.admin_ratio)
+      };
+    });
+    ok(res, { ratios });
+  } catch(e) { serverError(res, '获取交易比例失败', e); }
+});
+
+// 更新交易比例配置
+app.put('/api/admin/transaction-ratios', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { type, player_ratio, club_ratio, admin_ratio } = req.body;
+    if (!type || !['transfer', 'purchase'].includes(type)) return badRequest(res, '无效的交易类型');
+    const p = parseFloat(player_ratio) || 0;
+    const c = parseFloat(club_ratio) || 0;
+    const a = parseFloat(admin_ratio) || 0;
+    if (Math.abs(p + c + a - 100) > 0.01) return badRequest(res, '比例总和必须为100%，当前：' + (p + c + a) + '%');
+    await pool.query(
+      'UPDATE transaction_ratios SET player_ratio=$1, club_ratio=$2, admin_ratio=$3, updated_at=NOW() WHERE type=$4',
+      [p, c, a, type]
+    );
+    ok(res, null, '比例更新成功');
+  } catch(e) { serverError(res, '更新交易比例失败', e); }
+});
 
 async function sendNotification(userId, type, content, relatedId = null) {
   const result = await pool.query(
@@ -2175,21 +2225,29 @@ app.post('/api/trade/:id/accept', authMiddleware, async (req, res) => {
     if (fromClub.rows[0].owner_id !== req.userId) return forbidden(res, '只有源俱乐部老板可以接受交易');
     const t = trade.rows[0];
     const priceDiff = t.price_diff || 0;
-    // 转账差价：目标俱乐部老板 → 平台40% + 原俱乐部老板50% + 选手10%
+    // 转账差价：从数据库读取动态比例
+    const ratioType = t.trade_type === 'swap' ? 'transfer' : 'purchase';
+    const ratioResult = await pool.query('SELECT * FROM transaction_ratios WHERE type=$1', [ratioType]);
+    const ratios = ratioResult.rows[0] || { player_ratio: 10, club_ratio: 50, admin_ratio: 40 };
+    const playerRatio = parseFloat(ratios.player_ratio) / 100;
+    const clubRatio = parseFloat(ratios.club_ratio || 0) / 100;
+    const adminRatio = parseFloat(ratios.admin_ratio) / 100;
     if (priceDiff > 0) {
-      const platformFee = Math.floor(priceDiff * 0.4);
-      const origBossFee = Math.floor(priceDiff * 0.5);
-      const playerFee = priceDiff - platformFee - origBossFee;
+      const platformFee = Math.floor(priceDiff * adminRatio);
+      const clubFee = Math.floor(priceDiff * clubRatio);
+      const playerFee = priceDiff - platformFee - clubFee;
       // 目标俱乐部老板扣款
       await pool.query('UPDATE users SET dream_coins = dream_coins - $1 WHERE id=$2', [priceDiff, t.initiated_by]);
       await pool.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'trade','选手交易支付差价')", [t.initiated_by, -priceDiff]);
       // 平台收入（管理员）
       await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id=$2', [platformFee, 'mp4hmya7ad15v6']);
       await pool.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'trade','平台交易手续费')", ['mp4hmya7ad15v6', platformFee]);
-      // 原俱乐部老板收入
-      const origBossId = fromClub.rows[0].owner_id;
-      await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id=$2', [origBossFee, origBossId]);
-      await pool.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'trade','选手交易收入')", [origBossId, origBossFee]);
+      // 俱乐部收入（如果是转会，俱乐部获得部分；采买则俱乐部部分为0）
+      if (clubFee > 0) {
+        const origBossId = fromClub.rows[0].owner_id;
+        await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id=$2', [clubFee, origBossId]);
+        await pool.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'trade','俱乐部交易分成')", [origBossId, clubFee]);
+      }
       // 选手收入
       await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id=$2', [playerFee, t.player_user_id]);
       await pool.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'trade','选手交易分成')", [t.player_user_id, playerFee]);
