@@ -14,7 +14,7 @@ module.exports = function(app, pool, authMiddleware, ok, badRequest, serverError
             p.player_score,
             p.player_value,
             u.username,
-            u."gameId",
+            u.gameId,
             u.dream_coins,
             c.club_name
           FROM players p
@@ -26,7 +26,7 @@ module.exports = function(app, pool, authMiddleware, ok, badRequest, serverError
         const list = rows.map((row, idx) => ({
           rank: idx + 1,
           username: row.username,
-          game_id: row.gameId,
+          game_id: row.gameid,
           club_name: row.club_name,
           player_value: row.player_value,
           player_score: row.player_score,
@@ -40,7 +40,7 @@ module.exports = function(app, pool, authMiddleware, ok, badRequest, serverError
             c.club_name,
             c.club_score,
             u.username as boss_name,
-            u."gameId" as boss_game_id
+            u.gameId as boss_game_id
           FROM clubs c
           LEFT JOIN users u ON c.boss_id = u.id
           ORDER BY c.club_score DESC
