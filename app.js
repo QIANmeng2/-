@@ -2073,13 +2073,13 @@ async function renderClubDetail(clubId) {
             <div style="display:flex;flex-direction:column;gap:2px;">
               <span><b>${t.player_name || t.player_user_id}</b> <span style="color:var(--text-muted);">${t.trade_type==='buy'?'购买':'互换'}</span></span>
               <span style="font-size:0.72rem;color:var(--text-secondary);">${t.from_club_name} → ${t.to_club_name}</span>
-              ${t.price_diff > 0 ? `<span style="font-size:0.7rem;color:var(--warning);">${t.to_club_id == clubId ? '需支付差价' : '将获得差价'}: ${t.price_diff/10000}万</span>` : ''}
+              ${t.price_diff > 0 ? `<span style="font-size:0.7rem;color:var(--warning);">${String(t.to_club_id) === String(clubId) ? '需支付差价' : '将获得差价'}: ${t.price_diff/10000}万</span>` : ''}
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-              ${t.status === 'pending' && t.to_club_id == clubId && isOwner ? `
+              ${t.status === 'pending' && String(t.to_club_id) === String(clubId) && isOwner ? `
                 <button class="btn btn-sm" style="background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3);padding:4px 12px;font-size:0.72rem;" onclick="handleTrade(${t.id},'accept',${clubId})">接受</button>
                 <button class="btn btn-sm" style="background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.25);padding:4px 12px;font-size:0.72rem;" onclick="handleTrade(${t.id},'reject',${clubId})">拒绝</button>
-              ` : t.status === 'pending' && t.from_club_id == clubId && isOwner ? `
+              ` : t.status === 'pending' && String(t.from_club_id) === String(clubId) && isOwner ? `
                 <button class="btn btn-sm btn-ghost" style="padding:4px 12px;font-size:0.72rem;color:var(--text-muted);" onclick="handleTrade(${t.id},'cancel',${clubId})">取消</button>
               ` : ''}
               <span class="trade-status-${t.status}">${t.status==='pending'?'待处理':t.status==='accepted'?'已接受':t.status==='rejected'?'已拒绝':'已取消'}</span>
