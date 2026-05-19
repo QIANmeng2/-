@@ -41,9 +41,11 @@ const cacheStore = new Map();
 async function api(path, options = {}, retries = 2) {
   const isGet = !options.method || options.method === 'GET';
   const cacheKey = path + JSON.stringify(options.body || '');
+  // 优先使用缓存
   if (isGet && !options.skipCache && cacheStore.has(cacheKey)) {
     const cached = cacheStore.get(cacheKey);
-    if (Date.now() - cached.time < 20000) return cached.data;
+    // GET 请求缓存延长至 5 分钟（防止频繁请求失败）
+    if (Date.now() - cached.time < 300000) return cached.data;
   }
   const url = API_BASE + path;
   const headers = { 'Content-Type': 'application/json' };
@@ -65,6 +67,12 @@ async function api(path, options = {}, retries = 2) {
       if (retries === 2) showToast('正在唤醒服务器...', 'info');
       await new Promise(r => setTimeout(r, 1500));
       return api(path, options, retries - 1);
+    }
+    // 重试耗尽后，GET 请求返回过期缓存（兜底）
+    if (isGet && cacheStore.has(cacheKey)) {
+      const cached = cacheStore.get(cacheKey);
+      console.warn(`接口 ${path} 请求失败，使用过期缓存数据`);
+      return cached.data;
     }
     throw err;
   }
@@ -2218,7 +2226,7 @@ async function renderLeaderboardPanel() {
   content.innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
   try {
     const type = currentLeaderboardTab;
-    const data = await api('/api/leaderboard?type=' + type + '&limit=50');
+    const data = await api('/api/leaderboard?type=' + type + '&limit=50', { skipCache: false });
     const list = (data.data || data).list || [];
 
     let html = '<div class="card">';
@@ -2240,7 +2248,30 @@ async function renderLeaderboardPanel() {
     }
     html += '</div>';
     content.innerHTML = html;
-  } catch(e) { content.innerHTML = `<div class="card"><p>加载失败：${e.message}</p><button class="btn btn-sm btn-primary" onclick="renderLeaderboardPanel()">重试</button></div>`; }
+  } catch(e) {
+    // 尝试获取缓存数据兜底
+    try {
+      const cached = cacheStore.get('/api/leaderboard?type=' + currentLeaderboardTab + '&limit=50');
+      if (cached) {
+        content.innerHTML = '<div class="card"><div style="padding:12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;margin-bottom:16px;font-size:0.82rem;color:var(--warning);">⚠️ 网络不稳定，显示缓存数据</div></div>';
+        const list = (cached.data.data || cached.data).list || [];
+        if (list.length > 0) {
+          content.innerHTML += '<div class="card">';
+          content.innerHTML += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">';
+          content.innerHTML += '<h3 style="margin:0;">' + (currentLeaderboardTab === 'player' ? '选手榜单' : '俱乐部榜单') + '</h3>';
+          content.innerHTML += '</div>';
+          if (currentLeaderboardTab === 'player') {
+            content.innerHTML += renderPlayerLeaderboard(list);
+          } else {
+            content.innerHTML += renderClubLeaderboard(list);
+          }
+          content.innerHTML += '</div>';
+          return;
+        }
+      }
+    } catch {}
+    content.innerHTML = `<div class="card"><p>加载失败：${e.message}</p><button class="btn btn-sm btn-primary" onclick="renderLeaderboardPanel()">重试</button></div>`;
+  }
 }
 
 function renderPlayerLeaderboard(list) {
@@ -4019,8 +4050,14 @@ window.addEventListener('beforeunload', () => {
 
 // 启动
 (async () => {
-  updateUI();
-  switchTab('competition');
-  if (authToken) fetchUserInfo();
-  setTimeout(showWelcome, 800);
+  try {
+    window.APP_READY = true; // 标记应用已加载，解除兜底
+    updateUI();
+    switchTab('competition');
+    if (authToken) fetchUserInfo();
+    setTimeout(showWelcome, 800);
+  } catch (e) {
+    console.error('应用初始化错误:', e);
+    window.APP_READY = true; // 即使出错也标记已加载
+  }
 })();

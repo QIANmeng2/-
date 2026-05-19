@@ -230,7 +230,21 @@
   </div>
 </div>
 
-<script src="app.js?v=20260518c" defer></script>
+<script src="app.js?v=20260519a" defer></script>
 <script src="leaderboard-frontend.js?v=20260519" defer></script>
+<script>
+  // 兜底方案：3秒内 app.js 未加载完成则显示提示
+  window.APP_READY = false;
+  setTimeout(() => {
+    if (!window.APP_READY) {
+      document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#0a0a12;color:#fff;font-family:system-ui;flex-direction:column;gap:16px;text-align:center;padding:40px;">' +
+        '<div style="font-size:48px;">🔄</div>' +
+        '<div style="font-size:24px;font-weight:700;">系统更新中</div>' +
+        '<div style="font-size:14px;color:#888;">请稍后刷新页面，刷新按钮 ↓</div>' +
+        '<button onclick="location.reload()" style="padding:12px 32px;background:#6366f1;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:16px;">刷新页面</button>' +
+        '</div>';
+    }
+  }, 3000);
+</script>
 </body>
 </html>

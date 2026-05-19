@@ -2458,12 +2458,35 @@ app.get('/api/trade/:id', authMiddleware, async (req, res) => {
 
 require('./leaderboard.js')(app, pool, authMiddleware, ok, badRequest, serverError);
 
+// ==================== 健康检查接口（放在所有路由之后）====================
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// 备用健康检查（Railway 需要）
+app.get('/up', (req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime() });
+});
+
 async function startServer() {
-  await initDB();
-  console.log("✅ 数据库就绪");
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 服务运行在端口 ${PORT}`);
-  });
+  try {
+    await initDB();
+    console.log("✅ 数据库初始化完成");
+
+    // 等待连接池就绪
+    const client = await pool.connect();
+    await client.query('SELECT 1');
+    client.release();
+    console.log("✅ 数据库连接池就绪");
+
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 服务启动成功，端口: ${PORT}`);
+      console.log(`📝 健康检查: http://localhost:${PORT}/health`);
+    });
+  } catch (e) {
+    console.error("❌ 服务启动失败:", e.message);
+    process.exit(1);
+  }
 
   // 赛事状态自动转换：每分钟检查
   setInterval(async () => {
