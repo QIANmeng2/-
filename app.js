@@ -2766,12 +2766,13 @@ function createChatMessageHTML(msg) {
   const avatarChar = (msg.sender_name || '?')[0];
   const senderName = escapeHtml(msg.sender_name || '未知');
   const senderTeam = msg.sender_team ? ' · ' + escapeHtml(msg.sender_team) : '';
+  const clickable = !isMe ? `onclick="openPlayerDetailModal('${msg.sender_id}')" style="cursor:pointer;"` : '';
 
   return `
     <div class="chat-message ${isMe ? 'chat-message-me' : 'chat-message-other'}">
-      <div class="chat-avatar">${avatarChar}</div>
+      <div class="chat-avatar" ${clickable}>${avatarChar}</div>
       <div class="chat-message-content">
-        <div class="chat-sender-name">${senderName}${senderTeam}</div>
+        <div class="chat-sender-name" ${clickable}>${senderName}${senderTeam}</div>
         <div class="chat-bubble">${escapeHtml(msg.content)}</div>
         <div class="chat-time">${time}</div>
       </div>

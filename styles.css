@@ -2664,6 +2664,15 @@
   font-size: 0.72rem;
   color: var(--text-muted);
   padding: 0 4px;
+  cursor: default;
+}
+
+.chat-avatar {
+  cursor: default;
+}
+
+.chat-sender-name[onclick], .chat-avatar[onclick] {
+  cursor: pointer;
 }
 
 .chat-bubble {
