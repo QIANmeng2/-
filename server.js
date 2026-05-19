@@ -232,8 +232,8 @@ async function initDB() {
         initiated_by TEXT NOT NULL,
         initiated_club_id INTEGER NOT NULL,
         accepted_by TEXT,
-        initiator_id BIGINT NOT NULL,
-        recipient_id BIGINT NOT NULL,
+        initiator_id TEXT NOT NULL DEFAULT '0',
+        recipient_id TEXT NOT NULL DEFAULT '0',
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       );
@@ -241,18 +241,18 @@ async function initDB() {
     // 迁移：补充 initiator_id / recipient_id 字段（向后兼容，先加列再回填）
     await client.query(`
       ALTER TABLE player_trades
-        ADD COLUMN IF NOT EXISTS initiator_id BIGINT NOT NULL DEFAULT 0,
-        ADD COLUMN IF NOT EXISTS recipient_id BIGINT NOT NULL DEFAULT 0
+        ADD COLUMN IF NOT EXISTS initiator_id TEXT NOT NULL DEFAULT '0',
+        ADD COLUMN IF NOT EXISTS recipient_id TEXT NOT NULL DEFAULT '0'
     `);
     // 回填历史数据：initiator_id = initiated_by，recipient_id = 源俱乐部老板
     await client.query(`
       UPDATE player_trades
-      SET initiator_id = CAST(initiated_by AS BIGINT),
+      SET initiator_id = initiated_by,
           recipient_id = COALESCE(
-            (SELECT CAST(owner_id AS BIGINT) FROM clubs WHERE id = player_trades.from_club_id LIMIT 1),
-            0::BIGINT
+            (SELECT owner_id FROM clubs WHERE id = player_trades.from_club_id LIMIT 1),
+            '0'
           )
-      WHERE initiator_id = 0
+      WHERE initiator_id = '0'
     `);
     // 交易比例配置（动态比例）
     await client.query(`
