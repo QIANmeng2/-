@@ -2069,17 +2069,43 @@ async function renderClubDetail(clubId) {
 
         <h4 style="margin-top:20px;margin-bottom:8px;font-size:0.9rem;">选手交易记录</h4>
         ${trades.length === 0 ? '<p style="color:var(--text-muted);">暂无选手交易记录</p>' : trades.map(t => `
-          <div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:0.8rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;">
-            <span><b>${t.player_name || t.player_user_id}</b> <span style="color:var(--text-muted);">${t.trade_type==='buy'?'购买':'互换'}</span></span>
-            <span style="font-size:0.72rem;color:var(--text-secondary);">${t.from_club_name} → ${t.to_club_name}</span>
-            <span style="font-size:0.72rem;color:var(--warning);">差价${t.price_diff/10000}万</span>
-            <span class="trade-status-${t.status}">${t.status==='pending'?'待处理':t.status==='accepted'?'已接受':t.status==='rejected'?'已拒绝':'已取消'}</span>
-            <span style="font-size:0.7rem;color:var(--text-muted);">${new Date(t.created_at).toLocaleDateString('zh-CN')}</span>
+          <div style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.04);font-size:0.8rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <span><b>${t.player_name || t.player_user_id}</b> <span style="color:var(--text-muted);">${t.trade_type==='buy'?'购买':'互换'}</span></span>
+              <span style="font-size:0.72rem;color:var(--text-secondary);">${t.from_club_name} → ${t.to_club_name}</span>
+              ${t.price_diff > 0 ? `<span style="font-size:0.7rem;color:var(--warning);">${t.to_club_id == clubId ? '需支付差价' : '将获得差价'}: ${t.price_diff/10000}万</span>` : ''}
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              ${t.status === 'pending' && t.to_club_id == clubId && isOwner ? `
+                <button class="btn btn-sm" style="background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3);padding:4px 12px;font-size:0.72rem;" onclick="handleTrade(${t.id},'accept',${clubId})">接受</button>
+                <button class="btn btn-sm" style="background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.25);padding:4px 12px;font-size:0.72rem;" onclick="handleTrade(${t.id},'reject',${clubId})">拒绝</button>
+              ` : t.status === 'pending' && t.from_club_id == clubId && isOwner ? `
+                <button class="btn btn-sm btn-ghost" style="padding:4px 12px;font-size:0.72rem;color:var(--text-muted);" onclick="handleTrade(${t.id},'cancel',${clubId})">取消</button>
+              ` : ''}
+              <span class="trade-status-${t.status}">${t.status==='pending'?'待处理':t.status==='accepted'?'已接受':t.status==='rejected'?'已拒绝':'已取消'}</span>
+              <span style="font-size:0.68rem;color:var(--text-muted);">${new Date(t.created_at).toLocaleDateString('zh-CN')}</span>
+            </div>
           </div>
         `).join('')}
       </div>`;
     content.innerHTML = html;
   } catch(e) { content.innerHTML = `<div class="card"><p>加载失败：${e.message}</p></div>`; }
+}
+
+async function handleTrade(tradeId, action, clubId) {
+  const confirmText = action === 'accept' ? '确认接受该交易？' : action === 'reject' ? '确认拒绝该交易？' : '确认取消该交易？';
+  if (!confirm(confirmText)) return;
+
+  try {
+    const endpoint = action === 'accept' ? `/api/trade/${tradeId}/accept`
+                 : action === 'reject' ? `/api/trade/${tradeId}/reject`
+                 : `/api/trade/${tradeId}/cancel`;
+    const res = await api(endpoint, { method: 'POST' });
+    showToast(res.message || `交易已${action === 'accept' ? '接受' : action === 'reject' ? '拒绝' : '取消'}`, 'success');
+    await renderClubDetail(clubId);
+  } catch(e) {
+    showToast(e.message || '操作失败', 'error');
+  }
 }
 
 async function signPlayer(clubId) {
