@@ -256,6 +256,7 @@ function updateUI() {
     coinDisplay.textContent = '🪙 ' + dreamCoins.toLocaleString();
     document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="market"], #tabNav .tab-btn[data-tab="club"], #tabNav .tab-btn[data-tab="chat"]').forEach(b => b.style.display = '');
     ui('notificationBell').style.display = 'flex';
+    ui('btnNewbieGuide').style.display = '';
     if (currentUser.id === 'mp4hmya7ad15v6') { ui('tabAdmin').style.display = ''; }
     ui('tabCompetition').style.display = '';
   } else {
@@ -265,6 +266,7 @@ function updateUI() {
     document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="admin"], #tabNav .tab-btn[data-tab="market"], #tabNav .tab-btn[data-tab="club"]').forEach(b => b.style.display = 'none');
     ui('tabCompetition').style.display = '';
     ui('notificationBell').style.display = 'none';
+    ui('btnNewbieGuide').style.display = 'none';
   }
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === currentTab));
 }
@@ -4765,6 +4767,29 @@ function openGuideModal() {
 function closeGuideModal() {
   document.getElementById('guideModal').style.display = 'none';
   document.body.style.overflow = '';
+}
+
+// ---------- 新手指南 ----------
+function openNewbieGuide() {
+  document.getElementById('newbieGuideModal').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function closeNewbieGuide() {
+  document.getElementById('newbieGuideModal').style.display = 'none';
+  document.body.style.overflow = '';
+}
+function switchNbTab(tab) {
+  var playerTab = document.getElementById('nbTabPlayer');
+  var bossTab = document.getElementById('nbTabBoss');
+  var playerContent = document.getElementById('nbContentPlayer');
+  var bossContent = document.getElementById('nbContentBoss');
+  if (tab === 'player') {
+    playerTab.classList.add('active'); bossTab.classList.remove('active');
+    playerContent.style.display = ''; bossContent.style.display = 'none';
+  } else {
+    bossTab.classList.add('active'); playerTab.classList.remove('active');
+    bossContent.style.display = ''; playerContent.style.display = 'none';
+  }
 }
 
 // 工具函数 ----------
