@@ -1675,7 +1675,8 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
     for (const p of players) {
       try {
         const modeLabel = c.tier === 'arena' ? '擂台赛' : (c.tier === 'training' ? '训练赛' : '赛事');
-        const notifyText = isFreeMode
+        const noFeeMode = ['arena','training'].includes(c.tier);
+        const notifyText = noFeeMode
           ? `你被${isClub?'老板':'队长'}选入${modeLabel}「${c.name}」，请进入比赛页确认入场`
           : `你被${isClub?'老板':'队长'}选入赛事「${c.name}」，请进入比赛页确认入场并选择入场费`;
         await sendNotification(p.user_id, 'competition_register', notifyText);
@@ -1726,13 +1727,14 @@ app.post('/api/competitions/:id/confirm', authMiddleware, async (req, res) => {
     if (comp.rows.length === 0) { await client.query('ROLLBACK'); return notFound(res, '赛事不存在'); }
     const c = comp.rows[0];
     const isFreeMode = ['arena'].includes(c.tier);
+    const noFeeMode = ['arena','training'].includes(c.tier);
     // 直接查找该用户的报名记录（队长已指定队员+位置）
     const reg = await client.query(
       "SELECT * FROM competition_registrations WHERE competition_id = $1 AND player_user_id = $2 AND status = 'reserved'",
       [req.params.id, req.userId]
     );
     if (reg.rows.length === 0) { await client.query('ROLLBACK'); return badRequest(res, '未找到你的报名记录'); }
-    if (!isFreeMode) {
+    if (!noFeeMode) {
       if (![500,1000,2000].includes(entry_fee)) { await client.query('ROLLBACK'); return badRequest(res, '入场费必须为500/1000/2000'); }
       // 检查余额
       const user = await client.query('SELECT dream_coins FROM users WHERE id = $1', [req.userId]);
@@ -1745,7 +1747,7 @@ app.post('/api/competitions/:id/confirm', authMiddleware, async (req, res) => {
     // 更新报名状态
     await client.query(
       "UPDATE competition_registrations SET entry_fee = $1, status = 'confirmed' WHERE id = $2",
-      [isFreeMode ? 0 : (entry_fee || 0), reg.rows[0].id]
+      [noFeeMode ? 0 : (entry_fee || 0), reg.rows[0].id]
     );
     // 检查是否10人全部确认（仅常规赛事）
     if (!isFreeMode) {
@@ -1758,7 +1760,7 @@ app.post('/api/competitions/:id/confirm', authMiddleware, async (req, res) => {
       }
     }
     await client.query('COMMIT');
-    ok(res, { entry_fee: isFreeMode ? 0 : entry_fee });
+    ok(res, { entry_fee: noFeeMode ? 0 : entry_fee });
   } catch(e) { await client.query('ROLLBACK'); console.error(e); serverError(res, '确认失败'); } finally { client.release(); }
 });
 // 取消入场（退费）
