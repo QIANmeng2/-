@@ -2318,22 +2318,58 @@
       color:#fbbf24;font-weight:700;
     }
 
-    /* Mode Compare Table */
-    .nb-mode-compare { display:flex;flex-direction:column;gap:6px; }
-    .nb-compare-row {
-      display:flex;align-items:flex-start;gap:10px;
-      padding:8px 12px;background:rgba(255,255,255,0.03);
-      border-radius:8px;border:1px solid rgba(255,255,255,0.06);
-      font-size:0.82rem;line-height:1.5;
+    /* League Tier List */
+    .nb-league-list { display:flex;flex-direction:column;gap:8px; }
+    .nb-league-item {
+      padding:10px 14px;border-radius:10px;
+      border:1px solid rgba(255,255,255,0.07);
+      background:rgba(255,255,255,0.02);
     }
-    .nb-c-label {
-      flex-shrink:0;width:90px;font-weight:700;font-size:0.82rem;
-      color:var(--text-primary);
+    .nb-league-item.tier-top {
+      border-left:3px solid #fbbf24;
+      background:linear-gradient(135deg,rgba(251,191,36,0.06),rgba(251,191,36,0.01));
     }
-    .nb-c-info {
-      color:var(--text-secondary);font-size:0.81rem;
+    .nb-league-item.tier-mid {
+      border-left:3px solid #a78bfa;
+      background:linear-gradient(135deg,rgba(167,139,250,0.05),rgba(167,139,250,0.01));
     }
-    .nb-c-info strong { color:var(--text-primary); }
+    .nb-league-item.tier-reg {
+      border-left:3px solid rgba(99,102,241,0.5);
+      background:linear-gradient(135deg,rgba(99,102,241,0.04),transparent);
+    }
+    .nb-league-header {
+      display:flex;align-items:center;gap:7px;margin-bottom:6px;
+    }
+    .nb-league-icon { font-size:1rem; }
+    .nb-league-name {
+      font-weight:700;font-size:0.88rem;color:var(--text-primary);flex:1;
+    }
+    .nb-league-condition {
+      font-size:0.72rem;padding:2px 7px;border-radius:20px;
+      background:rgba(255,255,255,0.06);color:var(--text-muted);
+      white-space:nowrap;
+    }
+    .nb-league-body {
+      font-size:0.81rem;color:var(--text-secondary);line-height:1.55;
+      margin-bottom:4px;
+    }
+    .nb-league-modes { display:flex;gap:5px;flex-wrap:wrap;margin-top:6px; }
+    .nb-mode-pill {
+      font-size:0.72rem;padding:2px 9px;border-radius:20px;
+      background:rgba(255,255,255,0.05);color:var(--text-muted);
+      border:1px solid rgba(255,255,255,0.08);
+    }
+    .nb-mode-pill.gold {
+      background:rgba(245,158,11,0.1);color:#fbbf24;border-color:rgba(245,158,11,0.2);
+    }
+    /* Sub-modes inside 常规赛事 */
+    .nb-submodes { margin-top:6px;display:flex;flex-direction:column;gap:4px; }
+    .nb-submode-row {
+      display:flex;align-items:flex-start;gap:6px;font-size:0.79rem;
+      color:var(--text-secondary);line-height:1.5;padding:4px 0;
+    }
+    .nb-sm-icon { flex-shrink:0;font-size:0.85rem; }
+    .nb-submode-row b { color:var(--text-primary);font-weight:600; }
 
     /* Summary 总结 */
     .nb-summary {
