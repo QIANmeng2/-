@@ -289,6 +289,8 @@ const SUB_MODE_BADGE = {
 };
 // 判断是否为自由模式（无需入场券、不限人数）
 function isFreeMode(tier) { return tier === 'arena'; }
+// 判断是否需要入场券（仅常规赛事/入场券模式需要）
+function needsEntryFee(tier) { return tier === 'regular'; }
 
 async function renderCompetitionPanel() {
   const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
@@ -387,7 +389,8 @@ async function openCompetitionDetail(id) {
   const et = c.end_time ? new Date(c.end_time).toLocaleString('zh-CN') : '';
 
   let infoHtml = '';
-  if (actualTier === 'regular' || actualTier === 'training') {
+  if (actualTier === 'regular') {
+    // 常规赛事（入场券模式）：显示奖池+入场费统计
     infoHtml =
       '<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;padding:12px;background:rgba(255,255,255,.03);border-radius:8px;">'+
         '<div><span style="color:var(--text-muted);font-size:0.72rem;">状态</span><div style="font-weight:700;color:#fff;">'+statusLabel+'</div></div>'+
@@ -396,6 +399,14 @@ async function openCompetitionDetail(id) {
         '<div><span style="color:var(--text-muted);font-size:0.72rem;">500&times;'+(rs.fee500||0)+'</span></div>'+
         '<div><span style="color:var(--text-muted);font-size:0.72rem;">1000&times;'+(rs.fee1000||0)+'</span></div>'+
         '<div><span style="color:var(--text-muted);font-size:0.72rem;">2000&times;'+(rs.fee2000||0)+'</span></div>'+
+      '</div>';
+  } else if (actualTier === 'training') {
+    // 训练赛：2队/10人、红蓝双方、无需入场券
+    infoHtml =
+      '<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;padding:12px;background:rgba(255,255,255,.03);border-radius:8px;">'+
+        '<div><span style="color:var(--text-muted);font-size:0.72rem;">状态</span><div style="font-weight:700;color:#fff;">'+statusLabel+'</div></div>'+
+        '<div><span style="color:var(--text-muted);font-size:0.72rem;">已报名</span><div style="font-weight:700;color:#fff;">'+rs.count+'/10</div></div>'+
+        '<div><span style="color:var(--text-muted);font-size:0.72rem;">模式</span><div style="font-weight:700;color:#38bdf8;">2队 &middot; 红蓝双方 &middot; 无需入场券</div></div>'+
       '</div>';
   } else if (isFree) {
     infoHtml =
@@ -429,7 +440,7 @@ async function openCompetitionDetail(id) {
   '</div>';
   document.body.appendChild(overlay);
 
-  await loadCompPlayerList(id, actualTier === 'regular' || actualTier === 'training', isFree);
+  await loadCompPlayerList(id, actualTier === 'regular', isFree);
   if (needsRegUI) await loadCompRegUI(id, c);
   await loadCompAdminActions(id, c);
 }
@@ -467,7 +478,7 @@ async function loadCompPlayerList(compId, isRegular, isFreeMode) {
         }).join('')+
         '</div></div>';
     };
-    // 自由模式（擂台赛/训练赛）：不区分红蓝方，按队伍/俱乐部分组展示
+    // 自由模式（仅擂台赛）：不区分红蓝方，按队伍/俱乐部分组展示
     if (isFreeMode) {
       const groups = {};
       regs.forEach(r => {
@@ -663,6 +674,7 @@ async function loadCompRegUI(compId, c) {
   const container = document.getElementById('compRegActions');
   if (!container) return;
   const freeMode = isFreeMode(c.tier);
+  const needsFee = needsEntryFee(c.tier);
   if (!currentUser) {
     container.innerHTML = '<div style="padding:12px;background:rgba(255,255,255,.03);border-radius:8px;color:var(--text-muted);font-size:0.82rem;text-align:center;">登录后可报名参赛</div>';
     return;
@@ -678,11 +690,11 @@ async function loadCompRegUI(compId, c) {
     myReg = allRegs.find(r => r.player_user_id === currentUser.id);
   } catch(e) {}
   if (myReg && myReg.status === 'confirmed') {
-    const feeLine = freeMode ? '' : '<span style="color:var(--text-muted);margin-left:8px;font-size:0.78rem;">入场费：'+(myReg.entry_fee||0)+'梦币</span>';
+    const feeLine = needsFee ? '<span style="color:var(--text-muted);margin-left:8px;font-size:0.78rem;">入场费：'+(myReg.entry_fee||0)+'梦币</span>' : '';
     container.innerHTML = '<div style="padding:12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);border-radius:8px;"><span style="color:#10b981;font-weight:600;">已确认入场</span>'+feeLine+'</div>';
     return;
   } else if (myReg && myReg.status === 'reserved') {
-    if (freeMode) {
+    if (freeMode || c.tier === 'training') {
       container.innerHTML = '<div style="padding:12px;background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.2);border-radius:8px;"><span style="color:var(--warning);font-weight:600;">待确认入场</span><div style="margin-top:8px;"><button class="btn btn-sm btn-primary" onclick="confirmCompetitionEntry(\''+compId+'\',0)">确认入场</button></div></div>';
     } else {
       container.innerHTML = '<div style="padding:12px;background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.2);border-radius:8px;"><span style="color:var(--warning);font-weight:600;">待确认入场</span><div style="display:flex;gap:8px;margin-top:8px;"><button class="btn btn-sm" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);color:#10b981;" onclick="confirmCompetitionEntry(\''+compId+'\',500)">500梦币</button><button class="btn btn-sm" style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);color:#f59e0b;" onclick="confirmCompetitionEntry(\''+compId+'\',1000)">1000梦币</button><button class="btn btn-sm" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#ef4444;" onclick="confirmCompetitionEntry(\''+compId+'\',2000)">2000梦币</button></div></div>';
@@ -693,8 +705,8 @@ async function loadCompRegUI(compId, c) {
     container.innerHTML = '<div style="padding:12px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:8px;color:var(--text-muted);font-size:0.82rem;">当前赛事状态为 <b style="color:var(--text-primary);">'+statusCN+'</b>，不可报名（仅"即将开始"和"报名中"可报名）</div>';
     return;
   }
-  // 两入口选择（自由模式跳过入场券说明）
-  if (freeMode) {
+  // 两入口选择（自由模式和训练赛跳过入场券说明）
+  if (freeMode || c.tier === 'training') {
     container.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;">'+
       '<button class="btn btn-primary btn-sm" onclick="loadTeamRegisterFlow(\''+compId+'\')" style="flex:1;min-width:120px;">以队伍报名</button>'+
       '<button class="btn btn-ghost btn-sm" onclick="loadClubRegisterFlow(\''+compId+'\')" style="flex:1;min-width:120px;border-color:rgba(245,158,11,.3);color:#f59e0b;">以俱乐部报名</button>'+
