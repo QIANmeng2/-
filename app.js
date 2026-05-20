@@ -2322,16 +2322,29 @@ async function renderClubDetail(clubId) {
           <!-- 当前分组预览 -->
           <div id="freeRosterContainer" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
             ${(function(){
-              var freeList=rosters.free||[], teams={}, unassigned=[];
-              for(var i=0;i<freeList.length;i++){var r=freeList[i], tid=r.team_id||''; if(tid){if(!teams[tid])teams[tid]=[];teams[tid].push(r);}else unassigned.push(r);}
-              var html='';
-              Object.keys(teams).sort().forEach(function(tid){
-                html+='<div style="background:rgba(52,211,153,.04);border:1px solid rgba(52,211,153,.12);border-radius:6px;padding:6px 10px;margin-bottom:4px;"><div style="font-size:0.7rem;color:#34d399;font-weight:600;margin-bottom:4px;">'+escapeHtml(tid)+'（'+teams[tid].length+'/5人）</div>'+teams[tid].map(function(r){return '<div style="font-size:0.72rem;color:var(--text-secondary);padding:2px 0;display:flex;align-items:center;gap:4px;"><span style="color:#34d399;">✅</span><b>'+escapeHtml(r.game_id||r.player_user_id)+'</b>'+(r.grade?'<span class="grade-badge '+(gradeCls[r.grade]||'grade-c')+'" style="font-size:0.62rem;margin-left:4px;">'+r.grade+'</span>':'')+(r.market_value?'<span style="color:var(--warning);font-size:0.68rem;margin-left:4px;">'+r.market_value+'万</span>':'')+'</div>';}).join('')+'</div>';
-              });
-              if(unassigned.length){
-                html+='<div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:6px 10px;margin-bottom:4px;"><div style="font-size:0.7rem;color:var(--text-muted);font-weight:600;margin-bottom:4px;">未分配（'+unassigned.length+'人）</div>'+unassigned.map(function(r){return '<div style="font-size:0.72rem;color:var(--text-secondary);padding:2px 0;"><span>⬜</span><b>'+escapeHtml(r.game_id||r.player_user_id)+'</b></div>';}).join('')+'</div>';
-              }
-              return html;
+              var existingTeams={};
+              (rosters.free||[]).forEach(function(r){if(r.team_id)existingTeams[r.team_id]=1;});
+              var teamNames=Object.keys(existingTeams).sort();
+              return members.map(function(m){
+                var g=m.grade, gCls=gradeCls[g]||'grade-c', isBoss=m.role==='boss';
+                var existingTeam=(rosters.free||[]).find(function(r){return r.player_user_id===m.user_id})?.team_id||'';
+                var checked=freeIds.has(m.user_id);
+                var selOpts=['<option value="">— 不入选 —</option>'];
+                teamNames.forEach(function(tn){ selOpts.push('<option value="'+escapeHtml(tn)+'" '+(existingTeam===tn?'selected':'')+'>'+escapeHtml(tn)+'</option>'); });
+                if(existingTeam && !teamNames.includes(existingTeam)){ selOpts.push('<option value="'+escapeHtml(existingTeam)+'" selected>'+escapeHtml(existingTeam)+'</option>'); }
+                var selHtml=selOpts.join('');
+                var label='<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer;padding:6px 8px;border-radius:6px;transition:background .15s;" onmouseover="this.style.background=\'rgba(255,255,255,0.03)\'" onmouseout="this.style.background=\'transparent\'">';
+                var input='<input type="checkbox" class="roster-free-check" value="'+m.user_id+'" data-team="'+escapeHtml(existingTeam)+'" '+(checked?'checked':'')+' style="accent-color:#34d399;width:14px;height:14px;cursor:pointer;">';
+                var spStart='<span style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
+                var nameSp='<span style="font-weight:600;color:var(--text-primary);">'+(m.coachname||m.username)+'</span>';
+                var gidSp=m.gameid?'<span style="font-size:0.7rem;color:var(--text-muted);">'+m.gameid+'</span>':'';
+                var grSp=g?'<span class="grade-badge '+gCls+'" style="font-size:0.65rem;">'+g+'</span>':'';
+                var mvSp=m.market_value?'<span style="font-size:0.7rem;color:var(--warning);font-weight:700;">'+m.market_value+'万</span>':'';
+                var bossSp=isBoss?'<span class="pos-tag club-role-boss" style="font-size:0.65rem;">老板</span>':'';
+                var spEnd='</span>';
+                var select='<select class="free-team-sel" style="padding:2px 4px;font-size:0.7rem;background:rgba(255,255,255,.04);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);width:auto;max-width:90px;" onchange="var cb=this.parentElement.querySelector(\'.roster-free-check\');cb.dataset.team=this.value;if(this.value){cb.checked=true;}else{cb.checked=false;}">'+selHtml+'</select>';
+                return label+input+spStart+nameSp+gidSp+grSp+mvSp+bossSp+spEnd+select+'</label>';
+              }).join('');
             })()}
             <!-- 新建队伍快捷入口 -->
           <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -2349,10 +2362,21 @@ async function renderClubDetail(clubId) {
                 var g=m.grade, gCls=gradeCls[g]||'grade-c', isBoss=m.role==='boss';
                 var existingTeam=(rosters.free||[]).find(function(r){return r.player_user_id===m.user_id})?.team_id||'';
                 var checked=freeIds.has(m.user_id);
-                var selOptions='<option value="">— 不入选 —</option>';
-                teamNames.forEach(function(tn){ selOptions+='<option value="'+escapeHtml(tn)+'" '+(existingTeam===tn?'selected':'')+'>'+escapeHtml(tn)+'</option>'; });
-                if(existingTeam && !teamNames.includes(existingTeam)){ selOptions+='<option value="'+escapeHtml(existingTeam)+'" selected>'+escapeHtml(existingTeam)+'</option>'; }
-                return '<label style=\"display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer;padding:6px 8px;border-radius:6px;transition:background .15s;\" onmouseover=\"this.style.background=\'rgba(255,255,255,0.03)\'\" onmouseout=\"this.style.background=\'transparent\'\"><input type=\"checkbox\" class=\"roster-free-check\" value=\"'+m.user_id+'\" data-team=\"'+escapeHtml(existingTeam)+'\" '+(checked?'checked':'')+' style=\"accent-color:#34d399;width:14px;height:14px;cursor:pointer;\"><span style=\"flex:1;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;\"><span style=\"font-weight:600;color:var(--text-primary);\">'+(m.coachname||m.username)+'</span>'+(m.gameid?'<span style=\"font-size:0.7rem;color:var(--text-muted);\">'+m.gameid+'</span>':'')+(g?'<span class=\"grade-badge '+gCls+'\" style=\"font-size:0.65rem;\" >'+g+'</span>':'')+(m.market_value?'<span style=\"font-size:0.7rem;color:var(--warning);font-weight:700;\" >'+m.market_value+'万</span>':'')+(isBoss?'<span class=\"pos-tag club-role-boss\" style=\"font-size:0.65rem;\" >老板</span>:'')+'</span><select class=\"free-team-sel\" style=\"padding:2px 4px;font-size:0.7rem;background:rgba(255,255,255,.04);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);width:auto;max-width:90px;\" onchange=\"var cb=this.parentElement.querySelector('.roster-free-check');cb.dataset.team=this.value;if(this.value){cb.checked=true;}else{cb.checked=false;}\"'+selOptions+'</select></label>';
+                var selOpts=['<option value="">— 不入选 —</option>'];
+                teamNames.forEach(function(tn){ selOpts.push('<option value="'+escapeHtml(tn)+'" '+(existingTeam===tn?'selected':'')+'>'+escapeHtml(tn)+'</option>'); });
+                if(existingTeam && !teamNames.includes(existingTeam)){ selOpts.push('<option value="'+escapeHtml(existingTeam)+'" selected>'+escapeHtml(existingTeam)+'</option>'); }
+                var selHtml=selOpts.join('');
+                var label='<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer;padding:6px 8px;border-radius:6px;transition:background .15s;" onmouseover="this.style.background=\'rgba(255,255,255,0.03)\'" onmouseout="this.style.background=\'transparent\'">';
+                var input='<input type="checkbox" class="roster-free-check" value="'+m.user_id+'" data-team="'+escapeHtml(existingTeam)+'" '+(checked?'checked':'')+' style="accent-color:#34d399;width:14px;height:14px;cursor:pointer;">';
+                var spStart='<span style="flex:1;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">';
+                var nameSp='<span style="font-weight:600;color:var(--text-primary);">'+(m.coachname||m.username)+'</span>';
+                var gidSp=m.gameid?'<span style="font-size:0.7rem;color:var(--text-muted);">'+m.gameid+'</span>':'';
+                var grSp=g?'<span class="grade-badge '+gCls+'" style="font-size:0.65rem;">'+g+'</span>':'';
+                var mvSp=m.market_value?'<span style="font-size:0.7rem;color:var(--warning);font-weight:700;">'+m.market_value+'万</span>':'';
+                var bossSp=isBoss?'<span class="pos-tag club-role-boss" style="font-size:0.65rem;">老板</span>':'';
+                var spEnd='</span>';
+                var select='<select class="free-team-sel" style="padding:2px 4px;font-size:0.7rem;background:rgba(255,255,255,.04);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);width:auto;max-width:90px;" onchange="var cb=this.parentElement.querySelector(\'.roster-free-check\');cb.dataset.team=this.value;if(this.value){cb.checked=true;}else{cb.checked=false;}">'+selHtml+'</select>';
+                return label+input+spStart+nameSp+gidSp+grSp+mvSp+bossSp+spEnd+select+'</label>';
               }).join('');
             })()}
           </div>
