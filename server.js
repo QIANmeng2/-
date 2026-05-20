@@ -327,6 +327,16 @@ async function initDB() {
         paid_by TEXT,
         paid_at TIMESTAMP DEFAULT NOW()
       );
+      CREATE TABLE IF NOT EXISTS price_adjust_logs (
+        id SERIAL PRIMARY KEY,
+        club_id INTEGER NOT NULL,
+        player_user_id TEXT NOT NULL,
+        old_value INTEGER,
+        new_value INTEGER,
+        adjusted_by TEXT NOT NULL,
+        adjusted_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(club_id, player_user_id, adjusted_at)
+      );
     `);
     // 俱乐部大名单（顶级/次级各≤5人，自由名单支持多队伍分组）
     await client.query(`
@@ -1675,7 +1685,8 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
     for (const p of players) {
       try {
         const modeLabel = c.tier === 'arena' ? '擂台赛' : (c.tier === 'training' ? '训练赛' : '赛事');
-        const notifyText = isFreeMode
+        const noFeeMode = ['arena','training'].includes(c.tier);
+        const notifyText = noFeeMode
           ? `你被${isClub?'老板':'队长'}选入${modeLabel}「${c.name}」，请进入比赛页确认入场`
           : `你被${isClub?'老板':'队长'}选入赛事「${c.name}」，请进入比赛页确认入场并选择入场费`;
         await sendNotification(p.user_id, 'competition_register', notifyText);
@@ -1726,13 +1737,14 @@ app.post('/api/competitions/:id/confirm', authMiddleware, async (req, res) => {
     if (comp.rows.length === 0) { await client.query('ROLLBACK'); return notFound(res, '赛事不存在'); }
     const c = comp.rows[0];
     const isFreeMode = ['arena'].includes(c.tier);
+    const noFeeMode = ['arena','training'].includes(c.tier);
     // 直接查找该用户的报名记录（队长已指定队员+位置）
     const reg = await client.query(
       "SELECT * FROM competition_registrations WHERE competition_id = $1 AND player_user_id = $2 AND status = 'reserved'",
       [req.params.id, req.userId]
     );
     if (reg.rows.length === 0) { await client.query('ROLLBACK'); return badRequest(res, '未找到你的报名记录'); }
-    if (!isFreeMode) {
+    if (!noFeeMode) {
       if (![500,1000,2000].includes(entry_fee)) { await client.query('ROLLBACK'); return badRequest(res, '入场费必须为500/1000/2000'); }
       // 检查余额
       const user = await client.query('SELECT dream_coins FROM users WHERE id = $1', [req.userId]);
@@ -1745,7 +1757,7 @@ app.post('/api/competitions/:id/confirm', authMiddleware, async (req, res) => {
     // 更新报名状态
     await client.query(
       "UPDATE competition_registrations SET entry_fee = $1, status = 'confirmed' WHERE id = $2",
-      [isFreeMode ? 0 : (entry_fee || 0), reg.rows[0].id]
+      [noFeeMode ? 0 : (entry_fee || 0), reg.rows[0].id]
     );
     // 检查是否10人全部确认（仅常规赛事）
     if (!isFreeMode) {
@@ -1758,7 +1770,7 @@ app.post('/api/competitions/:id/confirm', authMiddleware, async (req, res) => {
       }
     }
     await client.query('COMMIT');
-    ok(res, { entry_fee: isFreeMode ? 0 : entry_fee });
+    ok(res, { entry_fee: noFeeMode ? 0 : entry_fee });
   } catch(e) { await client.query('ROLLBACK'); console.error(e); serverError(res, '确认失败'); } finally { client.release(); }
 });
 // 取消入场（退费）
@@ -2183,9 +2195,48 @@ app.post('/api/admin/player-review', authMiddleware, adminMiddleware, async (req
       [marketValue, grade, req.userId, userId]
     );
     await updatePlayerScore(userId);
-    await sendNotification(userId, 'player_approved', `你的选手认证已通过！身价：${marketValue}万 等级：${grade}级`);
+    // 认证通过 → 自动发放1000梦币（去重：同一用户不重复发放）
+    const existingReward = await pool.query(
+      "SELECT id FROM coin_transactions WHERE user_id=$1 AND type='cert_reward' LIMIT 1",
+      [userId]
+    );
+    if (existingReward.rows.length === 0) {
+      await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins, 0) + 1000 WHERE id = $1', [userId]);
+      await pool.query(
+        "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1, 1000, 'cert_reward', '认证通过奖励')",
+        [userId]
+      );
+      await sendNotification(userId, 'coin_award', '恭喜认证通过！你获得了 1000 梦币新人奖励，快去参与赛事吧！', null);
+    }
+    await sendNotification(userId, 'player_approved', `你的选手认证已通过！身价：${marketValue}万 等级：${grade}级 + 1000梦币奖励`);
     ok(res, {marketValue });
   } catch(e) { serverError(res, '操作失败'); }
+});
+
+// 管理员：补发已认证选手1000梦币（一次性批量操作）
+app.post('/api/admin/retroactive-cert-rewards', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    // 查出所有已认证但未领取过认证奖励的用户
+    const result = await pool.query(`
+      SELECT DISTINCT p.user_id FROM players p
+      WHERE p.status = 'approved'
+      AND NOT EXISTS (
+        SELECT 1 FROM coin_transactions ct
+        WHERE ct.user_id = p.user_id AND ct.type = 'cert_reward'
+      )
+    `);
+    if (result.rows.length === 0) return ok(res, {awarded: 0, message: '所有已认证选手都已领取过认证奖励'});
+    let count = 0;
+    for (const row of result.rows) {
+      await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins, 0) + 1000 WHERE id = $1', [row.user_id]);
+      await pool.query(
+        "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1, 1000, 'cert_reward', '认证补发奖励')",
+        [row.user_id]
+      );
+      count++;
+    }
+    ok(res, {awarded: count, message: `成功为 ${count} 位已认证选手补发1000梦币`});
+  } catch(e) { console.error(e); serverError(res, '操作失败'); }
 });
 
 // ====================== 转会市场 ======================
@@ -2583,10 +2634,10 @@ app.post('/api/competition/:id/register', authMiddleware, async (req, res) => {
   } catch(e) { console.error(e); serverError(res, '报名失败'); }
 });
 
-// ====================== 老板调整选手身价/周薪 ======================
+// ====================== 老板调整选手身价（7天冷却） ======================
 app.post('/api/club/:id/player/:userId/update', authMiddleware, async (req, res) => {
   const { id, userId } = req.params;
-  const { marketValue, customSalary } = req.body;
+  const { marketValue } = req.body;
   try {
     const club = await pool.query('SELECT * FROM clubs WHERE id = $1', [id]);
     if (club.rows.length === 0) return notFound(res, '俱乐部不存在');
@@ -2596,32 +2647,63 @@ app.post('/api/club/:id/player/:userId/update', authMiddleware, async (req, res)
     const cm = await pool.query('SELECT * FROM club_members WHERE club_id=$1 AND user_id=$2', [id, userId]);
     if (cm.rows.length === 0) return badRequest(res, '该选手未签约本俱乐部');
 
-    const updates = [];
-    const params = [];
-    let paramIdx = 1;
-
+    // 身价调整：7天冷却期检查
     if (marketValue !== undefined && marketValue !== null) {
       const mv = parseInt(marketValue);
       if (isNaN(mv) || mv < 1) return badRequest(res, '身价需为正整数');
+
+      const recentLog = await pool.query(
+        "SELECT adjusted_at FROM price_adjust_logs WHERE club_id=$1 AND player_user_id=$2 ORDER BY adjusted_at DESC LIMIT 1",
+        [id, userId]
+      );
+      if (recentLog.rows.length > 0) {
+        const lastAt = new Date(recentLog.rows[0].adjusted_at);
+        const now = new Date();
+        const diffMs = now - lastAt;
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        if (diffDays < 7) {
+          const remain = 7 - diffDays;
+          return badRequest(res, '该选手身价在 ' + remain + ' 天内不可再次调整（每7天限调一次）');
+        }
+      }
+
+      const player = await pool.query('SELECT market_value FROM players WHERE user_id=$1', [userId]);
+      const oldValue = player.rows[0]?.market_value || 0;
       const newGrade = calcGrade(mv);
-      updates.push(`market_value = $${paramIdx++}, grade = $${paramIdx++}`);
-      params.push(mv, newGrade);
-    }
-    if (customSalary !== undefined && customSalary !== null) {
-      const cs = parseInt(customSalary);
-      if (isNaN(cs) || cs < 0) return badRequest(res, '周薪不能为负数');
-      updates.push(`custom_salary = $${paramIdx++}`);
-      params.push(cs);
+
+      await pool.query('UPDATE players SET market_value=$1, grade=$2 WHERE user_id=$3', [mv, newGrade, userId]);
+
+      // 写入调价日志
+      await pool.query(
+        "INSERT INTO price_adjust_logs (club_id, player_user_id, old_value, new_value, adjusted_by) VALUES ($1,$2,$3,$4,$5)",
+        [id, userId, oldValue, mv, req.userId]
+      );
+
+      await updatePlayerScore(userId);
+      return ok(res, {message: '身价已调整为' + mv + '万'});
     }
 
-    if (updates.length === 0) return badRequest(res, '无有效更新字段');
-    params.push(userId);
-    await pool.query(`UPDATE players SET ${updates.join(', ')} WHERE user_id = $${paramIdx}`, params);
-    // 更新榜单分数
-    await updatePlayerScore(userId);
-    ok(res, {message: '选手信息已更新' });
+    return badRequest(res, '无有效更新字段');
   } catch(e) { console.error(e); serverError(res, '更新失败'); }
 });
+
+// 查询选手身价调整冷却状态
+app.get('/api/club/:id/player/:userId/cooldown', authMiddleware, async (req, res) => {
+  try {
+    const log = await pool.query(
+      "SELECT adjusted_at, old_value, new_value FROM price_adjust_logs WHERE club_id=$1 AND player_user_id=$2 ORDER BY adjusted_at DESC LIMIT 1",
+      [req.params.id, req.params.userId]
+    );
+    if (log.rows.length === 0) return ok(res, { canAdjust: true, daysLeft: 0 });
+    const lastAt = new Date(log.rows[0].adjusted_at);
+    const now = new Date();
+    const diffMs = now - lastAt;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays >= 7) return ok(res, { canAdjust: true, daysLeft: 0, lastAdjust: log.rows[0] });
+    return ok(res, { canAdjust: false, daysLeft: 7 - diffDays, lastAdjust: log.rows[0] });
+  } catch(e) { serverError(res, '查询失败'); }
+});
+
 
 // ====================== 解约/身价调整 ======================
 app.post('/api/player/:userId/buyout', authMiddleware, async (req, res) => {
@@ -2713,7 +2795,8 @@ app.post('/api/trade/:id/accept', authMiddleware, async (req, res) => {
     const t = trade.rows[0];
     const priceDiff = t.price_diff || 0;
     // 转账差价：从数据库读取动态比例
-    const ratioType = t.trade_type === 'swap' ? 'transfer' : 'purchase';
+    // swap(互换) 和 buy(买入/转会) 都是俱乐部间交易，使用 transfer 比例
+    const ratioType = ['swap', 'buy'].includes(t.trade_type) ? 'transfer' : 'purchase';
     const ratioResult = await pool.query('SELECT * FROM transaction_ratios WHERE type=$1', [ratioType]);
     const _defaults = ratioType === 'transfer'
       ? { player_ratio: 10, club_ratio: 40, admin_ratio: 50 }
