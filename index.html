@@ -45,10 +45,6 @@
       <span>梦工厂<span style="color:var(--secondary);">·</span>王者</span>
     </div>
     <div class="user-area">
-      <button class="btn btn-secondary btn-sm" id="btnGuide" onclick="openGuideModal()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-6h2v6zm0-8h-2V7h2v4z"/></svg>
-        <span class="guide-text">使用说明</span>
-      </button>
       <button class="btn btn-sm" id="btnNewbieGuide" onclick="openNewbieGuide()" style="display:none;background:linear-gradient(135deg,rgba(245,158,11,0.15),rgba(245,158,11,0.05));color:#fbbf24;border:1px solid rgba(245,158,11,0.3);font-weight:700;letter-spacing:.02em;">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
         <span style="margin-left:4px;">新手指南</span>
@@ -171,71 +167,6 @@
 
 
 <div id="toastContainer"></div>
-
-<!-- 使用说明弹窗 -->
-<div id="guideModal">
-  <div class="guide-content">
-    <div class="guide-header">
-      <h2>梦工厂 - 使用说明</h2>
-      <button class="close-btn" onclick="closeGuideModal()">&times;</button>
-    </div>
-    <div class="guide-body">
-      <h3>核心场景</h3>
-      <div class="guide-box">
-        <div style="margin-bottom:16px;">
-          <div style="font-weight:700; margin-bottom:8px; color: var(--accent);">常规赛事（队伍参赛）</div>
-          <ul style="margin:0; padding-left:20px; color:var(--text-secondary);">
-            <li>适合：<strong>5人队伍代表俱乐部/自由名单参赛</strong></li>
-            <li>规则：队长报名 → 队员确认入场费 → 10人满员开赛 → 胜方瓜分奖池</li>
-            <li>入场费三档：500 / 1000 / 2000 梦币</li>
-          </ul>
-        </div>
-      </div>
-
-      <h3>参赛流程</h3>
-      <ol style="margin:0 0 16px; padding-left:24px; color:var(--text-secondary);">
-        <li><strong>队长报名</strong>：进入常规赛事 → 选择代表队伍 → 报名，队伍5人收到通知</li>
-        <li><strong>队员确认</strong>：进入赛事详情 → 选入场费档位 → 确认入场，扣除梦币</li>
-        <li><strong>开赛</strong>：10人满员后自动锁定，到达开赛时间正式开始</li>
-        <li><strong>提交结果</strong>：开赛20分钟后可上传截图 + 胜方 + KDA数据</li>
-        <li><strong>管理员结算</strong>：审核无误后发放奖池，胜方按入场费占比瓜分</li>
-      </ol>
-
-      <h3>奖池规则</h3>
-      <div class="guide-box" style="border-color: rgba(245,158,11,0.3);">
-        <ul style="margin:0; padding-left:20px; color:var(--text-secondary);">
-          <li>总奖池 = 10人入场费之和</li>
-          <li><span style="color:var(--success);">胜方5人</span>按个人入场费占比瓜分总奖池</li>
-          <li><span style="color:var(--danger);">败方5人</span>入场费全损，无返还</li>
-          <li>报名不足10人 → 自动取消 → 全额退费</li>
-        </ul>
-      </div>
-
-      <h3>队伍系统</h3>
-      <ul style="margin:0 0 16px; padding-left:20px; color:var(--text-secondary);">
-        <li>可创建或加入队伍（最多7人）</li>
-        <li>队长可邀请成员、踢人、转让、解散</li>
-        <li>管理员也可代建队伍和调整成员</li>
-      </ul>
-
-      <h3>腾讯会议</h3>
-      <ul style="margin:0 0 16px; padding-left:20px; color:var(--text-secondary);">
-        <li>模式2（纯组织者）会自动创建会议</li>
-        <li>其他模式下，发起人可手动创建会议</li>
-      </ul>
-
-      <h3 style="color: var(--danger);">重要规则</h3>
-      <div class="guide-box highlight">
-        <ul style="margin:0; padding-left:20px; color:var(--text-secondary);">
-          <li>每条分路只能1人，全场最多10人</li>
-          <li>可带朋友一起报名，无需注册多个账号</li>
-          <li>满10人后进入确认阶段，未确认者不会占用位置</li>
-          <li>确认成局后锁定，不再接受新报名</li>
-        </ul>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- 新手指南弹窗 -->
 <div id="newbieGuideModal" style="display:none;" class="newbie-guide-overlay">
