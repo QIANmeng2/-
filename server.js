@@ -7,6 +7,26 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const { Pool } = require('pg');
 
+// 腾讯云混元视觉（延迟加载，避免未配置时报错）
+let _hunyuanClient = null;
+function getHunyuanClient() {
+  if (_hunyuanClient) return _hunyuanClient;
+  const secretId = process.env.TENCENT_SECRET_ID || '';
+  const secretKey = process.env.TENCENT_SECRET_KEY || '';
+  if (!secretId || !secretKey) return null;
+  const tencentcloud = require("tencentcloud-sdk-nodejs-hunyuan");
+  const HunyuanClient = tencentcloud.hunyuan.v20230901.Client;
+  _hunyuanClient = new HunyuanClient({
+    credential: { secretId, secretKey },
+    region: "ap-guangzhou",
+    profile: {
+      httpProfile: { endpoint: "hunyuan.tencentcloudapi.com" },
+      signMethod: "TC3-HMAC-SHA256"
+    }
+  });
+  return _hunyuanClient;
+}
+
 const app = express();
 const PORT = process.env.PORT || 8080;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-me';
@@ -353,12 +373,14 @@ async function initDB() {
         screenshot_urls JSONB DEFAULT '[]',
         player_data JSONB DEFAULT '[]',
         mvp_player_id TEXT DEFAULT NULL,
+        coin_rewards JSONB DEFAULT '{}',
         confirmed_by TEXT,
         confirmed_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
     await client.query("ALTER TABLE competition_results ADD COLUMN IF NOT EXISTS mvp_player_id TEXT DEFAULT NULL");
+    await client.query("ALTER TABLE competition_results ADD COLUMN IF NOT EXISTS coin_rewards JSONB DEFAULT '{}'");
     // 在线聊天消息
     await client.query(`
       CREATE TABLE IF NOT EXISTS chat_messages (
@@ -1775,16 +1797,65 @@ app.get('/api/competitions/:id/results', authMiddleware, adminMiddleware, async 
 
 // 提交赛后截图
 app.post('/api/competitions/:id/submit-result', authMiddleware, async (req, res) => {
-  const { winner, screenshots, players, mvp_player_id } = req.body;
+  const { winner, screenshots, players, mvp_player_id, coin_rewards } = req.body;
   if (!winner || !screenshots || !players) return badRequest(res, '参数不完整');
   try {
     await pool.query(
-      'INSERT INTO competition_results (competition_id, winner, screenshot_urls, player_data, mvp_player_id) VALUES ($1,$2,$3,$4,$5)',
-      [req.params.id, winner, JSON.stringify(screenshots), JSON.stringify(players), mvp_player_id || null]
+      'INSERT INTO competition_results (competition_id, winner, screenshot_urls, player_data, mvp_player_id, coin_rewards) VALUES ($1,$2,$3,$4,$5,$6)',
+      [req.params.id, winner, JSON.stringify(screenshots), JSON.stringify(players), mvp_player_id || null, JSON.stringify(coin_rewards || {})]
     );
     await pool.query("UPDATE competitions SET comp_status = 'review' WHERE id = $1", [req.params.id]);
     ok(res, {message: '结果已提交，等待管理员审核' });
   } catch(e) { console.error(e); serverError(res, '提交失败'); }
+});
+
+// ==================== 截图AI识别（王者荣耀结算截图）- 腾讯云混元视觉 ====================
+async function recognizeScreenshot(base64Image) {
+  const client = getHunyuanClient();
+  if (!client) throw new Error('未配置腾讯云密钥，请在环境变量中设置 TENCENT_SECRET_ID 和 TENCENT_SECRET_KEY');
+
+  var imageUrl = base64Image.indexOf('base64,') > -1 ? base64Image : 'data:image/jpeg;base64,' + base64Image;
+  var prompt = '这是王者荣耀的比赛结算截图。请仔细分析图片，提取以下信息并以JSON格式返回：\n\n1. 获胜方："red"（红方胜）、"blue"（蓝方胜）或 "draw"（平局）\n2. 所有玩家信息数组，每个玩家包含：\n   - game_id: 游戏ID（截图中的玩家名称/游戏ID）\n   - hero: 使用的英雄名称\n   - kda: KDA数据，字符串格式如 "5/2/8"\n   - score: 评分数值（如 8.5）\n   - is_mvp: 是否MVP（true/false）\n   - team: "red" 或 "blue"\n\n请只返回纯JSON对象，不要有markdown代码块或其他文字。\n格式示例：\n{"winner":"red","players":[{"game_id":"Player1","hero":"典韦","kda":"5/2/8","score":8.5,"is_mvp":true,"team":"red"}]}';
+
+  var params = {
+    Model: 'hunyuan-vision',
+    Messages: [
+      {
+        Role: 'user',
+        Contents: [
+          { Type: 'text', Text: prompt },
+          { Type: 'image_url', ImageUrl: { Url: imageUrl } }
+        ]
+      }
+    ],
+    TopP: 1
+  };
+
+  try {
+    var result = await client.ChatCompletions(params);
+    var content = result.Choices && result.Choices[0] && result.Choices[0].Message
+                  ? result.Choices[0].Message.Content || '' : '';
+    if (!content) throw new Error('AI返回内容为空');
+    var jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('AI返回格式无法解析，原始返回: ' + content.slice(0, 200));
+    return JSON.parse(jsonMatch[0]);
+  } catch(e) {
+    if (e.message.indexOf('未配置') >= 0 || e.message.indexOf('无法解析') >= 0) throw e;
+    throw new Error('混元视觉调用失败: ' + (e.message || JSON.stringify(e)));
+  }
+}
+
+// 截图识别接口
+app.post('/api/competitions/:id/recognize-screenshot', authMiddleware, adminMiddleware, async (req, res) => {
+  const { screenshot } = req.body;
+  if (!screenshot) return badRequest(res, '缺少截图');
+  try {
+    const aiResult = await recognizeScreenshot(screenshot);
+    ok(res, aiResult);
+  } catch(e) {
+    console.error('截图识别失败:', e);
+    serverError(res, '截图识别失败: ' + e.message);
+  }
 });
 
 // 管理员确认结果并发放奖池
@@ -1802,20 +1873,32 @@ app.post('/api/admin/competitions/:id/confirm-result', authMiddleware, adminMidd
     const result = await client.query('SELECT * FROM competition_results WHERE competition_id = $1 ORDER BY created_at DESC LIMIT 1', [req.params.id]);
     if (result.rows.length === 0) { await client.query('ROLLBACK'); return badRequest(res, '未找到比赛结果'); }
     const r = result.rows[0];
-    // 计算奖池
-    const totalPool = regs.rows.reduce((sum, x) => sum + x.entry_fee, 0);
-    // 根据 winner 和 players 数据判定胜负
-    const playerData = r.player_data || [];
-    const winners = playerData.filter(p => p.team === r.winner && p.win);
-    const winnerIds = new Set(winners.map(p => p.player_user_id));
-    // 胜方总入场费
-    const winnerFees = regs.rows.filter(x => winnerIds.has(x.player_user_id));
-    const winnerTotalFee = winnerFees.reduce((sum, x) => sum + x.entry_fee, 0);
-    // 按占比分配
-    for (const w of winnerFees) {
-      const share = Math.round(totalPool * (w.entry_fee / winnerTotalFee));
-      await client.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id = $2', [share, w.player_user_id]);
-      await client.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'reward','赛事奖励')", [w.player_user_id, share]);
+    // 处理梦币奖励（管理员手动设置）
+    const coinRewards = r.coin_rewards || {};
+    const coinRewardEntries = Object.entries(coinRewards).filter(([uid, amount]) => amount > 0);
+    let totalPool = 0, winnerCount = 0;
+
+    if (coinRewardEntries.length > 0) {
+      // 手动设置奖励：按 coin_rewards 发放
+      for (const [uid, amount] of coinRewardEntries) {
+        await client.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id = $2', [amount, uid]);
+        await client.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'reward','赛事奖励')", [uid, amount]);
+      }
+      winnerCount = coinRewardEntries.length;
+    } else {
+      // 自动奖池分配（原有逻辑）
+      totalPool = regs.rows.reduce((sum, x) => sum + x.entry_fee, 0);
+      const playerData = r.player_data || [];
+      const winners = playerData.filter(p => p.team === r.winner && p.win);
+      const winnerIds = new Set(winners.map(p => p.player_user_id));
+      const winnerFees = regs.rows.filter(x => winnerIds.has(x.player_user_id));
+      const winnerTotalFee = winnerFees.reduce((sum, x) => sum + x.entry_fee, 0);
+      winnerCount = winnerFees.length;
+      for (const w of winnerFees) {
+        const share = Math.round(totalPool * (w.entry_fee / winnerTotalFee));
+        await client.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id = $2', [share, w.player_user_id]);
+        await client.query("INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1,$2,'reward','赛事奖励')", [w.player_user_id, share]);
+      }
     }
     // 写入玩家统计
     for (const p of playerData) {
