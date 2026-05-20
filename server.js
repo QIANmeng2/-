@@ -1675,8 +1675,7 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
     for (const p of players) {
       try {
         const modeLabel = c.tier === 'arena' ? '擂台赛' : (c.tier === 'training' ? '训练赛' : '赛事');
-        const noFeeMode = ['arena','training'].includes(c.tier);
-        const notifyText = noFeeMode
+        const notifyText = isFreeMode
           ? `你被${isClub?'老板':'队长'}选入${modeLabel}「${c.name}」，请进入比赛页确认入场`
           : `你被${isClub?'老板':'队长'}选入赛事「${c.name}」，请进入比赛页确认入场并选择入场费`;
         await sendNotification(p.user_id, 'competition_register', notifyText);
@@ -1727,14 +1726,13 @@ app.post('/api/competitions/:id/confirm', authMiddleware, async (req, res) => {
     if (comp.rows.length === 0) { await client.query('ROLLBACK'); return notFound(res, '赛事不存在'); }
     const c = comp.rows[0];
     const isFreeMode = ['arena'].includes(c.tier);
-    const noFeeMode = ['arena','training'].includes(c.tier);
     // 直接查找该用户的报名记录（队长已指定队员+位置）
     const reg = await client.query(
       "SELECT * FROM competition_registrations WHERE competition_id = $1 AND player_user_id = $2 AND status = 'reserved'",
       [req.params.id, req.userId]
     );
     if (reg.rows.length === 0) { await client.query('ROLLBACK'); return badRequest(res, '未找到你的报名记录'); }
-    if (!noFeeMode) {
+    if (!isFreeMode) {
       if (![500,1000,2000].includes(entry_fee)) { await client.query('ROLLBACK'); return badRequest(res, '入场费必须为500/1000/2000'); }
       // 检查余额
       const user = await client.query('SELECT dream_coins FROM users WHERE id = $1', [req.userId]);
@@ -1747,7 +1745,7 @@ app.post('/api/competitions/:id/confirm', authMiddleware, async (req, res) => {
     // 更新报名状态
     await client.query(
       "UPDATE competition_registrations SET entry_fee = $1, status = 'confirmed' WHERE id = $2",
-      [noFeeMode ? 0 : (entry_fee || 0), reg.rows[0].id]
+      [isFreeMode ? 0 : (entry_fee || 0), reg.rows[0].id]
     );
     // 检查是否10人全部确认（仅常规赛事）
     if (!isFreeMode) {
@@ -1760,7 +1758,7 @@ app.post('/api/competitions/:id/confirm', authMiddleware, async (req, res) => {
       }
     }
     await client.query('COMMIT');
-    ok(res, { entry_fee: noFeeMode ? 0 : entry_fee });
+    ok(res, { entry_fee: isFreeMode ? 0 : entry_fee });
   } catch(e) { await client.query('ROLLBACK'); console.error(e); serverError(res, '确认失败'); } finally { client.release(); }
 });
 // 取消入场（退费）
@@ -2185,48 +2183,9 @@ app.post('/api/admin/player-review', authMiddleware, adminMiddleware, async (req
       [marketValue, grade, req.userId, userId]
     );
     await updatePlayerScore(userId);
-    // 认证通过 → 自动发放1000梦币（去重：同一用户不重复发放）
-    const existingReward = await pool.query(
-      "SELECT id FROM coin_transactions WHERE user_id=$1 AND type='cert_reward' LIMIT 1",
-      [userId]
-    );
-    if (existingReward.rows.length === 0) {
-      await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins, 0) + 1000 WHERE id = $1', [userId]);
-      await pool.query(
-        "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1, 1000, 'cert_reward', '认证通过奖励')",
-        [userId]
-      );
-      await sendNotification(userId, 'coin_award', '恭喜认证通过！你获得了 1000 梦币新人奖励，快去参与赛事吧！', null);
-    }
-    await sendNotification(userId, 'player_approved', `你的选手认证已通过！身价：${marketValue}万 等级：${grade}级 + 1000梦币奖励`);
+    await sendNotification(userId, 'player_approved', `你的选手认证已通过！身价：${marketValue}万 等级：${grade}级`);
     ok(res, {marketValue });
   } catch(e) { serverError(res, '操作失败'); }
-});
-
-// 管理员：补发已认证选手1000梦币（一次性批量操作）
-app.post('/api/admin/retroactive-cert-rewards', authMiddleware, adminMiddleware, async (req, res) => {
-  try {
-    // 查出所有已认证但未领取过认证奖励的用户
-    const result = await pool.query(`
-      SELECT DISTINCT p.user_id FROM players p
-      WHERE p.status = 'approved'
-      AND NOT EXISTS (
-        SELECT 1 FROM coin_transactions ct
-        WHERE ct.user_id = p.user_id AND ct.type = 'cert_reward'
-      )
-    `);
-    if (result.rows.length === 0) return ok(res, {awarded: 0, message: '所有已认证选手都已领取过认证奖励'});
-    let count = 0;
-    for (const row of result.rows) {
-      await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins, 0) + 1000 WHERE id = $1', [row.user_id]);
-      await pool.query(
-        "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1, 1000, 'cert_reward', '认证补发奖励')",
-        [row.user_id]
-      );
-      count++;
-    }
-    ok(res, {awarded: count, message: `成功为 ${count} 位已认证选手补发1000梦币`});
-  } catch(e) { console.error(e); serverError(res, '操作失败'); }
 });
 
 // ====================== 转会市场 ======================
