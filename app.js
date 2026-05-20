@@ -2317,13 +2317,9 @@ async function renderClubDetail(clubId) {
         <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:10px;padding:16px;margin-bottom:16px;">
           <div style="font-size:0.82rem;font-weight:700;color:#34d399;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            自由名单 (${freeIds.size}/∞) <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;margin-left:4px;">不限等级，可设多支队伍</span>
+            自由名单 (${freeIds.size}/∞) <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;margin-left:4px;">不限等级，勾选后右侧选队伍</span>
           </div>
-          <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <label style="font-size:0.72rem;color:var(--text-muted);white-space:nowrap;">新队伍名：</label>
-            <input type="text" id="rosterTeamInput" placeholder="输入队伍名（如：一队/二队）" style="min-width:140px;padding:4px 8px;font-size:0.76rem;background:rgba(255,255,255,.04);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);">
-            <button class="btn btn-xs btn-ghost" onclick="document.querySelectorAll('.roster-free-check:not(:checked)').forEach(function(cb){cb.dataset.team=document.getElementById('rosterTeamInput').value.trim()})" style="font-size:0.68rem;padding:3px 8px;">应用到新选</button>
-          </div>
+          <!-- 当前分组预览 -->
           <div id="freeRosterContainer" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
             ${(function(){
               var freeList=rosters.free||[], teams={}, unassigned=[];
@@ -2333,18 +2329,32 @@ async function renderClubDetail(clubId) {
                 html+='<div style="background:rgba(52,211,153,.04);border:1px solid rgba(52,211,153,.12);border-radius:6px;padding:6px 10px;margin-bottom:4px;"><div style="font-size:0.7rem;color:#34d399;font-weight:600;margin-bottom:4px;">'+escapeHtml(tid)+'（'+teams[tid].length+'/5人）</div>'+teams[tid].map(function(r){return '<div style="font-size:0.72rem;color:var(--text-secondary);padding:2px 0;display:flex;align-items:center;gap:4px;"><span style="color:#34d399;">✅</span><b>'+escapeHtml(r.game_id||r.player_user_id)+'</b>'+(r.grade?'<span class="grade-badge '+(gradeCls[r.grade]||'grade-c')+'" style="font-size:0.62rem;margin-left:4px;">'+r.grade+'</span>':'')+(r.market_value?'<span style="color:var(--warning);font-size:0.68rem;margin-left:4px;">'+r.market_value+'万</span>':'')+'</div>';}).join('')+'</div>';
               });
               if(unassigned.length){
-                html+='<div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:6px 10px;margin-bottom:4px;"><div style="font-size:0.7rem;color:var(--text-muted);font-weight:600;margin-bottom:4px;">未分组（'+unassigned.length+'/5人）</div>'+unassigned.map(function(r){return '<div style="font-size:0.72rem;color:var(--text-secondary);padding:2px 0;"><span>✅</span><b>'+escapeHtml(r.game_id||r.player_user_id)+'</b></div>';}).join('')+'</div>';
+                html+='<div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:6px 10px;margin-bottom:4px;"><div style="font-size:0.7rem;color:var(--text-muted);font-weight:600;margin-bottom:4px;">未分配（'+unassigned.length+'人）</div>'+unassigned.map(function(r){return '<div style="font-size:0.72rem;color:var(--text-secondary);padding:2px 0;"><span>⬜</span><b>'+escapeHtml(r.game_id||r.player_user_id)+'</b></div>';}).join('')+'</div>';
               }
               return html;
             })()}
-            <div style="border-top:1px solid rgba(255,255,255,.05);padding-top:6px;margin-top:4px;">
-            <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">添加成员：</div>
-            ${(members.map(function(m){
-              var g=m.grade, gCls=gradeCls[g]||'grade-c', isBoss=m.role==='boss';
-              var existingTeam=(rosters.free||[]).find(function(r){return r.player_user_id===m.user_id})?.team_id||'';
-              return '<label style="display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer;padding:6px 8px;border-radius:6px;transition:background .15s;" onmouseover="this.style.background=\'rgba(255,255,255,0.03)\'" onmouseout="this.style.background=\'transparent\'"><input type="checkbox" class="roster-free-check" value="'+m.user_id+'" data-team="'+existingTeam+'" '+(freeIds.has(m.user_id)?'checked':'')+' onchange="if(this.checked&&!this.dataset.team)this.dataset.team=(document.getElementById(\'rosterTeamInput\')&&document.getElementById(\'rosterTeamInput\').value.trim())||\'\'" style="accent-color:#34d399;width:14px;height:14px;cursor:pointer;"><span style="font-weight:600;color:var(--text-primary);">'+(m.coachname||m.username)+'</span>'+(m.gameid?'<span style="font-size:0.7rem;color:var(--text-muted);">'+m.gameid+'</span>':'')+(g?'<span class="grade-badge '+gCls+'" style="font-size:0.65rem;">'+g+'</span>':'')+(m.market_value?'<span style="font-size:0.7rem;color:var(--warning);font-weight:700;">'+m.market_value+'万</span>':'')+(isBoss?'<span class="pos-tag club-role-boss" style="font-size:0.65rem;">老板</span>':'')+(existingTeam?'<span style="font-size:0.62rem;color:#34d399;background:rgba(52,211,153,.1);padding:1px 5px;border-radius:3px;">'+escapeHtml(existingTeam)+'</span>':'')+'</label>';
-            }).join(''))}
-            </div>
+            <!-- 新建队伍快捷入口 -->
+          <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <label style="font-size:0.72rem;color:var(--text-muted);white-space:nowrap;">+ 新建队伍：</label>
+            <input type="text" id="rosterTeamInput" placeholder="如：一队、二队" style="min-width:120px;padding:4px 8px;font-size:0.76rem;background:rgba(255,255,255,.04);border:1px solid var(--border-color);border-radius:6px;color:var(--text-primary);">
+            <button class="btn btn-xs btn-primary" onclick="(function(){var n=document.getElementById('rosterTeamInput').value.trim();if(!n)return;var sels=document.querySelectorAll('.free-team-sel');sels.forEach(function(s){var o=document.createElement('option');o.value=n;o.textContent=n;s.appendChild(o);});document.getElementById('rosterTeamInput').value='';showToast('已添加「'+n+'」到所有下拉框','success');})()" style="font-size:0.68rem;padding:3px 8px;">添加到选项</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;border-top:1px solid rgba(255,255,255,.05);padding-top:6px;margin-top:4px;">
+            <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">成员列表（☑️ 勾选 + 右侧选队伍）：</div>
+            \${(function(){
+              var existingTeams={};
+              (rosters.free||[]).forEach(function(r){if(r.team_id)existingTeams[r.team_id]=1;});
+              var teamNames=Object.keys(existingTeams).sort();
+              return members.map(function(m){
+                var g=m.grade, gCls=gradeCls[g]||'grade-c', isBoss=m.role==='boss';
+                var existingTeam=(rosters.free||[]).find(function(r){return r.player_user_id===m.user_id})?.team_id||'';
+                var checked=freeIds.has(m.user_id);
+                var selOptions='<option value="">— 不入选 —</option>';
+                teamNames.forEach(function(tn){ selOptions+='<option value="'+escapeHtml(tn)+'" '+(existingTeam===tn?'selected':'')+'>'+escapeHtml(tn)+'</option>'; });
+                if(existingTeam && !teamNames.includes(existingTeam)){ selOptions+='<option value="'+escapeHtml(existingTeam)+'" selected>'+escapeHtml(existingTeam)+'</option>'; }
+                return '<label style=\"display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--text-secondary);cursor:pointer;padding:6px 8px;border-radius:6px;transition:background .15s;\" onmouseover=\"this.style.background=\'rgba(255,255,255,0.03)\'\" onmouseout=\"this.style.background=\'transparent\'\"><input type=\"checkbox\" class=\"roster-free-check\" value=\"'+m.user_id+'\" data-team=\"'+escapeHtml(existingTeam)+'\" '+(checked?'checked':'')+' style=\"accent-color:#34d399;width:14px;height:14px;cursor:pointer;\"><span style=\"flex:1;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;\"><span style=\"font-weight:600;color:var(--text-primary);\">'+(m.coachname||m.username)+'</span>'+(m.gameid?'<span style=\"font-size:0.7rem;color:var(--text-muted);\">'+m.gameid+'</span>':'')+(g?'<span class=\"grade-badge '+gCls+'\" style=\"font-size:0.65rem;\" >'+g+'</span>':'')+(m.market_value?'<span style=\"font-size:0.7rem;color:var(--warning);font-weight:700;\" >'+m.market_value+'万</span>':'')+(isBoss?'<span class=\"pos-tag club-role-boss\" style=\"font-size:0.65rem;\" >老板</span>:'')+'</span><select class=\"free-team-sel\" style=\"padding:2px 4px;font-size:0.7rem;background:rgba(255,255,255,.04);border:1px solid var(--border-color);border-radius:4px;color:var(--text-primary);width:auto;max-width:90px;\" onchange=\"var cb=this.parentElement.querySelector('.roster-free-check');cb.dataset.team=this.value;if(this.value){cb.checked=true;}else{cb.checked=false;}\"'+selOptions+'</select></label>';
+              }).join('');
+            })()}
           </div>
           <button class="btn btn-sm" onclick="saveClubRoster(${clubId},'free')" style="background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.25);">保存自由名单</button>
         </div>
