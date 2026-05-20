@@ -2318,6 +2318,23 @@
       color:#fbbf24;font-weight:700;
     }
 
+    /* Mode Compare Table */
+    .nb-mode-compare { display:flex;flex-direction:column;gap:6px; }
+    .nb-compare-row {
+      display:flex;align-items:flex-start;gap:10px;
+      padding:8px 12px;background:rgba(255,255,255,0.03);
+      border-radius:8px;border:1px solid rgba(255,255,255,0.06);
+      font-size:0.82rem;line-height:1.5;
+    }
+    .nb-c-label {
+      flex-shrink:0;width:90px;font-weight:700;font-size:0.82rem;
+      color:var(--text-primary);
+    }
+    .nb-c-info {
+      color:var(--text-secondary);font-size:0.81rem;
+    }
+    .nb-c-info strong { color:var(--text-primary); }
+
     /* Summary 总结 */
     .nb-summary {
       margin-top:14px;padding:14px 16px;border-radius:12px;
