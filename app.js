@@ -1820,9 +1820,6 @@ async function openPlayerDetailModal(userId) {
     const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
     const isClubBoss = p.club_owner_id === currentUser.id;
     const canEdit = (isClubBoss || isAdmin) && p.club_id;
-    const salaryDisplay = p.weekly_salary !== undefined && p.weekly_salary !== null
-      ? p.weekly_salary.toLocaleString() + ' 梦币/周'
-      : '-';
 
     let detailHtml = `
       <div class="player-detail-section">
@@ -1852,7 +1849,6 @@ async function openPlayerDetailModal(userId) {
         <h4>俱乐部信息</h4>
         <div class="player-detail-grid">
           <div class="player-detail-item"><label>所属俱乐部</label><span>${p.club_name || '-'}</span></div>
-          <div class="player-detail-item"><label>周薪</label><span style="color:var(--success);">${salaryDisplay}</span></div>
         </div>
       </div>
       ` : ''}
@@ -1892,15 +1888,15 @@ async function openPlayerDetailModal(userId) {
     if (canEdit) {
       detailHtml += `
       <div class="player-detail-section" style="border-top:1px solid rgba(255,255,255,0.06);padding-top:14px;">
-        <h4>调整选手信息（老板）</h4>
-        <form onsubmit="handleUpdatePlayerInfo(event, '${userId}', ${p.club_id})" style="display:flex;flex-direction:column;gap:10px;">
+        <h4>调整选手身价（老板）</h4>
+        <div id="priceCooldownArea" style="margin-bottom:10px;"></div>
+        <form onsubmit="handleUpdatePlayerInfo(event, '${userId}', ${p.club_id})" id="priceAdjustForm" style="display:flex;flex-direction:column;gap:10px;">
           <div>
             <label style="font-size:0.75rem;color:var(--text-muted);display:block;margin-bottom:4px;">身价（万梦币）</label>
             <input class="form-input" type="number" id="editMarketValue" value="${p.market_value || ''}" min="1" style="font-size:0.85rem;">
           </div>
-          <div>
-            <label style="font-size:0.75rem;color:var(--text-muted);display:block;margin-bottom:4px;">自定义周薪（梦币，留空则按等级标准）</label>
-            <input class="form-input" type="number" id="editCustomSalary" value="${p.custom_salary !== null && p.custom_salary !== undefined ? p.custom_salary : ''}" min="0" style="font-size:0.85rem;">
+          <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.45;">
+            ⚠️ 每位选手每 <b>7天</b> 只能调整一次身价，请谨慎操作
           </div>
           <button type="submit" class="btn btn-primary btn-sm">保存调整</button>
         </form>
@@ -1908,6 +1904,8 @@ async function openPlayerDetailModal(userId) {
     }
 
     document.getElementById('playerDetailContent').innerHTML = detailHtml;
+    // 老板视角：查询身价调整冷却状态
+    if (canEdit && p.club_id) checkPriceCooldown(p.club_id, userId);
   } catch(e) {
     document.getElementById('playerDetailContent').innerHTML = `<p style="color:var(--danger);">加载失败：${e.message}</p>`;
   }
@@ -1916,24 +1914,38 @@ async function openPlayerDetailModal(userId) {
 async function handleUpdatePlayerInfo(e, userId, clubId) {
   e.preventDefault();
   const marketValue = document.getElementById('editMarketValue').value;
-  const customSalary = document.getElementById('editCustomSalary').value;
   try {
     await api('/api/club/' + clubId + '/player/' + userId + '/update', {
       method: 'POST',
       body: JSON.stringify({
-        marketValue: marketValue ? parseInt(marketValue) : undefined,
-        customSalary: customSalary !== '' ? parseInt(customSalary) : undefined
+        marketValue: marketValue ? parseInt(marketValue) : undefined
       })
     });
-    showToast('选手信息已更新', 'success');
+    showToast('身价已调整', 'success');
     closePlayerDetailModal();
   } catch(err) { showToast(err.message, 'error'); }
 }
 
 function closePlayerDetailModal() {
-  const el = document.getElementById('playerDetailModal');
-  if (el) el.remove();
+  var el = document.getElementById('playerDetailModal');
+  if (el) el.style.display = 'none';
   document.body.style.overflow = '';
+}
+
+// 查询身价调整冷却状态
+async function checkPriceCooldown(clubId, userId) {
+  try {
+    const data = await api('/api/club/' + clubId + '/player/' + userId + '/cooldown');
+    const area = document.getElementById('priceCooldownArea');
+    if (!area) return;
+    if (!data.canAdjust) {
+      area.innerHTML = '<div style="padding:10px 14px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:10px;color:#f87171;font-size:0.82rem;font-weight:600;">⏰ 冷却中：该选手 ' + data.daysLeft + ' 天后可再次调整身价</div>';
+      var form = document.getElementById('priceAdjustForm');
+      if (form) { form.style.opacity = '0.4'; form.style.pointerEvents = 'none'; }
+    } else {
+      area.innerHTML = '<div style="padding:8px 12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:8px;color:#34d399;font-size:0.76rem;">✓ 可以调整身价</div>';
+    }
+  } catch(e) { /* silent fail */ }
 }
 
 // 采买选手
@@ -3279,7 +3291,6 @@ async function renderProfileForm() {
     const pd = await api('/api/player/status');
     const p = pd.player;
     if (p && p.status === 'approved') {
-      const salary = p.weekly_salary !== undefined ? p.weekly_salary.toLocaleString() + ' 梦币/周' : '-';
       const gCls = { S: 'grade-s', A: 'grade-a', B: 'grade-b', C: 'grade-c', D: 'grade-c' }[p.grade] || 'grade-c';
       playerHtml = `
         <div class="card" style="border-left:3px solid var(--success);margin-top:16px;">
@@ -3294,7 +3305,6 @@ async function renderProfileForm() {
             <div class="player-detail-item"><label>所属俱乐部</label><span>${p.club_name || '自由选手'}</span></div>
             <div class="player-detail-item"><label>身价</label><span style="color:var(--warning);">${p.market_value || '-'}万</span></div>
             <div class="player-detail-item"><label>等级</label><span class="grade-badge ${gCls}">${p.grade || '-'}</span></div>
-            <div class="player-detail-item"><label>周薪</label><span style="color:var(--success);">${salary}</span></div>
             <div class="player-detail-item"><label>游戏ID</label><span>${p.game_id || '-'}</span></div>
           </div>
         </div>`;
