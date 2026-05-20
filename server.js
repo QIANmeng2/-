@@ -1650,8 +1650,8 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
       if (mySide) side = mySide.side;
       else { await client.query('ROLLBACK'); return badRequest(res, '红蓝双方均已满员'); }
     }
-    // 房间容量检查（常规赛事固定10人上限，自由模式无限制）
-    const isFreeMode = ['arena','training'].includes(c.tier);
+    // 房间容量检查（常规赛事/训练赛固定10人上限，自由模式无限制）
+    const isFreeMode = ['arena'].includes(c.tier);
     if (!isFreeMode) {
       const countRes = await client.query(
         'SELECT COUNT(*) FROM competition_registrations WHERE competition_id = $1 AND status != $2',
@@ -1725,7 +1725,7 @@ app.post('/api/competitions/:id/confirm', authMiddleware, async (req, res) => {
     const comp = await client.query('SELECT * FROM competitions WHERE id = $1', [req.params.id]);
     if (comp.rows.length === 0) { await client.query('ROLLBACK'); return notFound(res, '赛事不存在'); }
     const c = comp.rows[0];
-    const isFreeMode = ['arena','training'].includes(c.tier);
+    const isFreeMode = ['arena'].includes(c.tier);
     // 直接查找该用户的报名记录（队长已指定队员+位置）
     const reg = await client.query(
       "SELECT * FROM competition_registrations WHERE competition_id = $1 AND player_user_id = $2 AND status = 'reserved'",
