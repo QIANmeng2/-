@@ -2341,7 +2341,7 @@ async function renderClubDetail(clubId) {
           </div>
           <div style="display:flex;flex-direction:column;gap:6px;border-top:1px solid rgba(255,255,255,.05);padding-top:6px;margin-top:4px;">
             <div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">成员列表（☑️ 勾选 + 右侧选队伍）：</div>
-            \${(function(){
+            ${(function(){
               var existingTeams={};
               (rosters.free||[]).forEach(function(r){if(r.team_id)existingTeams[r.team_id]=1;});
               var teamNames=Object.keys(existingTeams).sort();
