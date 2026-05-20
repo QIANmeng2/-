@@ -2203,6 +2203,203 @@
     #guideModal strong { color: var(--text-primary); }
     #guideModal ol { margin: 0 0 16px; padding-left: 24px; }
 
+    /* ===== 新手指南弹窗 ===== */
+    .newbie-guide-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      z-index: 9998;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      animation: nbFadeIn .3s ease;
+    }
+    @keyframes nbFadeIn { from{opacity:0} to{opacity:1} }
+    .newbie-guide-panel {
+      background: linear-gradient(160deg, rgba(22,22,38,0.97) 0%, rgba(14,14,26,0.99) 100%);
+      border: 1px solid rgba(245,158,11,0.2);
+      border-radius: 18px;
+      max-width: 560px;
+      width: 100%;
+      max-height: 88vh;
+      overflow-y: auto;
+      box-shadow: 0 0 80px rgba(245,158,11,0.08), 0 25px 70px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.04);
+      animation: nbScaleIn .4s cubic-bezier(.16,1,.3,1);
+      position: relative;
+    }
+    @keyframes nbScaleIn { from{opacity:0;transform:scale(0.93) translateY(24px)} to{opacity:1;transform:scale(1) translateY(0)} }
+    .newbie-glow {
+      position: absolute;top:-1px;left:15%;right:15%;height:2px;
+      background: linear-gradient(90deg,transparent,rgba(245,158,11,0.6),rgba(139,92,246,0.5),rgba(245,158,11,0.6),transparent);
+      border-radius: 2px;
+    }
+    .newbie-header {
+      display:flex;align-items:center;justify-content:space-between;
+      padding:28px 28px 16px;position:sticky;top:0;
+      background: linear-gradient(160deg, rgba(22,22,38,0.97) 0%, rgba(14,14,26,0.99) 100%);
+      z-index:2;
+    }
+    .newbie-title-row {
+      display:flex;align-items:center;gap:14px;
+    }
+    .newbie-icon-wrap {
+      width:52px;height:52px;border-radius:14px;
+      background: linear-gradient(135deg, rgba(245,158,11,0.12), rgba(139,92,246,0.08));
+      border:1px solid rgba(245,158,11,0.2);
+      display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    }
+    .newbie-title {
+      font-family:var(--font-display);font-size:1.35rem;font-weight:800;
+      background: linear-gradient(135deg,#fbbf24 0%,#f59e0b 40%,#a78bfa 100%);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+      letter-spacing:.03em;
+    }
+    .newbie-subtitle { font-size:0.75rem;color:var(--text-muted);margin-top:2px;letter-spacing:.04em; }
+    .newbie-close {
+      width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,0.04);
+      border:1px solid rgba(255,255,255,0.08);color:var(--text-muted);
+      font-size:1.3rem;display:flex;align-items:center;justify-content:center;
+      cursor:pointer;transition:all .2s;flex-shrink:0;
+    }
+    .newbie-close:hover { background:rgba(239,68,68,0.12);border-color:rgba(239,68,68,0.25);color:#ef4444; }
+
+    /* Tab 切换 */
+    .newbie-tabs {
+      display:flex;padding:0 28px;margin-bottom:16px;gap:0;
+    }
+    .newbie-tab {
+      flex:1;padding:10px 16px;font-size:0.85rem;font-weight:700;
+      border:none;background:transparent;color:var(--text-muted);cursor:pointer;
+      transition:all .25s;border-bottom:2px solid transparent;
+      display:flex;align-items:center;justify-content:center;gap:6px;
+      letter-spacing:.02em;
+    }
+    .newbie-tab:hover { color:var(--text-secondary);background:rgba(255,255,255,.02); }
+    .newbie-tab.active {
+      color:#fbbf24;border-bottom-color:#f59e0b;
+      background:linear-gradient(to top,rgba(245,158,11,0.06),transparent);
+    }
+
+    /* 内容区 */
+    .newbie-content { padding:0 28px 20px; }
+
+    /* Step 步骤 */
+    .nb-step {
+      display:flex;gap:14px;padding:14px 16px;margin-bottom:10px;
+      background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);
+      border-radius:12px;transition:background .2s;
+    }
+    .nb-step:hover { background:rgba(255,255,255,.04); }
+    .nb-step-num {
+      font-size:1.6rem;font-weight:900;color:rgba(245,158,11,0.25);
+      flex-shrink:0;width:36px;text-align:center;line-height:1;
+      font-family:var(--font-display);
+    }
+    .nb-step-body { flex:1;min-width:0; }
+    .nb-step-title {
+      font-size:0.88rem;font-weight:700;color:var(--text-primary);margin-bottom:4px;
+    }
+    .nb-step-desc {
+      font-size:0.8rem;color:var(--text-secondary);line-height:1.55;
+    }
+    .nb-step-tags { display:flex;gap:6px;margin-top:6px;flex-wrap:wrap; }
+    .nb-tag {
+      font-size:0.65rem;padding:2px 8px;border-radius:20px;
+      background:rgba(255,255,255,.06);color:var(--text-muted);
+      border:1px solid rgba(255,255,255,.08);font-weight:600;
+    }
+    .nb-tag.gold { background:rgba(245,158,11,0.1);color:#fbbf24;border-color:rgba(245,158,11,0.2); }
+    .nb-tag.green { background:rgba(16,185,129,0.1);color:#34d399;border-color:rgba(16,185,129,0.2); }
+    .nb-tag.red { background:rgba(239,68,68,0.1);color:#f87171;border-color:rgba(239,68,68,0.2); }
+    .nb-highlight {
+      color:#fbbf24;font-weight:700;
+    }
+
+    /* Summary 总结 */
+    .nb-summary {
+      margin-top:14px;padding:14px 16px;border-radius:12px;
+      display:flex;align-items:flex-start;gap:10px;
+      font-size:0.82rem;line-height:1.55;
+    }
+    .player-summary {
+      background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(139,92,246,0.05));
+      border:1px solid rgba(99,102,241,0.15);color:#a5b4fc;
+    }
+    .boss-summary {
+      background:linear-gradient(135deg,rgba(245,158,11,0.08),rgba(217,119,6,0.04));
+      border:1px solid rgba(245,158,11,0.15);color:#fcd34d;
+    }
+    .nb-summary-icon { font-size:1.3rem;flex-shrink:0; }
+
+    /* 老板玩法 - 模式卡片 */
+    .nb-boss-intro {
+      text-align:center;padding:16px;margin-bottom:14px;
+      background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.12);
+      border-radius:12px;
+    }
+    .nb-boss-intro-title { font-size:0.95rem;font-weight:700;color:#c4b5fd;margin-bottom:6px; }
+    .nb-boss-intro-desc { font-size:0.8rem;color:var(--text-secondary);line-height:1.5; }
+
+    .nb-mode-card {
+      padding:18px 18px;margin-bottom:12px;border-radius:14px;
+      border:1px solid rgba(255,255,255,.06);position:relative;
+    }
+    .mode-a { background:linear-gradient(135deg,rgba(16,185,129,0.05),rgba(6,95,70,0.03));border-color:rgba(16,185,129,0.12); }
+    .mode-b { background:linear-gradient(135deg,rgba(99,102,241,0.05),rgba(67,56,202,0.03));border-color:rgba(99,102,241,0.12); }
+
+    .nb-mode-badge {
+      position:absolute;top:-8px;left:16px;font-size:0.65rem;font-weight:800;
+      padding:2px 10px;border-radius:20px;letter-spacing:.05em;
+    }
+    .mode-a .nb-mode-badge { background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.25); }
+    .mode-b .nb-mode-badge { background:rgba(99,102,241,0.15);color:#a5b4fc;border:1px solid rgba(99,102,241,0.25); }
+
+    .nb-mode-title { font-size:0.95rem;font-weight:700;margin-bottom:10px; }
+    .nb-mode-steps { display:flex;flex-direction:column;gap:6px; }
+    .nb-mode-step {
+      font-size:0.8rem;color:var(--text-secondary);padding:6px 10px;
+      background:rgba(0,0,0,.2);border-radius:8px;line-height:1.45;
+    }
+    .nb-mode-step strong { color:var(--text-primary); }
+    .up { color:#34d399;font-weight:900;font-size:0.85rem; }
+    .nb-mode-tip {
+      margin-top:8px;font-size:0.76rem;color:var(--text-muted);
+      padding:8px 12px;background:rgba(0,0,0,.15);border-radius:8px;
+      line-height:1.45;
+    }
+    .nb-mode-tip.highlight {
+      background:linear-gradient(135deg,rgba(245,158,11,0.08),rgba(139,92,246,0.05));
+      border:1px solid rgba(245,158,11,0.12);color:var(--text-secondary);
+    }
+
+    /* Insight 卡片 */
+    .nb-insight {
+      display:flex;gap:12px;padding:16px;margin-bottom:14px;
+      background:linear-gradient(135deg,rgba(245,158,11,0.06),rgba(217,119,6,0.03));
+      border:1px solid rgba(245,158,11,0.15);border-radius:14px;
+    }
+    .nb-insight-icon { font-size:1.5rem;flex-shrink:0; }
+    .nb-insight-title { font-size:0.85rem;font-weight:700;color:#fcd34d;margin-bottom:4px; }
+    .nb-insight-text { font-size:0.8rem;color:var(--text-secondary);line-height:1.55; }
+    .nb-insight-text b { color:#fbbf24; }
+
+    /* Footer */
+    .newbie-footer { padding:16px 28px 24px; }
+
+    /* 响应式 */
+    @media(max-width:600px) {
+      .newbie-guide-panel { max-width:96%;border-radius:14px;max-height:92vh; }
+      .newbie-header { padding:20px 18px 12px; }
+      .newbie-content { padding:0 18px 16px; }
+      .newbie-tabs { padding:0 18px; }
+      .nb-step { flex-direction:column;gap:8px; }
+      .nb-step-num { width:auto;font-size:1.2rem; }
+      .newbie-footer { padding:12px 18px 20px; }
+    }
+
     /* 分路段位网格 */
     .lane-grid {
       display: grid;
