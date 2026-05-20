@@ -2185,9 +2185,48 @@ app.post('/api/admin/player-review', authMiddleware, adminMiddleware, async (req
       [marketValue, grade, req.userId, userId]
     );
     await updatePlayerScore(userId);
-    await sendNotification(userId, 'player_approved', `你的选手认证已通过！身价：${marketValue}万 等级：${grade}级`);
+    // 认证通过 → 自动发放1000梦币（去重：同一用户不重复发放）
+    const existingReward = await pool.query(
+      "SELECT id FROM coin_transactions WHERE user_id=$1 AND type='cert_reward' LIMIT 1",
+      [userId]
+    );
+    if (existingReward.rows.length === 0) {
+      await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins, 0) + 1000 WHERE id = $1', [userId]);
+      await pool.query(
+        "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1, 1000, 'cert_reward', '认证通过奖励')",
+        [userId]
+      );
+      await sendNotification(userId, 'coin_award', '恭喜认证通过！你获得了 1000 梦币新人奖励，快去参与赛事吧！', null);
+    }
+    await sendNotification(userId, 'player_approved', `你的选手认证已通过！身价：${marketValue}万 等级：${grade}级 + 1000梦币奖励`);
     ok(res, {marketValue });
   } catch(e) { serverError(res, '操作失败'); }
+});
+
+// 管理员：补发已认证选手1000梦币（一次性批量操作）
+app.post('/api/admin/retroactive-cert-rewards', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    // 查出所有已认证但未领取过认证奖励的用户
+    const result = await pool.query(`
+      SELECT DISTINCT p.user_id FROM players p
+      WHERE p.status = 'approved'
+      AND NOT EXISTS (
+        SELECT 1 FROM coin_transactions ct
+        WHERE ct.user_id = p.user_id AND ct.type = 'cert_reward'
+      )
+    `);
+    if (result.rows.length === 0) return ok(res, {awarded: 0, message: '所有已认证选手都已领取过认证奖励'});
+    let count = 0;
+    for (const row of result.rows) {
+      await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins, 0) + 1000 WHERE id = $1', [row.user_id]);
+      await pool.query(
+        "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1, 1000, 'cert_reward', '认证补发奖励')",
+        [row.user_id]
+      );
+      count++;
+    }
+    ok(res, {awarded: count, message: `成功为 ${count} 位已认证选手补发1000梦币`});
+  } catch(e) { console.error(e); serverError(res, '操作失败'); }
 });
 
 // ====================== 转会市场 ======================
