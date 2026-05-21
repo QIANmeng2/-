@@ -24,27 +24,28 @@
     WELCOME: {
       onNext:  () => 'ROLE_SELECT',
       onPrev:  () => null,
-      render()  { _renderWelcome(); }
+      render:  function() { _renderWelcome(); }
     },
     ROLE_SELECT: {
       onNext:  () => _selectedRole ? 'ROLE_CONFIRM' : null,
       onPrev:  () => 'WELCOME',
-      render()  { _renderRoleSelect(); }
+      render:  function() { _renderRoleSelect(); }
     },
     ROLE_CONFIRM: {
       onNext:  () => 'NAVIGATE',
       onPrev:  () => 'ROLE_SELECT',
-      render()  { _renderRoleConfirm(); }
+      render:  function() { _renderRoleConfirm(); }
     },
     NAVIGATE: {
       onNext:  () => 'COMPLETE',
       onPrev:  () => 'ROLE_CONFIRM',
-      render()  { _renderNavigate(); }
+      render:  function() { _renderNavigate(); }
     },
     COMPLETE: {
       onNext:  () => null,
       onPrev:  () => null,
-      render()  { /* 不会直接 render，close() 由 next() 调用 */ }
+      render:  function() { /* 不会直接 render，close() 由 next() 调用 */ }
+    }
   };
 
   // ===================== 内部状态 =====================
