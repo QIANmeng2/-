@@ -18,7 +18,7 @@ async function updatePlayerScore(userId) {
     const { market_value, dream_coins } = result.rows[0];
     const playerValue = market_value || 0;
     const dreamcoinValue = dream_coins || 0;
-    const playerScore = Math.round(0.5 * playerValue + 0.5 * dreamcoinValue);
+    const playerScore = Math.round(0.5 * playerValue + 0.5 * (dreamcoinValue / 10000));
     await pool.query('UPDATE players SET player_score = $1 WHERE user_id = $2', [playerScore, userId]);
     console.log(`  ${userId}: value=${playerValue}, coins=${dreamcoinValue}, score=${playerScore}`);
   } catch (e) {
