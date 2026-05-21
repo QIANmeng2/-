@@ -2669,6 +2669,16 @@ app.post('/api/club/:id/player/:userId/update', authMiddleware, async (req, res)
 
       const player = await pool.query('SELECT market_value FROM players WHERE user_id=$1', [userId]);
       const oldValue = player.rows[0]?.market_value || 0;
+
+      // ±20% 区间限制
+      if (oldValue > 0) {
+        const minMV = Math.floor(oldValue * 0.8);
+        const maxMV = Math.ceil(oldValue * 1.2);
+        if (mv < minMV || mv > maxMV) {
+          return badRequest(res, `身价调整范围仅限 ${minMV}万 ~ ${maxMV}万（当前身价 ${oldValue}万的±20%）`);
+        }
+      }
+
       const newGrade = calcGrade(mv);
 
       await pool.query('UPDATE players SET market_value=$1, grade=$2 WHERE user_id=$3', [mv, newGrade, userId]);
