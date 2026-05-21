@@ -83,8 +83,8 @@ async function loadMatches() {
   if (!container) return;
   container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">加载中…</div>';
   try {
-    const data = await api('/api/matches');
-    const matches = data.matches || data.data || [];
+    const data = await api('/api/competitions');
+    const matches = data.competitions || data.matches || data.data || [];
     _matchCache = {};
     matches.forEach(m => { _matchCache[m.id] = m; });
 
@@ -93,11 +93,12 @@ async function loadMatches() {
       container.innerHTML = window.MatchCard.renderList(matches, { clickable: true, showMode: true, showTime: true });
     } else {
       // 兜底：组件未加载时显示纯文字列表
+      // 兼容两种字段名：title/name, status/comp_status
       container.innerHTML = matches.map(m =>
         '<div style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;" onclick="openMatchDetailView(\'' + m.id + '\')">' +
-        '<b>' + escapeHtml(m.title || '比赛') + '</b> · ' + (m.status || '') +
+        '<b>' + escapeHtml(m.title || m.name || '赛事') + '</b> · ' + escapeHtml(m.status || m.comp_status || '') +
         '</div>'
-      ).join('') || '<div style="color:var(--text-muted);text-align:center;padding:40px;">暂无比赛</div>';
+      ).join('') || '<div style="color:var(--text-muted);text-align:center;padding:40px;">暂无赛事</div>';
     }
   } catch (err) {
     container.innerHTML = '<div style="color:var(--danger);text-align:center;padding:20px;">加载失败：' + escapeHtml(err.message) + '</div>';
