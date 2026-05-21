@@ -2996,6 +2996,106 @@
   color: var(--danger);
 }
 
+/* ===== 聊天系统优化：身份标识 + 撤回 + @提及 + 禁言 ===== */
+
+/* 身份徽章 */
+.chat-identity-badge {
+  display: inline-block;
+  font-size: 0.62rem;
+  padding: 1px 6px;
+  border-radius: 10px;
+  margin-left: 6px;
+  vertical-align: middle;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* 撤回消息气泡 */
+.chat-bubble-recalled {
+  background: transparent !important;
+  border: 1px dashed var(--border-color) !important;
+  color: var(--text-muted) !important;
+  font-style: italic;
+}
+
+.chat-message-me .chat-bubble-recalled {
+  background: transparent !important;
+  border: 1px dashed rgba(255,255,255,0.25) !important;
+  color: rgba(255,255,255,0.5) !important;
+}
+
+/* 撤回按钮 */
+.chat-recall-btn {
+  display: none;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.chat-bubble:hover .chat-recall-btn {
+  display: inline;
+}
+
+.chat-recall-btn:hover {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* @提及高亮 */
+.chat-mention {
+  color: #fbbf24;
+  font-weight: 600;
+  background: rgba(251, 191, 36, 0.12);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.chat-message-me .chat-mention {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* @提及下拉 */
+.mention-dropdown {
+  animation: fadeInUp 0.15s ease;
+}
+
+.mention-dropdown-item:hover,
+.mention-dropdown-item.mention-active {
+  background: rgba(99, 102, 241, 0.15);
+}
+
+/* 右键菜单 */
+.chat-context-item:hover {
+  background: rgba(99, 102, 241, 0.1);
+}
+
+/* 禁言弹窗 */
+.mute-dialog h3 {
+  color: var(--text-primary);
+}
+
+.mute-preset-btn {
+  background: var(--bg-glass) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-secondary) !important;
+  font-size: 0.78rem !important;
+}
+
+.mute-preset-btn:hover {
+  border-color: var(--primary) !important;
+  color: var(--primary) !important;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ===== 俱乐部面板：主区+侧边栏布局 ===== */
 .club-panel-layout {
   display: grid;

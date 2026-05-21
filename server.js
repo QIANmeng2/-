@@ -168,6 +168,8 @@ async function initDB() {
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()');
     await client.query('ALTER TABLE notifications ADD COLUMN IF NOT EXISTS notification_id TEXT DEFAULT \'\'');
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS dream_coins INTEGER DEFAULT 0');
+    await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS muted_until TIMESTAMP DEFAULT NULL');
+    await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS mute_reason TEXT DEFAULT NULL');
     await client.query(`
       CREATE TABLE IF NOT EXISTS competitions (
         id TEXT PRIMARY KEY,
@@ -408,6 +410,8 @@ async function initDB() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_chat_messages_team ON chat_messages(team_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_chat_messages_club ON chat_messages(club_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_chat_messages_receiver ON chat_messages(receiver_id)`);
+    await client.query('ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS recalled BOOLEAN DEFAULT false');
+    await client.query('ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS mentions TEXT[] DEFAULT \'{}\'');
   } finally { client.release(); }
 }
 
@@ -538,6 +542,26 @@ app.post('/api/chat/send', authMiddleware, async (req, res) => {
     if (content.length > 1000) return badRequest(res, '消息内容过长（最多1000字）');
 
     const sender_id = req.userId;
+
+    // 禁言检查（管理员豁免）
+    if (sender_id !== ADMIN_USER_ID) {
+      const muteCheck = await pool.query('SELECT muted_until, mute_reason FROM users WHERE id = $1', [sender_id]);
+      if (muteCheck.rows[0]?.muted_until && new Date(muteCheck.rows[0].muted_until) > new Date()) {
+        const until = new Date(muteCheck.rows[0].muted_until).toLocaleString('zh-CN');
+        return forbidden(res, `你已被禁言至 ${until}，原因：${muteCheck.rows[0].mute_reason || '无'}`);
+      }
+    }
+
+    // 解析@提及
+    const mentionPattern = /@(\S+?)(?=\s|$)/g;
+    let mentionedUsers = [];
+    let match;
+    while ((match = mentionPattern.exec(content)) !== null) {
+      const mentionedName = match[1];
+      const userResult = await pool.query('SELECT id FROM users WHERE coachname = $1 OR username = $1', [mentionedName]);
+      if (userResult.rows.length > 0) mentionedUsers.push(userResult.rows[0].id);
+    }
+
     let rv = null, tid = null, cid = null;
 
     if (type === 'private') {
@@ -562,9 +586,9 @@ app.post('/api/chat/send', authMiddleware, async (req, res) => {
     // public 无需额外验证
 
     const result = await pool.query(
-      `INSERT INTO chat_messages (sender_id, receiver_id, team_id, club_id, type, content) 
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, sender_id, receiver_id, team_id, club_id, type, content, created_at`,
-      [sender_id, rv, tid, cid, type, content.trim()]
+      `INSERT INTO chat_messages (sender_id, receiver_id, team_id, club_id, type, content, mentions) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, sender_id, receiver_id, team_id, club_id, type, content, created_at, recalled, mentions`,
+      [sender_id, rv, tid, cid, type, content.trim(), mentionedUsers]
     );
 
     const msg = result.rows[0];
@@ -581,6 +605,8 @@ app.post('/api/chat/send', authMiddleware, async (req, res) => {
       club_id: msg.club_id,
       type: msg.type,
       content: msg.content,
+      recalled: false,
+      mentions: msg.mentions || [],
       created_at: msg.created_at
     };
 
@@ -596,10 +622,57 @@ app.post('/api/chat/send', authMiddleware, async (req, res) => {
       } else if (type === 'club') {
         global._io.to('club_' + club_id).emit('new_message', messageData);
       }
+      // @提及通知：单独推送给被提及用户（附带 mentioned:true）
+      if (mentionedUsers.length > 0) {
+        const mentionData = { ...messageData, mentioned: true };
+        mentionedUsers.forEach(uid => {
+          global._io.to('user_' + uid).emit('new_message', mentionData);
+        });
+      }
     }
 
     ok(res, { message: messageData });
   } catch(e) { serverError(res, '发送消息失败', e); }
+});
+
+// 撤回消息
+app.put('/api/chat/:id/recall', authMiddleware, async (req, res) => {
+  try {
+    const msgId = parseInt(req.params.id);
+    if (isNaN(msgId)) return badRequest(res, '无效的消息ID');
+    const userId = req.userId;
+    const isAdmin = userId === ADMIN_USER_ID;
+
+    const result = await pool.query('SELECT * FROM chat_messages WHERE id = $1', [msgId]);
+    if (result.rows.length === 0) return notFound(res, '消息不存在');
+    const msg = result.rows[0];
+
+    // 权限校验：自己2分钟内可撤回，管理员随时可撤回
+    if (msg.sender_id !== userId && !isAdmin) return forbidden(res, '无权撤回该消息');
+    if (!isAdmin) {
+      const elapsed = (new Date() - new Date(msg.created_at)) / 1000;
+      if (elapsed > 120) return badRequest(res, '超过2分钟，无法撤回');
+    }
+
+    await pool.query('UPDATE chat_messages SET recalled = true WHERE id = $1', [msgId]);
+
+    // Socket.IO 广播撤回事件
+    if (global._io) {
+      const recallData = { messageId: msgId, type: msg.type, team_id: msg.team_id, club_id: msg.club_id, sender_name: (await pool.query('SELECT coachname,username FROM users WHERE id=$1',[msg.sender_id])).rows[0]?.coachname || '用户' };
+      if (msg.type === 'public') {
+        global._io.emit('message_recalled', recallData);
+      } else if (msg.type === 'team') {
+        global._io.to('team_' + msg.team_id).emit('message_recalled', recallData);
+      } else if (msg.type === 'club') {
+        global._io.to('club_' + msg.club_id).emit('message_recalled', recallData);
+      } else if (msg.type === 'private') {
+        global._io.to('user_' + msg.sender_id).emit('message_recalled', recallData);
+        if (msg.receiver_id) global._io.to('user_' + msg.receiver_id).emit('message_recalled', recallData);
+      }
+    }
+
+    ok(res, { messageId: msgId });
+  } catch(e) { serverError(res, '撤回消息失败', e); }
 });
 
 // 获取消息历史
@@ -614,46 +687,70 @@ app.get('/api/chat/fetch', authMiddleware, async (req, res) => {
     if (type === 'public') {
       // 公聊：所有用户可见
       query = `
-        SELECT m.*, u.coachname as sender_name, u.teamname as sender_team
+        SELECT m.*, u.coachname as sender_name, u.teamname as sender_team,
+          CASE WHEN m.sender_id = $2 THEN 'admin'::text
+               WHEN EXISTS(SELECT 1 FROM club_members WHERE user_id=m.sender_id AND role='boss') THEN 'boss'::text
+               WHEN EXISTS(SELECT 1 FROM players WHERE user_id=m.sender_id AND status='approved' AND club_id IS NOT NULL) THEN 'signed'::text
+               WHEN EXISTS(SELECT 1 FROM players WHERE user_id=m.sender_id AND status='approved') THEN 'certified'::text
+               ELSE 'uncertified'::text
+          END as sender_identity
         FROM chat_messages m
         LEFT JOIN users u ON m.sender_id = u.id
         WHERE m.type = 'public'
         ORDER BY m.created_at DESC LIMIT $1`;
-      params = [limitNum];
+      params = [limitNum, ADMIN_USER_ID];
     } else if (type === 'private') {
       if (!receiver_id) return badRequest(res, '获取私聊需要指定 receiver_id');
       // 私聊：只有发送者和接收者可见
       query = `
-        SELECT m.*, u.coachname as sender_name, u.teamname as sender_team
+        SELECT m.*, u.coachname as sender_name, u.teamname as sender_team,
+          CASE WHEN m.sender_id = $4 THEN 'admin'::text
+               WHEN EXISTS(SELECT 1 FROM club_members WHERE user_id=m.sender_id AND role='boss') THEN 'boss'::text
+               WHEN EXISTS(SELECT 1 FROM players WHERE user_id=m.sender_id AND status='approved' AND club_id IS NOT NULL) THEN 'signed'::text
+               WHEN EXISTS(SELECT 1 FROM players WHERE user_id=m.sender_id AND status='approved') THEN 'certified'::text
+               ELSE 'uncertified'::text
+          END as sender_identity
         FROM chat_messages m
         LEFT JOIN users u ON m.sender_id = u.id
         WHERE m.type = 'private' AND ((m.sender_id = $1 AND m.receiver_id = $2) OR (m.sender_id = $2 AND m.receiver_id = $1))
         ORDER BY m.created_at DESC LIMIT $3`;
-      params = [userId, receiver_id, limitNum];
+      params = [userId, receiver_id, limitNum, ADMIN_USER_ID];
     } else if (type === 'team') {
       if (!team_id) return badRequest(res, '获取队伍聊天需要指定 team_id');
       // 验证是否为队伍成员
       const memberCheck = await pool.query('SELECT 1 FROM team_members WHERE teamId=$1 AND userId=$2', [team_id, userId]);
       if (memberCheck.rows.length === 0) return forbidden(res, '你不是该队伍成员');
       query = `
-        SELECT m.*, u.coachname as sender_name, u.teamname as sender_team
+        SELECT m.*, u.coachname as sender_name, u.teamname as sender_team,
+          CASE WHEN m.sender_id = $3 THEN 'admin'::text
+               WHEN EXISTS(SELECT 1 FROM club_members WHERE user_id=m.sender_id AND role='boss') THEN 'boss'::text
+               WHEN EXISTS(SELECT 1 FROM players WHERE user_id=m.sender_id AND status='approved' AND club_id IS NOT NULL) THEN 'signed'::text
+               WHEN EXISTS(SELECT 1 FROM players WHERE user_id=m.sender_id AND status='approved') THEN 'certified'::text
+               ELSE 'uncertified'::text
+          END as sender_identity
         FROM chat_messages m
         LEFT JOIN users u ON m.sender_id = u.id
         WHERE m.type = 'team' AND m.team_id = $1
         ORDER BY m.created_at DESC LIMIT $2`;
-      params = [team_id, limitNum];
+      params = [team_id, limitNum, ADMIN_USER_ID];
     } else if (type === 'club') {
       if (!club_id) return badRequest(res, '获取俱乐部聊天需要指定 club_id');
       // 验证是否为俱乐部成员
       const memberCheck = await pool.query('SELECT 1 FROM club_members WHERE club_id=$1 AND user_id=$2', [club_id, userId]);
       if (memberCheck.rows.length === 0) return forbidden(res, '你不是该俱乐部成员');
       query = `
-        SELECT m.*, u.coachname as sender_name, u.teamname as sender_team
+        SELECT m.*, u.coachname as sender_name, u.teamname as sender_team,
+          CASE WHEN m.sender_id = $3 THEN 'admin'::text
+               WHEN EXISTS(SELECT 1 FROM club_members WHERE user_id=m.sender_id AND role='boss') THEN 'boss'::text
+               WHEN EXISTS(SELECT 1 FROM players WHERE user_id=m.sender_id AND status='approved' AND club_id IS NOT NULL) THEN 'signed'::text
+               WHEN EXISTS(SELECT 1 FROM players WHERE user_id=m.sender_id AND status='approved') THEN 'certified'::text
+               ELSE 'uncertified'::text
+          END as sender_identity
         FROM chat_messages m
         LEFT JOIN users u ON m.sender_id = u.id
         WHERE m.type = 'club' AND m.club_id = $1
         ORDER BY m.created_at DESC LIMIT $2`;
-      params = [club_id, limitNum];
+      params = [club_id, limitNum, ADMIN_USER_ID];
     } else {
       return badRequest(res, '缺少或无效的 type 参数');
     }
@@ -664,11 +761,18 @@ app.get('/api/chat/fetch', authMiddleware, async (req, res) => {
       sender_id: m.sender_id,
       sender_name: m.sender_name || m.coachname || '未知',
       sender_team: m.sender_team || '',
+      sender: {
+        id: m.sender_id,
+        identity: m.sender_identity || 'uncertified',
+        identityLabel: { admin: '管理员', boss: '老板', signed: '已签约', certified: '已认证', uncertified: '未认证' }[m.sender_identity] || '未认证'
+      },
       receiver_id: m.receiver_id,
       team_id: m.team_id,
       club_id: m.club_id,
       type: m.type,
       content: m.content,
+      recalled: m.recalled || false,
+      mentions: m.mentions || [],
       created_at: m.created_at
     }));
 
@@ -732,6 +836,48 @@ app.get('/api/users/search', authMiddleware, async (req, res) => {
     );
     ok(res, { users: result.rows });
   } catch(e) { serverError(res, '搜索用户失败', e); }
+});
+
+// 获取频道内用户列表（用于@提及）
+app.get('/api/chat/channel-users', authMiddleware, async (req, res) => {
+  try {
+    const { type, team_id, club_id } = req.query;
+    const userId = req.userId;
+    let users;
+
+    if (type === 'team' && team_id) {
+      users = await pool.query(`
+        SELECT u.id, u.coachname, u.username, u.teamname
+        FROM users u JOIN team_members tm ON u.id = tm.userId
+        WHERE tm.teamId = $1 AND u.id != $2
+        ORDER BY u.coachname
+      `, [team_id, userId]);
+    } else if (type === 'club' && club_id) {
+      users = await pool.query(`
+        SELECT u.id, u.coachname, u.username, u.teamname
+        FROM users u JOIN club_members cm ON u.id = cm.user_id
+        WHERE cm.club_id = $1 AND u.id != $2
+        ORDER BY u.coachname
+      `, [club_id, userId]);
+    } else if (type === 'public') {
+      // 公聊：返回近24小时活跃用户
+      users = await pool.query(`
+        SELECT DISTINCT u.id, u.coachname, u.username, u.teamname
+        FROM users u
+        INNER JOIN chat_messages m ON m.sender_id = u.id
+        WHERE m.type = 'public' AND m.created_at > NOW() - INTERVAL '24 hours'
+          AND u.id != $1
+        ORDER BY u.coachname
+      `, [userId]);
+    } else if (type === 'private' && req.query.receiver_id) {
+      // 私聊不需要@
+      return ok(res, { users: [] });
+    } else {
+      return badRequest(res, '无效的频道类型');
+    }
+
+    ok(res, { users: users.rows });
+  } catch(e) { serverError(res, '获取频道用户失败', e); }
 });
 
 async function sendNotification(userId, type, content, relatedId = null) {
@@ -2539,6 +2685,41 @@ app.post('/api/admin/salary/pay', authMiddleware, adminMiddleware, async (req, r
     }
     ok(res, {totalPaid, clubs: byOwner });
   } catch(e) { console.error(e); serverError(res, '发薪失败: ' + e.message); }
+});
+
+// ====================== 禁言管理 ======================
+// 管理员禁言用户
+app.post('/api/admin/mute', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { userId, minutes, reason } = req.body;
+    if (!userId || !minutes) return badRequest(res, '缺少参数：userId, minutes');
+    const mins = parseInt(minutes);
+    if (isNaN(mins) || mins <= 0 || mins > 10080) return badRequest(res, '禁言时长必须在1~10080分钟之间');
+
+    const until = new Date(Date.now() + mins * 60000);
+    await pool.query('UPDATE users SET muted_until=$1, mute_reason=$2 WHERE id=$3', [until, reason || '', userId]);
+
+    // Socket.IO 通知被禁言用户
+    if (global._io) {
+      global._io.to('user_' + userId).emit('user_muted', { until: until.toISOString(), reason: reason || '', minutes: mins });
+    }
+
+    ok(res, { userId, until, minutes: mins });
+  } catch(e) { serverError(res, '禁言失败', e); }
+});
+
+// 管理员解禁用户
+app.delete('/api/admin/mute/:userId', authMiddleware, adminMiddleware, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    await pool.query('UPDATE users SET muted_until=NULL, mute_reason=NULL WHERE id=$1', [userId]);
+
+    if (global._io) {
+      global._io.to('user_' + userId).emit('user_unmuted', { userId });
+    }
+
+    ok(res, { userId });
+  } catch(e) { serverError(res, '解禁失败', e); }
 });
 
 app.get('/api/club/:id/salary-records', authMiddleware, async (req, res) => {

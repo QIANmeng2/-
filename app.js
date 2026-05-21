@@ -58,6 +58,37 @@ function initChatSocket() {
       }
     });
 
+    // 消息撤回
+    chatSocket.on('message_recalled', (data) => {
+      console.log('[Chat] 消息撤回:', data);
+      const container = document.getElementById('chatMessages');
+      if (!container) return;
+      const msgEl = container.querySelector('.chat-message[data-msg-id="' + data.messageId + '"]');
+      if (msgEl) {
+        const bubble = msgEl.querySelector('.chat-bubble');
+        if (bubble) {
+          bubble.innerHTML = '<span style="font-style:italic;opacity:0.6;">' + data.sender_name + ' 撤回了一条消息</span>';
+          bubble.classList.add('chat-bubble-recalled');
+        }
+        const recallBtn = msgEl.querySelector('.chat-recall-btn');
+        if (recallBtn) recallBtn.remove();
+      }
+    });
+
+    // 被禁言通知
+    chatSocket.on('user_muted', (data) => {
+      if (data.userId === currentUser?.id || !data.userId) {
+        showToast('你已被禁言至 ' + new Date(data.until).toLocaleString('zh-CN') + (data.reason ? '，原因：' + data.reason : ''), 'warning', 5000);
+      }
+    });
+
+    // 解禁通知
+    chatSocket.on('user_unmuted', (data) => {
+      if (data.userId === currentUser?.id || !data.userId) {
+        showToast('你已被解除禁言', 'success');
+      }
+    });
+
     chatSocket.on('disconnect', () => {
       console.log('[Chat] Socket.IO 断开连接');
       chatSocketConnected = false;
@@ -2894,6 +2925,9 @@ async function renderChatPanel() {
   // 切换到公聊
   await switchChatType('public');
 
+  // 初始化@提及功能
+  initMentionInput();
+
   // 清理监听器
   const cleanup = () => {
     unsubscribe();
@@ -3116,13 +3150,44 @@ function createChatMessageHTML(msg) {
   const senderName = escapeHtml(msg.sender_name || '未知');
   const senderTeam = msg.sender_team ? ' · ' + escapeHtml(msg.sender_team) : '';
   const clickable = !isMe ? `onclick="openPlayerDetailModal('${msg.sender_id}')" style="cursor:pointer;"` : '';
+  const msgId = msg.id;
+
+  // 身份标识
+  const identity = msg.sender?.identity || (isMe && currentUser ? (currentUser.id === 'mp4hmya7ad15v6' ? 'admin' : 'uncertified') : 'uncertified');
+  const identityColors = { admin: '#fbbf24', boss: '#f59e0b', signed: '#a78bfa', certified: '#60a5fa', uncertified: '#9ca3af' };
+  const identityLabels = { admin: '管理员', boss: '老板', signed: '已签约', certified: '已认证', uncertified: '未认证' };
+  const identityColor = identityColors[identity] || '#9ca3af';
+  const identityLabel = identityLabels[identity] || '';
+  const identityBadge = `<span class="chat-identity-badge" style="background:${identityColor}20;color:${identityColor};border:1px solid ${identityColor}40;">${identityLabel}</span>`;
+
+  // 内容处理：@提及高亮 + 撤回状态
+  let bubbleContent;
+  if (msg.recalled) {
+    bubbleContent = '<span style="font-style:italic;opacity:0.6;">' + senderName + ' 撤回了一条消息</span>';
+  } else {
+    let content = escapeHtml(msg.content);
+    // @提及高亮
+    if (msg.mentions && msg.mentions.length > 0) {
+      const mentionPattern = /@(\S+?)(?=\s|$)/g;
+      content = content.replace(mentionPattern, '<span class="chat-mention">@$1</span>');
+    }
+    bubbleContent = content;
+  }
+
+  // 撤回按钮（仅自己的消息 + 2分钟内 + 未撤回）
+  const msgAge = (Date.now() - new Date(msg.created_at).getTime()) / 1000;
+  const showRecallBtn = isMe && !msg.recalled && msgAge < 120;
+  const recallBtn = showRecallBtn ? `<span class="chat-recall-btn" onclick="event.stopPropagation();handleRecallMessage(${msgId})" title="撤回">撤回</span>` : '';
+
+  const recalledClass = msg.recalled ? ' chat-message-recalled' : '';
+  const bubbleClass = msg.recalled ? ' chat-bubble-recalled' : '';
 
   return `
-    <div class="chat-message ${isMe ? 'chat-message-me' : 'chat-message-other'}">
+    <div class="chat-message ${isMe ? 'chat-message-me' : 'chat-message-other'}${recalledClass}" data-msg-id="${msgId}" oncontextmenu="event.preventDefault();showChatContextMenu(event, ${msgId}, '${senderName.replace(/'/g, "\\'")}', '${msg.sender_id}')">
       <div class="chat-avatar" ${clickable}>${avatarChar}</div>
       <div class="chat-message-content">
-        <div class="chat-sender-name" ${clickable}>${senderName}${senderTeam}</div>
-        <div class="chat-bubble">${escapeHtml(msg.content)}</div>
+        <div class="chat-sender-name" ${clickable} style="color:${identityColor};">${senderName}${senderTeam}${identityBadge}</div>
+        <div class="chat-bubble${bubbleClass}">${bubbleContent}${recallBtn}</div>
         <div class="chat-time">${time}</div>
       </div>
     </div>
@@ -3188,6 +3253,249 @@ function updateChatBadge() {
     const count = chatUnreadCounts.private || 0;
     badge.style.display = count > 0 ? 'inline-flex' : 'none';
     badge.textContent = count > 99 ? '99+' : count;
+  }
+}
+
+// ====== 消息撤回 ======
+async function handleRecallMessage(msgId) {
+  if (!confirm('确定撤回这条消息？')) return;
+  try {
+    await api('/api/chat/' + msgId + '/recall', { method: 'PUT' });
+    // 本地更新 UI
+    const container = document.getElementById('chatMessages');
+    const msgEl = container.querySelector('.chat-message[data-msg-id="' + msgId + '"]');
+    if (msgEl) {
+      const bubble = msgEl.querySelector('.chat-bubble');
+      if (bubble) {
+        bubble.innerHTML = '<span style="font-style:italic;opacity:0.6;">你撤回了一条消息</span>';
+        bubble.classList.add('chat-bubble-recalled');
+      }
+      const recallBtn = msgEl.querySelector('.chat-recall-btn');
+      if (recallBtn) recallBtn.remove();
+    }
+  } catch (e) {
+    showToast('撤回失败: ' + e.message, 'error');
+  }
+}
+
+// ====== 聊天右键菜单（管理员禁言） ======
+let chatContextMenuEl = null;
+function showChatContextMenu(e, msgId, senderName, senderId) {
+  hideChatContextMenu();
+  const isAdmin = currentUser?.id === 'mp4hmya7ad15v6';
+  if (!isAdmin) return;
+
+  const menu = document.createElement('div');
+  menu.className = 'chat-context-menu';
+  menu.id = 'chatContextMenu';
+  menu.style.cssText = 'position:fixed;z-index:10000;background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;padding:4px 0;min-width:150px;box-shadow:0 4px 20px rgba(0,0,0,0.5);';
+  menu.innerHTML = `
+    <div class="chat-context-item" onclick="event.stopPropagation();showMuteDialog('${senderId}','${senderName.replace(/'/g,"\\'")}');hideChatContextMenu();" style="padding:8px 16px;cursor:pointer;font-size:0.85rem;color:var(--text-primary);transition:background 0.15s;">
+      🔇 禁言此用户
+    </div>
+    <div class="chat-context-item" onclick="event.stopPropagation();handleRecallAsAdmin(${msgId});hideChatContextMenu();" style="padding:8px 16px;cursor:pointer;font-size:0.85rem;color:var(--danger);transition:background 0.15s;">
+      ↩ 撤回此消息
+    </div>
+  `;
+  document.body.appendChild(menu);
+
+  // 定位
+  const menuW = 150, menuH = 100;
+  let left = e.clientX, top = e.clientY;
+  if (left + menuW > window.innerWidth) left = window.innerWidth - menuW - 10;
+  if (top + menuH > window.innerHeight) top = window.innerHeight - menuH - 10;
+  menu.style.left = left + 'px';
+  menu.style.top = top + 'px';
+
+  chatContextMenuEl = menu;
+  setTimeout(() => document.addEventListener('click', hideChatContextMenu, { once: true }), 50);
+}
+
+function hideChatContextMenu() {
+  if (chatContextMenuEl) { chatContextMenuEl.remove(); chatContextMenuEl = null; }
+}
+
+async function handleRecallAsAdmin(msgId) {
+  if (!confirm('管理员撤回此消息？')) return;
+  try {
+    await api('/api/chat/' + msgId + '/recall', { method: 'PUT' });
+    showToast('已撤回', 'success');
+  } catch (e) {
+    showToast('撤回失败: ' + e.message, 'error');
+  }
+}
+
+// ====== 管理员禁言弹窗 ======
+function showMuteDialog(userId, userName) {
+  hideChatContextMenu();
+  const overlay = document.createElement('div');
+  overlay.className = 'mute-overlay';
+  overlay.id = 'muteOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:10001;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div class="mute-dialog" style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:24px;min-width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+      <h3 style="margin:0 0 16px;font-size:1.1rem;">禁言用户：${escapeHtml(userName)}</h3>
+      <div style="margin-bottom:12px;">
+        <label style="display:block;font-size:0.85rem;color:var(--text-secondary);margin-bottom:6px;">禁言时长（分钟）</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+          <button class="mute-preset-btn btn btn-sm" onclick="document.getElementById('muteMinutes').value=10" style="padding:4px 12px;">10分钟</button>
+          <button class="mute-preset-btn btn btn-sm" onclick="document.getElementById('muteMinutes').value=60" style="padding:4px 12px;">1小时</button>
+          <button class="mute-preset-btn btn btn-sm" onclick="document.getElementById('muteMinutes').value=1440" style="padding:4px 12px;">1天</button>
+          <button class="mute-preset-btn btn btn-sm" onclick="document.getElementById('muteMinutes').value=10080" style="padding:4px 12px;">7天</button>
+        </div>
+        <input type="number" id="muteMinutes" class="form-input" value="10" min="1" max="10080" style="width:100%;">
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="display:block;font-size:0.85rem;color:var(--text-secondary);margin-bottom:6px;">禁言原因（可选）</label>
+        <input type="text" id="muteReason" class="form-input" placeholder="违规原因" style="width:100%;">
+      </div>
+      <div style="display:flex;gap:12px;justify-content:flex-end;">
+        <button class="btn btn-sm" onclick="document.getElementById('muteOverlay').remove()">取消</button>
+        <button class="btn btn-sm btn-danger" onclick="executeMute('${userId}')">确认禁言</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+}
+
+async function executeMute(userId) {
+  const minutes = parseInt(document.getElementById('muteMinutes').value);
+  const reason = document.getElementById('muteReason').value.trim();
+  if (!minutes || minutes < 1 || minutes > 10080) { showToast('请输入有效的禁言时长（1~10080分钟）', 'warning'); return; }
+  try {
+    await api('/api/admin/mute', { method: 'POST', body: JSON.stringify({ userId, minutes, reason }) });
+    showToast('禁言成功', 'success');
+    document.getElementById('muteOverlay')?.remove();
+  } catch (e) {
+    showToast('禁言失败: ' + e.message, 'error');
+  }
+}
+
+// ====== @提及功能 ======
+let mentionDropdownEl = null;
+let mentionUsers = [];
+let mentionFilter = '';
+
+function initMentionInput() {
+  const input = document.getElementById('chatInput');
+  if (!input) return;
+  input.addEventListener('input', handleMentionInput);
+  input.addEventListener('keydown', handleMentionKeydown);
+}
+
+async function handleMentionInput(e) {
+  const input = e.target;
+  const val = input.value;
+  const cursorPos = input.selectionStart;
+  // 找到光标前最近的@
+  const atIndex = val.lastIndexOf('@', cursorPos - 1);
+  if (atIndex === -1 || (atIndex > 0 && val[atIndex - 1] !== ' ' && val[atIndex - 1] !== '\n')) {
+    hideMentionDropdown();
+    return;
+  }
+  const filterText = val.substring(atIndex + 1, cursorPos);
+  if (filterText.includes(' ')) { hideMentionDropdown(); return; }
+
+  // 加载频道用户列表
+  const type = chatPanelData.currentChatType;
+  const target = chatPanelData.currentChatTarget;
+  if (!mentionUsers.length || mentionFilter !== filterText.substring(0, 1)) {
+    let url = '/api/chat/channel-users?type=' + type;
+    if (type === 'team' && target?.team_id) url += '&team_id=' + target.team_id;
+    else if (type === 'club' && target?.club_id) url += '&club_id=' + target.club_id;
+    else if (type === 'private') { hideMentionDropdown(); return; }
+    try {
+      const data = await api(url, { skipCache: true });
+      mentionUsers = data.users || [];
+      mentionFilter = filterText.substring(0, 1);
+    } catch (e) { return; }
+  }
+
+  const filtered = mentionUsers.filter(u => {
+    const name = (u.coachname || u.username || '').toLowerCase();
+    return filterText === '' || name.includes(filterText.toLowerCase());
+  });
+
+  if (filtered.length === 0) { hideMentionDropdown(); return; }
+
+  showMentionDropdown(filtered, atIndex, input);
+}
+
+function showMentionDropdown(users, atIndex, input) {
+  hideMentionDropdown();
+  const dropdown = document.createElement('div');
+  dropdown.className = 'mention-dropdown';
+  dropdown.id = 'mentionDropdown';
+  dropdown.style.cssText = 'position:absolute;z-index:10000;background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;max-height:200px;overflow-y:auto;min-width:180px;box-shadow:0 4px 20px rgba(0,0,0,0.5);';
+
+  users.forEach(u => {
+    const item = document.createElement('div');
+    item.className = 'mention-dropdown-item';
+    item.style.cssText = 'padding:8px 12px;cursor:pointer;font-size:0.85rem;color:var(--text-primary);transition:background 0.15s;display:flex;align-items:center;gap:8px;';
+    item.innerHTML = '<span style="font-weight:600;">' + escapeHtml(u.coachname || u.username) + '</span>' + (u.teamname ? '<span style="font-size:0.7rem;color:var(--text-muted);">' + escapeHtml(u.teamname) + '</span>' : '');
+    item.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      selectMentionUser(u, atIndex, input);
+    });
+    dropdown.appendChild(item);
+  });
+
+  // 定位在输入框上方
+  const inputRect = input.getBoundingClientRect();
+  const chatInputArea = input.closest('.chat-input-area');
+  const areaRect = chatInputArea?.getBoundingClientRect() || inputRect;
+  dropdown.style.position = 'fixed';
+  dropdown.style.left = inputRect.left + 'px';
+  dropdown.style.bottom = (window.innerHeight - areaRect.top + 4) + 'px';
+  dropdown.style.width = Math.max(inputRect.width, 180) + 'px';
+
+  document.body.appendChild(dropdown);
+  mentionDropdownEl = dropdown;
+}
+
+function hideMentionDropdown() {
+  if (mentionDropdownEl) { mentionDropdownEl.remove(); mentionDropdownEl = null; }
+}
+
+function selectMentionUser(user, atIndex, input) {
+  const name = user.coachname || user.username;
+  const val = input.value;
+  const cursorPos = input.selectionStart;
+  const beforeAt = val.substring(0, atIndex);
+  const afterCursor = val.substring(cursorPos);
+  input.value = beforeAt + '@' + name + ' ' + afterCursor;
+  const newCursor = atIndex + name.length + 2;
+  input.setSelectionRange(newCursor, newCursor);
+  input.focus();
+  hideMentionDropdown();
+}
+
+function handleMentionKeydown(e) {
+  if (!mentionDropdownEl) return;
+  const items = mentionDropdownEl.querySelectorAll('.mention-dropdown-item');
+  let activeIdx = -1;
+  items.forEach((item, i) => { if (item.classList.contains('mention-active')) activeIdx = i; });
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    const next = (activeIdx + 1) % items.length;
+    items.forEach(i => i.classList.remove('mention-active'));
+    items[next].classList.add('mention-active');
+    items[next].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    const prev = activeIdx <= 0 ? items.length - 1 : activeIdx - 1;
+    items.forEach(i => i.classList.remove('mention-active'));
+    items[prev].classList.add('mention-active');
+    items[prev].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter' || e.key === 'Tab') {
+    e.preventDefault();
+    if (activeIdx >= 0) {
+      items[activeIdx].dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    }
+  } else if (e.key === 'Escape') {
+    hideMentionDropdown();
   }
 }
 
