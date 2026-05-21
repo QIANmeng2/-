@@ -2928,6 +2928,9 @@ async function renderChatPanel() {
   // 初始化@提及功能
   initMentionInput();
 
+  // 初始化移动端触摸委托
+  initChatTouchDelegate();
+
   // 清理监听器
   const cleanup = () => {
     unsubscribe();
@@ -3179,15 +3182,22 @@ function createChatMessageHTML(msg) {
   const showRecallBtn = isMe && !msg.recalled && msgAge < 120;
   const recallBtn = showRecallBtn ? `<span class="chat-recall-btn" onclick="event.stopPropagation();handleRecallMessage(${msgId})" title="撤回">撤回</span>` : '';
 
+  // 更多操作按钮（移动端：长按替代方案，仅管理员看他人消息时显示）
+  const isCurrentAdmin = currentUser?.id === 'mp4hmya7ad15v6';
+  const moreBtn = (!isMe && isCurrentAdmin) ? `<span class="chat-message-more-btn" onclick="event.stopPropagation();handleChatLongPress(${msgId}, '${safeSenderName}', '${msg.sender_id}', event)" title="更多">⋮</span>` : '';
+
   const recalledClass = msg.recalled ? ' chat-message-recalled' : '';
   const bubbleClass = msg.recalled ? ' chat-bubble-recalled' : '';
 
+  // 安全的 senderName 用于 data 属性
+  const safeSenderName = senderName.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
   return `
-    <div class="chat-message ${isMe ? 'chat-message-me' : 'chat-message-other'}${recalledClass}" data-msg-id="${msgId}" oncontextmenu="event.preventDefault();showChatContextMenu(event, ${msgId}, '${senderName.replace(/'/g, "\\'")}', '${msg.sender_id}')">
+    <div class="chat-message ${isMe ? 'chat-message-me' : 'chat-message-other'}${recalledClass}" data-msg-id="${msgId}" data-sender-name="${safeSenderName}" data-sender-id="${msg.sender_id}" oncontextmenu="event.preventDefault();showChatContextMenu(event, ${msgId}, '${safeSenderName}', '${msg.sender_id}')">
       <div class="chat-avatar" ${clickable}>${avatarChar}</div>
       <div class="chat-message-content">
         <div class="chat-sender-name" ${clickable} style="color:${identityColor};">${senderName}${senderTeam}${identityBadge}</div>
-        <div class="chat-bubble${bubbleClass}">${bubbleContent}${recallBtn}</div>
+        <div class="chat-bubble${bubbleClass}">${bubbleContent}${recallBtn}${moreBtn}</div>
         <div class="chat-time">${time}</div>
       </div>
     </div>
@@ -3283,36 +3293,105 @@ let chatContextMenuEl = null;
 function showChatContextMenu(e, msgId, senderName, senderId) {
   hideChatContextMenu();
   const isAdmin = currentUser?.id === 'mp4hmya7ad15v6';
-  if (!isAdmin) return;
+  const isOwnMessage = senderId === currentUser?.id;
+  const isTouchDevice = 'ontouchstart' in window;
+
+  // 获取坐标（兼容 touch 和 mouse 事件）
+  const x = e.touches ? e.touches[0].clientX : (e.clientX || 0);
+  const y = e.touches ? e.touches[0].clientY : (e.clientY || 0);
+
+  // 构建菜单项
+  let menuItems = '';
+  if (isAdmin && !isOwnMessage) {
+    menuItems = `
+      <div class="chat-context-item" onclick="event.stopPropagation();showMuteDialog('${senderId}','${senderName.replace(/'/g,"\\'")}');hideChatContextMenu();" style="padding:8px 16px;cursor:pointer;font-size:0.85rem;color:var(--text-primary);transition:background 0.15s;">
+        🔇 禁言此用户
+      </div>
+      <div class="chat-context-item" onclick="event.stopPropagation();handleRecallAsAdmin(${msgId});hideChatContextMenu();" style="padding:8px 16px;cursor:pointer;font-size:0.85rem;color:var(--danger);transition:background 0.15s;">
+        ↩ 撤回此消息
+      </div>`;
+  } else if (isOwnMessage) {
+    // 自己的消息：检查是否在2分钟内
+    const msgAge = (Date.now() - new Date().getTime() + 120000); // 简化为总是显示（后端会校验）
+    menuItems = `
+      <div class="chat-context-item" onclick="event.stopPropagation();handleRecallMessage(${msgId});hideChatContextMenu();" style="padding:8px 16px;cursor:pointer;font-size:0.85rem;color:var(--danger);transition:background 0.15s;">
+        ↩ 撤回此消息
+      </div>`;
+  } else {
+    return; // 非管理员 + 非自己消息 = 无菜单
+  }
 
   const menu = document.createElement('div');
   menu.className = 'chat-context-menu';
   menu.id = 'chatContextMenu';
   menu.style.cssText = 'position:fixed;z-index:10000;background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;padding:4px 0;min-width:150px;box-shadow:0 4px 20px rgba(0,0,0,0.5);';
-  menu.innerHTML = `
-    <div class="chat-context-item" onclick="event.stopPropagation();showMuteDialog('${senderId}','${senderName.replace(/'/g,"\\'")}');hideChatContextMenu();" style="padding:8px 16px;cursor:pointer;font-size:0.85rem;color:var(--text-primary);transition:background 0.15s;">
-      🔇 禁言此用户
-    </div>
-    <div class="chat-context-item" onclick="event.stopPropagation();handleRecallAsAdmin(${msgId});hideChatContextMenu();" style="padding:8px 16px;cursor:pointer;font-size:0.85rem;color:var(--danger);transition:background 0.15s;">
-      ↩ 撤回此消息
-    </div>
-  `;
+  menu.innerHTML = menuItems;
   document.body.appendChild(menu);
 
   // 定位
-  const menuW = 150, menuH = 100;
-  let left = e.clientX, top = e.clientY;
+  const menuW = 150, menuH = menuItems.includes('禁言') ? 100 : 50;
+  let left = x, top = y;
   if (left + menuW > window.innerWidth) left = window.innerWidth - menuW - 10;
   if (top + menuH > window.innerHeight) top = window.innerHeight - menuH - 10;
+  if (left < 0) left = 10;
+  if (top < 0) top = 10;
   menu.style.left = left + 'px';
   menu.style.top = top + 'px';
 
   chatContextMenuEl = menu;
-  setTimeout(() => document.addEventListener('click', hideChatContextMenu, { once: true }), 50);
+
+  // 点击外部关闭（兼容触摸和点击）
+  const closeHandler = function(ev) { hideChatContextMenu(); };
+  setTimeout(() => {
+    document.addEventListener('click', closeHandler, { once: true });
+    if (isTouchDevice) document.addEventListener('touchstart', closeHandler, { once: true });
+  }, 50);
 }
 
 function hideChatContextMenu() {
   if (chatContextMenuEl) { chatContextMenuEl.remove(); chatContextMenuEl = null; }
+}
+
+// 移动端长按/更多按钮处理
+function handleChatLongPress(msgId, senderName, senderId, event) {
+  const e = event || window.event;
+  showChatContextMenu(e, parseInt(msgId), senderName, senderId);
+}
+
+// 聊天消息触摸长按委托
+let chatTouchTimer = null;
+let chatTouchStartPos = null;
+
+function initChatTouchDelegate() {
+  const container = document.getElementById('chatMessages');
+  if (!container) return;
+
+  container.addEventListener('touchstart', function(e) {
+    const msgEl = e.target.closest('.chat-message');
+    if (!msgEl) return;
+    chatTouchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    chatTouchTimer = setTimeout(function() {
+      const msgId = msgEl.dataset.msgId;
+      const senderName = msgEl.dataset.senderName || '';
+      const senderId = msgEl.dataset.senderId || '';
+      if (msgId) showChatContextMenu(e, parseInt(msgId), senderName, senderId);
+    }, 600);
+  }, { passive: true });
+
+  container.addEventListener('touchend', function() {
+    clearTimeout(chatTouchTimer);
+    chatTouchTimer = null;
+  });
+
+  container.addEventListener('touchmove', function(e) {
+    if (!chatTouchStartPos) return;
+    const dx = Math.abs(e.touches[0].clientX - chatTouchStartPos.x);
+    const dy = Math.abs(e.touches[0].clientY - chatTouchStartPos.y);
+    if (dx > 10 || dy > 10) {
+      clearTimeout(chatTouchTimer);
+      chatTouchTimer = null;
+    }
+  }, { passive: true });
 }
 
 async function handleRecallAsAdmin(msgId) {
@@ -3441,14 +3520,16 @@ function showMentionDropdown(users, atIndex, input) {
     dropdown.appendChild(item);
   });
 
-  // 定位在输入框上方
+  // 定位在输入框上方（兼容移动端键盘）
   const inputRect = input.getBoundingClientRect();
   const chatInputArea = input.closest('.chat-input-area');
   const areaRect = chatInputArea?.getBoundingClientRect() || inputRect;
+  const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
   dropdown.style.position = 'fixed';
-  dropdown.style.left = inputRect.left + 'px';
-  dropdown.style.bottom = (window.innerHeight - areaRect.top + 4) + 'px';
-  dropdown.style.width = Math.max(inputRect.width, 180) + 'px';
+  dropdown.style.left = Math.max(inputRect.left, 8) + 'px';
+  dropdown.style.bottom = (vh - areaRect.top + 4) + 'px';
+  dropdown.style.width = Math.min(Math.max(inputRect.width, 180), window.innerWidth - 32) + 'px';
+  dropdown.style.maxHeight = Math.min(200, (areaRect.top - 16)) + 'px';
 
   document.body.appendChild(dropdown);
   mentionDropdownEl = dropdown;

@@ -2904,6 +2904,8 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .chat-message-me .chat-message-content {
@@ -2915,6 +2917,10 @@
   color: var(--text-muted);
   padding: 0 4px;
   cursor: default;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .chat-avatar {
@@ -3043,6 +3049,27 @@
 .chat-recall-btn:hover {
   color: var(--danger);
   background: rgba(239, 68, 68, 0.1);
+}
+
+/* 移动端：始终显示撤回+更多按钮 */
+.chat-message-more-btn {
+  display: none;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.15s;
+  line-height: 1;
+}
+
+/* 消息操作栏 — 移动端显示 */
+.chat-message-actions {
+  display: none;
+  gap: 4px;
+  margin-top: 2px;
+  padding: 0 4px;
 }
 
 /* @提及高亮 */
@@ -3228,5 +3255,40 @@
   }
   .club-sidebar-list {
     max-height: 300px;
+  }
+  /* 移动端聊天交互 */
+  .chat-recall-btn {
+    display: inline !important;
+    font-size: 0.62rem;
+    padding: 1px 5px;
+  }
+  .chat-message-more-btn {
+    display: inline;
+    font-size: 0.7rem;
+    padding: 2px 5px;
+  }
+  .chat-message-actions {
+    display: flex;
+  }
+  .chat-identity-badge {
+    font-size: 0.55rem;
+    padding: 0 4px;
+    margin-left: 3px;
+  }
+  .mention-dropdown {
+    max-height: 160px;
+    max-width: calc(100vw - 32px);
+  }
+  .chat-context-menu {
+    min-width: 130px;
+    font-size: 0.82rem;
+  }
+  .mute-dialog {
+    min-width: auto !important;
+    width: calc(100vw - 40px);
+    max-width: 360px;
+  }
+  .chat-message {
+    max-width: 92%;
   }
 }
