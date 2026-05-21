@@ -1960,6 +1960,9 @@ async function handleUpdatePlayerInfo(e, userId, clubId) {
         marketValue: marketValue ? parseInt(marketValue) : undefined
       })
     });
+    // 清除榜单缓存，确保实时刷新
+    cacheStore.delete('/api/leaderboard?type=player&limit=50');
+    cacheStore.delete('/api/leaderboard?type=club&limit=50');
     showToast('身价已调整', 'success');
     closePlayerDetailModal();
   } catch(err) { showToast(err.message, 'error'); }
@@ -2152,6 +2155,9 @@ async function submitTrade() {
       })
     });
     showToast('交易请求已发起！', 'success');
+    // 清除榜单缓存
+    cacheStore.delete('/api/leaderboard?type=player&limit=50');
+    cacheStore.delete('/api/leaderboard?type=club&limit=50');
     closeTradeModal();
     await renderMarketPanel();
   } catch(e) {
@@ -2470,6 +2476,9 @@ async function handleTrade(tradeId, action, clubId) {
                  : `/api/trade/${tradeId}/cancel`;
     const res = await api(endpoint, { method: 'POST' });
     showToast(res.message || `交易已${action === 'accept' ? '接受' : action === 'reject' ? '拒绝' : '取消'}`, 'success');
+    // 交易变动后清除榜单缓存
+    cacheStore.delete('/api/leaderboard?type=player&limit=50');
+    cacheStore.delete('/api/leaderboard?type=club&limit=50');
     await renderClubDetail(clubId);
   } catch(e) {
     showToast(e.message || '操作失败', 'error');
@@ -2483,6 +2492,9 @@ async function signPlayer(clubId) {
   try {
     const res = await api('/api/club/sign', { method:'POST', body: JSON.stringify({ playerUserId, clubId }) });
     showToast(res.message || '签约成功','success');
+    // 清除榜单缓存
+    cacheStore.delete('/api/leaderboard?type=player&limit=50');
+    cacheStore.delete('/api/leaderboard?type=club&limit=50');
     await renderClubDetail(clubId);
   } catch(e) { showToast(e.message,'error'); }
 }
@@ -2492,6 +2504,9 @@ async function removeClubMember(clubId, userId) {
   try {
     await api('/api/club/' + clubId + '/manage', { method:'POST', body: JSON.stringify({ action:'remove', userId }) });
     showToast('队员已移除','success');
+    // 清除榜单缓存
+    cacheStore.delete('/api/leaderboard?type=player&limit=50');
+    cacheStore.delete('/api/leaderboard?type=club&limit=50');
     await renderClubDetail(clubId);
   } catch(e) { showToast(e.message,'error'); }
 }
@@ -2736,9 +2751,35 @@ async function acceptTeamInvite(teamId) {
 async function renderLeaderboardPanel() {
   const content = document.getElementById('tabContent');
   content.innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
+
+  // 清除旧定时器，设置30秒自动刷新
+  if (window._leaderboardTimer) clearInterval(window._leaderboardTimer);
+  window._leaderboardTimer = setInterval(() => {
+    if (document.visibilityState === 'visible' && currentTab === 'leaderboard') {
+      console.log('[榜单] 30秒自动刷新');
+      api('/api/leaderboard?type=' + currentLeaderboardTab + '&limit=50', { skipCache: true }).then(data => {
+        const list = (data.data || data).list || [];
+        const container = document.getElementById('tabContent');
+        if (!container) return;
+        // 只更新榜单内容，不重新渲染整个面板
+        const card = container.querySelector('.card');
+        if (card && list.length > 0) {
+          const isPlayer = currentLeaderboardTab === 'player';
+          card.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px;">'
+            + '<h3 style="margin:0;">' + (isPlayer ? '选手榜单' : '俱乐部榜单') + '</h3>'
+            + '<div style="display:flex;gap:8px;">'
+            + `<button class="btn btn-sm ${isPlayer?'btn-primary':'btn-secondary'}" onclick="switchLeaderboardTab('player')">选手榜</button>`
+            + `<button class="btn btn-sm ${!isPlayer?'btn-primary':'btn-secondary'}" onclick="switchLeaderboardTab('club')">俱乐部榜</button>`
+            + '</div></div>'
+            + (isPlayer ? renderPlayerLeaderboard(list) : renderClubLeaderboard(list));
+        }
+      }).catch(() => {});
+    }
+  }, 30000);
+
   try {
     const type = currentLeaderboardTab;
-    const data = await api('/api/leaderboard?type=' + type + '&limit=50', { skipCache: false });
+    const data = await api('/api/leaderboard?type=' + type + '&limit=50', { skipCache: true });
     const list = (data.data || data).list || [];
 
     let html = '<div class="card">';
@@ -3582,6 +3623,11 @@ function handleMentionKeydown(e) {
 
 // ---------- Tab 切换 ----------
 async function switchTab(tab) {
+  // 离开榜单时清除刷新定时器
+  if (tab !== 'leaderboard' && window._leaderboardTimer) {
+    clearInterval(window._leaderboardTimer);
+    window._leaderboardTimer = null;
+  }
   currentTab = tab; updateUI();
     if (tab === 'team') cacheStore.delete('/api/teams/mine');
   const content = document.getElementById('tabContent');
