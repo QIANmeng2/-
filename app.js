@@ -1626,6 +1626,10 @@ async function loadMarketPlayers(container) {
           <option value="">全部身价</option>
           <option value="10">10万以下</option><option value="20">20万以下</option><option value="30">30万以下</option><option value="50">50万以下</option>
         </select>
+        <select class="form-input" id="marketGrade" onchange="filterMarketPlayers()" style="width:auto;padding:4px 8px;font-size:0.8rem;">
+          <option value="">全部等级</option>
+          <option value="S">S级</option><option value="A">A级</option><option value="B">B级</option><option value="C">C级</option>
+        </select>
       </div>
       <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;align-items:center;">
         <span style="font-size:0.72rem;color:var(--text-muted);">签约：</span>
@@ -1686,6 +1690,9 @@ function renderMarketPlayerList() {
   let list = window._marketPlayers || [];
   const maxVal = document.getElementById('marketMaxValue')?.value;
   if (maxVal) list = list.filter(p => p.market_value <= parseInt(maxVal));
+  // 等级筛选
+  const grade = document.getElementById('marketGrade')?.value;
+  if (grade) list = list.filter(p => p.grade === grade);
   // 签约状态筛选
   if (window._marketContract === 'free') list = list.filter(p => !p.club_id);
   else if (window._marketContract === 'signed') list = list.filter(p => p.club_id);
