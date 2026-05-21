@@ -21,19 +21,31 @@
   <title>梦工厂·王者</title>
   <link rel="icon" href="/favicon.ico" type="image/x-icon">
   <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
-  <link rel="preload" href="styles.css?v=20260519a" as="style">
-  <link rel="stylesheet" href="styles.css?v=20260519a">
-</head>
+  <link rel="stylesheet" href="styles/variables.css?v=20260522e">
+  <link rel="preload" href="styles.css?v=20260522e" as="style">
+  <link rel="stylesheet" href="styles.css?v=20260522e">
+  <!-- 组件系统：先加载组件，再加载 components.js 做统一委托 -->
+  <script src="components/MatchStatusBadge.js?v=20260522e"></script>
+  <script src="components/MatchCard.js?v=20260522e"></script>
+  <script src="components/ScoreBoard.js?v=20260522e"></script>
+  <script src="components/Timeline.js?v=20260522e"></script>
+  <script src="components/MVPPanel.js?v=20260522e"></script>
+  <script src="components/components.js?v=20260522f"></script>
+  <script src="components/Tracker.js?v=20260522f"></script>
+  <script src="components/OnboardingModal.js?v=20260522f"></script>
+  <script src="components/NewbieTasks.js?v=20260522f"></script>
+  <!-- app.js 必须在组件之后，因为 app.js 会调用 Components.* -->
+  <script src="app.js?v=20260522e" defer></script>
 <body>
 <!-- 背景网格装饰 -->
 <div style="position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:-2;background:radial-gradient(ellipse 100% 60% at 20% -10%,rgba(79,70,229,0.08) 0%,transparent 50%),radial-gradient(ellipse 80% 50% at 80% 10%,rgba(124,58,237,0.06) 0%,transparent 50%);"></div>
 
 <div class="header">
   <div class="header-inner">
-    <div class="logo">
+    <div class="logo" onclick="window.scrollTo({top:0,behavior:'smooth'})" style="cursor:pointer;">
       <div class="logo-icon">
-        <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 0 6px rgba(255,215,0,0.5));">
-          <path d="M20 4L23.5 14.5H34.5L25.5 21L28.5 31.5L20 25L11.5 31.5L14.5 21L5.5 14.5H16.5L20 4Z" stroke="url(#logoStarGrad)" stroke-width="1.8" fill="none" stroke-linejoin="round"/>
+        <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 0 6px rgba(255,215,0,0.4));">
+          <path d="M20 4L23.5 14.5L34.5 15.27L25.5 21L28.5 31.5L20 25L11.5 31.5L14.5 21L5.5 15.27L16.5 14.5L20 4Z" stroke="url(#logoStarGrad)" stroke-width="1.8" fill="none" stroke-linejoin="round"/>
           <defs>
             <linearGradient id="logoStarGrad" x1="5" y1="4" x2="34" y2="32" gradientUnits="userSpaceOnUse">
               <stop offset="0%" stop-color="#FFD700"/>
@@ -45,9 +57,9 @@
       <span>梦工厂<span style="color:var(--secondary);">·</span>王者</span>
     </div>
     <div class="user-area">
-      <button class="btn btn-sm" id="btnNewbieGuide" onclick="openNewbieGuide()" style="display:none;background:linear-gradient(135deg,rgba(245,158,11,0.15),rgba(245,158,11,0.05));color:#fbbf24;border:1px solid rgba(245,158,11,0.3);font-weight:700;letter-spacing:.02em;">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
-        <span style="margin-left:4px;">新手指南</span>
+      <!-- 新手引导按钮（登录后显示） -->
+      <button class="btn btn-sm" id="btnOnboard" onclick="OnboardingModal.open()" style="display:none;background:linear-gradient(135deg,rgba(201,168,76,0.15),rgba(201,168,76,0.05));color:#c9a84c;border:1px solid rgba(201,168,76,0.25);font-weight:600;" title="新手引导">
+        新手引导
       </button>
       <button class="btn btn-outline btn-sm" id="btnLoginTop" onclick="openAuthModal('login')">登录</button>
       <div class="notification-bell" id="notificationBell" onclick="openNotifications()" style="display:none;">
@@ -66,20 +78,41 @@
 
 <div class="main-container">
   <div class="tab-nav" id="tabNav">
-    <button class="tab-btn" data-tab="competition" id="tabCompetition" style="display:none;">比赛</button>
+    <button class="tab-btn" data-tab="competition" id="tabCompetition" style="display:none;">赛事中心</button>
     <button class="tab-btn" data-tab="market" id="tabMarket" style="display:none;">转会市场</button>
     <button class="tab-btn" data-tab="team" id="tabTeam" style="display:none;">我的队伍</button>
-    <button class="tab-btn" data-tab="club" id="tabClub" style="display:none;">我的俱乐部</button>
+    <button class="tab-btn" data-tab="club" id="tabClub" style="display:none;">战队基地</button>
     <button class="tab-btn" data-tab="chat" id="tabChat" style="display:none;">聊天</button>
-    <button class="tab-btn" data-tab="profile" id="tabProfile" style="display:none;">个人中心</button>
+    <button class="tab-btn" data-tab="profile" id="tabProfile" style="display:none;">电竞生涯</button>
     <button class="tab-btn" data-tab="leaderboard" id="tabLeaderboard">榜单</button>
     <button class="tab-btn" data-tab="admin" id="tabAdmin" style="display:none;">管理</button>
   </div>
-  <div id="tabContent"></div>
+  <div id="tabContent">
+  <!-- 首页第一屏：简化，只保留核心行动点 -->
+  <div id="homeHero" style="display:none;padding:32px 16px;text-align:center;">
+    <h1 style="font-size:1.6rem;font-weight:800;margin:0 0 8px;background:linear-gradient(135deg,#c9a84c,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">梦工厂·王者</h1>
+    <p style="color:var(--text-secondary);font-size:0.88rem;margin:0 0 24px;">首个王者荣耀电竞训练赛生态平台</p>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
+      <button class="btn btn-primary" onclick="switchTab('competition')" style="font-weight:700;">打比赛</button>
+      <button class="btn btn-secondary" onclick="switchTab('club')" style="font-weight:700;">加入战队</button>
+      <button class="btn btn-outline" onclick="switchTab('market')" style="font-weight:700;">转会市场</button>
+      <button class="btn btn-ghost" onclick="OnboardingModal.open()" style="font-weight:700;border:1px solid rgba(201,168,76,0.3);color:#c9a84c;">新手引导</button>
+    </div>
+    <div id="newbieTasksMount" style="margin-top:28px;"></div>
+  </div>
+  <!-- 比赛列表：由 Components.renderMatchList() 填充 -->
+  <div id="competitionList" style="display:none;"></div>
+  <!-- 比赛详情：包含所有组件挂载点 -->
+  <div id="matchDetailView" style="display:none;">
+    <div id="scoreboardMount"></div>
+    <div id="timelineMount"></div>
+    <div id="mvpMount"></div>
+  </div>
+</div>
 </div>
 
 <!-- 登录/注册弹窗 -->
-<div id="authModalOverlay" style="display:none;" class="modal-overlay">
+<div id="authModal" style="display:none;" class="modal-overlay">
   <div class="modal modal-sm">
     <h3 id="authModalTitle">登录</h3>
     <form id="authForm" onsubmit="handleAuth(event)">
@@ -97,7 +130,7 @@
   </div>
 </div>
 
-<!-- 欢迎引导弹窗 -->
+<!-- 欢迎引导弹窗（保留兼容） -->
 <div id="welcomeModal" class="welcome-overlay" style="display:none;">
   <div class="welcome-panel">
     <div class="welcome-glow"></div>
@@ -165,199 +198,70 @@
   </div>
 </div>
 
-
 <div id="toastContainer"></div>
 
-<!-- 新手指南弹窗 -->
-<div id="newbieGuideModal" style="display:none;" class="newbie-guide-overlay">
-  <div class="newbie-guide-panel">
-    <div class="newbie-glow"></div>
-    <div class="newbie-header">
-      <div class="newbie-title-row">
-        <div class="newbie-icon-wrap">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-        </div>
-        <div>
-          <div class="newbie-title">新手指南</div>
-          <div class="newbie-subtitle">选择你的身份，开启梦工厂之旅</div>
-        </div>
-      </div>
-      <button class="newbie-close" onclick="closeNewbieGuide()">&times;</button>
+<!-- 使用说明弹窗（保留） -->
+<div id="guideModal" style="display:none;" class="modal-overlay">
+  <div class="modal" style="max-width:520px;max-height:80vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin:0;">梦工厂 - 使用说明</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeGuideModal()">&times;</button>
     </div>
-
-    <!-- 身份切换 Tab -->
-    <div class="newbie-tabs">
-      <button class="newbie-tab active" id="nbTabPlayer" onclick="switchNbTab('player')">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
-        选手玩法
-      </button>
-      <button class="newbie-tab" id="nbTabBoss" onclick="switchNbTab('boss')">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/><circle cx="12" cy="12" r="3"/></svg>
-        老板玩法
-      </button>
-    </div>
-
-    <!-- 内容区：选手玩法 -->
-    <div class="newbie-content" id="nbContentPlayer">
-      <!-- Step 1 -->
-      <div class="nb-step">
-        <div class="nb-step-num">01</div>
-        <div class="nb-step-body">
-          <div class="nb-step-title">认证身价 · 获得启动资金</div>
-          <div class="nb-step-desc">进入<strong>转会市场</strong>，填写游戏ID、巅峰分、段位，提交认证申请。审核通过后自动获得 <span class="nb-highlight">1000 梦币</span> 新人奖励！</div>
-          <div class="nb-step-tags"><span class="nb-tag">一次性</span><span class="nb-tag gold">+1000梦币</span></div>
-        </div>
+    <div style="color:var(--text-secondary);font-size:0.82rem;line-height:1.7;">
+      <h3 style="color:var(--primary);">核心场景</h3>
+      <div style="margin-bottom:16px;">
+        <div style="font-weight:700; margin-bottom:8px; color: var(--accent);">常规赛事（队伍参赛）</div>
+        <ul style="margin:0; padding-left:20px;">
+          <li>适合：<strong>5人队伍代表俱乐部/自由名单参赛</strong></li>
+          <li>规则：队长报名 → 队员确认入场费 → 10人满员开赛 → 胜方瓜分奖池</li>
+          <li>入场费三档：500 / 1000 / 2000 梦币</li>
+        </ul>
       </div>
-      <!-- Step 2 -->
-      <div class="nb-step">
-        <div class="nb-step-num">02</div>
-        <div class="nb-step-body">
-          <div class="nb-step-title">寻找队友 / 联系俱乐部</div>
-          <div class="nb-step-desc">在 <strong>社群/聊天系统</strong> 中认识其他选手和俱乐部老板。被老板看中？直接签约入队！也可以自己组队参赛。</div>
-          <div class="nb-step-tags"><span class="nb-tag">聊天</span><span class="nb-tag">社交</span></div>
-        </div>
-      </div>
-      <!-- Step 3 -->
-      <div class="nb-step">
-        <div class="nb-step-num">03</div>
-        <div class="nb-step-body">
-          <div class="nb-step-title">积极参与赛事</div>
-          <div class="nb-step-desc" style="margin-bottom:10px;">平台赛事分三个层级，<strong>参与条件各不相同：</strong></div>
-          <div class="nb-league-list">
-            <div class="nb-league-item tier-top">
-              <div class="nb-league-header"><span class="nb-league-icon">👑</span><span class="nb-league-name">顶级联赛</span><span class="nb-league-condition">需高身价/认证</span></div>
-              <div class="nb-league-body">顶尖选手专属赛事，<strong>入场券最高档</strong>，奖池丰厚，胜负大幅影响身价排名。</div>
-              <div class="nb-league-modes">
-                <span class="nb-mode-pill gold">奖池赛</span>
-                <span class="nb-mode-pill">训练赛</span>
-                <span class="nb-mode-pill">擂台赛</span>
-              </div>
-            </div>
-            <div class="nb-league-item tier-mid">
-              <div class="nb-league-header"><span class="nb-league-icon">🥈</span><span class="nb-league-name">次级联赛</span><span class="nb-league-condition">中段位可参加</span></div>
-              <div class="nb-league-body">进阶选手舞台，<strong>入场券中档</strong>，培养队伍配合度，积累比赛经验提升身价。</div>
-            </div>
-            <div class="nb-league-item tier-reg">
-              <div class="nb-league-header"><span class="nb-league-icon">⚔️</span><span class="nb-league-name">常规赛事</span><span class="nb-league-condition">全员可参与</span></div>
-              <div class="nb-league-body">开放给所有选手，包含三种子模式——</div>
-              <div class="nb-submodes">
-                <div class="nb-submode-row"><span class="nb-sm-icon">🏟️</span><b>奖池赛</b>：需入场券(500/1000/2000)，红蓝双方对战，胜方瓜分全部奖池</div>
-                <div class="nb-submode-row"><span class="nb-sm-icon">🏋️</span><b>训练赛</b>：免入场券，2队10人上限+红蓝对战，纯训练无奖池</div>
-                <div class="nb-submode-row"><span class="nb-sm-icon">🎯</span><b>擂台赛</b>：完全免费开放，不限人数、无需入场券、随时参与</div>
-              </div>
-            </div>
-          </div>
-          <div class="nb-step-desc" style="margin-top:10px;padding:8px 12px;background:rgba(251,191,36,0.08);border-left:3px solid #fbbf24;border-radius:0 6px 6px 0;font-size:0.82rem;line-height:1.55;">
-            <span style="color:#fbbf24;font-weight:700;">💡 社群约打：</span>也可在<strong>社群/聊天系统</strong>直接找别人约打，约定模式后联系管理员开房参赛。<br><span style="color:var(--danger);">⚠ 不通过系统房间自行组建的对局将不会被记录。</span>
-          </div>
-        </div>
-      </div>
-      <!-- Step 4 -->
-      <div class="nb-step">
-        <div class="nb-step-num">04</div>
-        <div class="nb-step-body">
-          <div class="nb-step-title">比赛影响身价</div>
-          <div class="nb-step-desc">每场比赛结束后管理员提交结果：<span style="color:var(--success);">胜利 +2% 身价</span> / <span style="color:var(--danger);">失败 -2%</span>，获得 MVP 额外 <strong>+2%</strong>！表现越好，身价越高。</div>
-          <div class="nb-step-tags"><span class="nb-tag green">胜↑+2%</span><span class="nb-tag red">败↓-2%</span><span class="nb-tag gold">MVP↑+2%</span></div>
-        </div>
-      </div>
-      <!-- Step 5 -->
-      <div class="nb-step">
-        <div class="nb-step-num">05</div>
-        <div class="nb-step-body">
-          <div class="nb-step-title">查看榜单排名</div>
-          <div class="nb-step-desc">在 <strong>榜单</strong> 页面查看自己的排名和身价变化。高身价 = 高关注度 = 更多机会！</div>
-          <div class="nb-step-tags"><span class="nb-tag">实时榜单</span><span class="nb-tag">身价排行</span></div>
-        </div>
-      </div>
-      <div class="nb-summary player-summary">
-        <div class="nb-summary-icon">🎮</div>
-        <div><b>选手核心循环：</b>认证 → 参赛 → 赢钱涨身价 → 更高身价吸引更好机会 → 循环成长</div>
+      <h3 style="color:var(--primary);">参赛流程</h3>
+      <ol style="margin:0 0 16px; padding-left:24px;">
+        <li><strong>队长报名</strong>：进入常规赛事 → 选择代表队伍 → 报名，队伍5人收到通知</li>
+        <li><strong>队员确认</strong>：进入赛事详情 → 选入场费档位 → 确认入场，扣除梦币</li>
+        <li><strong>开赛</strong>：10人满员后自动锁定，到达开赛时间正式开始</li>
+        <li><strong>提交结果</strong>：开赛20分钟后可上传截图 + 胜方 + KDA数据</li>
+        <li><strong>管理员结算</strong>：审核无误后发放奖池，胜方按入场费占比瓜分</li>
+      </ol>
+      <h3 style="color:var(--primary);">奖池规则</h3>
+      <div style="border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:12px;margin-bottom:16px;">
+        <ul style="margin:0; padding-left:20px;">
+          <li>总奖池 = 10人入场费之和</li>
+          <li><span style="color:var(--success);">胜方5人</span>按个人入场费占比瓜分总奖池</li>
+          <li><span style="color:var(--danger);">败方5人</span>入场费全损，无返还</li>
+          <li>报名不足10人 → 自动取消 → 全额退费</li>
+        </ul>
       </div>
     </div>
+  </div>
+</div>
 
-    <!-- 内容区：老板玩法 -->
-    <div class="newbie-content" id="nbContentBoss" style="display:none;">
-      <!-- Boss Intro -->
-      <div class="nb-boss-intro">
-        <div class="nb-boss-intro-title">🏢 老板两种运营模式</div>
-        <div class="nb-boss-intro-desc">老板可组建三支队伍：<strong>顶级联赛（1队·≤5人）</strong> + <strong>次级联赛（1队·≤5人）</strong> + <strong>自由名单（多队·不限）</strong></div>
-      </div>
-
-      <!-- 调价限制提醒 -->
-      <div class="nb-price-limit" style="margin-bottom:14px;padding:14px 16px;background:linear-gradient(135deg,rgba(245,158,11,0.08),rgba(239,68,68,0.05));border:1px solid rgba(245,158,11,0.2);border-radius:12px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-          <span style="font-size:1.1rem;">⏰</span>
-          <span style="font-weight:700;color:#fbbf24;font-size:0.88rem;">身价调整限制</span>
-        </div>
-        <div style="font-size:0.8rem;color:var(--text-secondary);line-height:1.55;">
-          每位选手 <b style="color:#fbbf24;">每7天只能调整一次</b>身价。调价后系统自动记录，冷却期内该选手不可再次修改。请谨慎设定身价，合理利用每一次调价机会！
-        </div>
-      </div>
-
-      <!-- Mode A -->
-      <div class="nb-mode-card mode-a">
-        <div class="nb-mode-badge">模式 A</div>
-        <div class="nb-mode-title">💰 高价冲榜流</div>
-        <div class="nb-mode-steps">
-          <div class="nb-mode-step">① 在转会市场<strong>高价购入</strong>已认证的顶尖选手</div>
-          <div class="nb-mode-step">② 组建豪华战队，参与各类赛事</div>
-          <div class="nb-mode-step">③ 比赛获胜 → 选手身价上涨 <span class="up">↑</span> → 俱乐部整体实力飙升</div>
-          <div class="nb-mode-step">④ 直接占据直播间<strong>公开榜单</strong>前排位置</div>
-        </div>
-        <div class="nb-mode-tip">适合：预算充足、追求短期曝光和排名的老板</div>
-      </div>
-
-      <!-- Mode B -->
-      <div class="nb-mode-card mode-b">
-        <div class="nb-mode-badge">模式 B</div>
-        <div class="nb-mode-title">📈 低成本培养流</div>
-        <div class="nb-mode-steps">
-          <div class="nb-mode-step">① 在转会市场<strong>低价购入</strong>潜力选手（低身价）</div>
-          <div class="nb-mode-step">② 通过训练赛培养，提升选手比赛表现</div>
-          <div class="nb-mode-step">③ 选手身价因比赛结果<strong>自然增长</strong> <span class="up">↑</span></div>
-          <div class="nb-mode-step">④ 以更高价格卖给 <strong>官方联梦</strong>，获得 <span class="nb-highlight">交易价的80%</span> 作为转会提成！</div>
-        </div>
-        <div class="nb-mode-tip highlight">💡 官方联梦会在身价合理的情况下无限制回购选手。选手去到官方联梦后，一段时间后身价会恢复正常 → 可以再次低价买入 → 形成转会-比赛循环交易赚梦币！</div>
-      </div>
-
-      <!-- Key Insight -->
-      <div class="nb-insight">
-        <div class="nb-insight-icon">💡</div>
-        <div>
-          <div class="nb-insight-title">运营心得</div>
-          <div class="nb-insight-text">高价选手更容易运作（基数大，百分比波动绝对值更大）。但无论哪种模式，都考验大家的<b>运营眼光和培养能力</b>。找到被低估的潜力股 → 培养出成绩 → 高价出手 → 利润最大化！</div>
-        </div>
-      </div>
-
-      <div class="nb-summary boss-summary">
-        <div class="nb-summary-icon">🏆</div>
-        <div><b>老板核心循环：</b>买人 → 培养/比赛 → 身价增长 → 卖给官方(80%提成) 或 冲榜占位 → 循环获利</div>
-      </div>
+<!-- 新手指南弹窗（保留兼容） -->
+<div id="newbieGuideModal" style="display:none;" class="modal-overlay">
+  <div class="modal" style="max-width:540px;max-height:80vh;overflow-y:auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2 style="margin:0;">新手指南</h2>
+      <button class="btn btn-ghost btn-sm" onclick="closeNewbieGuide()">&times;</button>
     </div>
-
-    <div class="newbie-footer">
-      <button class="btn btn-primary" onclick="closeNewbieGuide()" style="width:100%;padding:12px;background:linear-gradient(135deg,#f59e0b,#d97706);border:none;font-weight:700;">我知道了，开始玩！</button>
+    <div style="color:var(--text-secondary);font-size:0.8rem;line-height:1.7;">
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <button class="btn btn-sm btn-primary" onclick="switchNbTab('player')" id="nbTabPlayer">选手玩法</button>
+        <button class="btn btn-sm btn-ghost" onclick="switchNbTab('boss')" id="nbTabBoss">老板玩法</button>
+      </div>
+      <div id="nbContentPlayer">
+        <p>① 认证身价获得启动资金 → ② 寻找队友/联系俱乐部 → ③ 积极参与赛事 → ④ 比赛影响身价（胜+2%/败-2%，MVP+2%）→ ⑤ 查看榜单排名</p>
+      </div>
+      <div id="nbContentBoss" style="display:none;">
+        <p><b>两种运营模式：</b></p>
+        <p>💰 <b>高价冲榜流</b>：高价购入顶尖选手 → 组建豪华战队 → 比赛获胜涨身价 → 占据榜单前排</p>
+        <p>📈 <b>低成本培养流</b>：低价购入潜力选手 → 培养 → 身价上涨 → 卖给官方联梦（获得交易价80%提成）</p>
+      </div>
     </div>
   </div>
 </div>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<script src="app.js?v=20260519a" defer></script>
-<script src="leaderboard-frontend.js?v=20260519" defer></script>
-<script>
-  // 兜底方案：3秒内 app.js 未加载完成则显示提示
-  window.APP_READY = false;
-  setTimeout(() => {
-    if (!window.APP_READY) {
-      document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#0a0a12;color:#fff;font-family:system-ui;flex-direction:column;gap:16px;text-align:center;padding:40px;">' +
-        '<div style="font-size:48px;">🔄</div>' +
-        '<div style="font-size:24px;font-weight:700;">系统更新中</div>' +
-        '<div style="font-size:14px;color:#888;">请稍后刷新页面，刷新按钮 ↓</div>' +
-        '<button onclick="location.reload()" style="padding:12px 32px;background:#6366f1;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:16px;">刷新页面</button>' +
-        '</div>';
-    }
-  }, 3000);
-</script>
 </body>
 </html>

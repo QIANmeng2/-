@@ -8,6 +8,120 @@ let unreadNotifs = 0;
 let currentMatchId = null;
 let currentLeaderboardTab = 'player';
 
+// ==================== 组件系统：MatchCard 点击 → 打开比赛详情 ====================
+window.onMatchCardClick = function (matchId, cardEl) {
+  console.log('[app.js] MatchCard clicked:', matchId);
+  // 优先调用已有的 openCompetitionDetail（兼容旧代码），否则弹窗显示详情
+  if (typeof window.openCompetitionDetail === 'function') {
+    window.openCompetitionDetail(matchId);
+  } else {
+    openMatchDetailView(matchId);
+  }
+};
+
+/**
+ * 新的比赛详情视图（使用 ScoreBoard + Timeline + MVPPanel 组件）
+ * 后续替换 openCompetitionDetail 弹窗
+ */
+async function openMatchDetailView(matchId) {
+  // 埋点：打开比赛详情
+  if (window.Tracker) Tracker.trackMatchOpen(matchId);
+  try {
+    const data = await api('/api/matches/' + matchId);
+    const match = data.match || data.data || data;
+    if (!match) return showToast('比赛不存在', 'error');
+
+    // 显示详情容器，隐藏列表
+    document.getElementById('competitionList').style.display = 'none';
+    const detail = document.getElementById('matchDetailView');
+    detail.style.display = 'block';
+
+    // 挂载 ScoreBoard
+    const sb = document.getElementById('scoreboardMount');
+    if (sb && window.ScoreBoard) {
+      window.ScoreBoard.mount(sb, match, { size: 'lg', showBoProgress: true });
+    }
+
+    // 挂载 Timeline（传入 match.timeline 数据）
+    const tl = document.getElementById('timelineMount');
+    if (tl && window.Timeline) {
+      window.Timeline.mount(tl, match, { compact: false });
+    }
+
+    // 挂载 MVP 面板
+    const mvp = document.getElementById('mvpMount');
+    if (mvp && window.MVPPanel) {
+      window.MVPPanel.mount(mvp, match, { size: 'md', showStats: true });
+    }
+
+    // 返回按钮
+    let backBtn = document.getElementById('matchDetailBack');
+    if (!backBtn) {
+      backBtn = document.createElement('button');
+      backBtn.id = 'matchDetailBack';
+      backBtn.className = 'btn btn-ghost btn-sm';
+      backBtn.textContent = '← 返回列表';
+      backBtn.onclick = () => {
+        detail.style.display = 'none';
+        document.getElementById('competitionList').style.display = '';
+        loadMatches(); // 刷新列表
+      };
+      detail.prepend(backBtn);
+    }
+    backBtn.style.display = '';
+
+  } catch (err) {
+    showToast('加载比赛详情失败：' + err.message, 'error');
+  }
+}
+
+// ==================== 新：使用 /api/matches + MatchCard 组件渲染比赛列表 ====================
+let _matchCache = {};
+
+async function loadMatches() {
+  const container = document.getElementById('competitionList');
+  if (!container) return;
+  container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">加载中…</div>';
+  try {
+    const data = await api('/api/matches');
+    const matches = data.matches || data.data || [];
+    _matchCache = {};
+    matches.forEach(m => { _matchCache[m.id] = m; });
+
+    // 使用 MatchCard 组件渲染列表
+    if (window.MatchCard) {
+      container.innerHTML = window.MatchCard.renderList(matches, { clickable: true, showMode: true, showTime: true });
+    } else {
+      // 兜底：组件未加载时显示纯文字列表
+      container.innerHTML = matches.map(m =>
+        '<div style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;" onclick="openMatchDetailView(\'' + m.id + '\')">' +
+        '<b>' + escapeHtml(m.title || '比赛') + '</b> · ' + (m.status || '') +
+        '</div>'
+      ).join('') || '<div style="color:var(--text-muted);text-align:center;padding:40px;">暂无比赛</div>';
+    }
+  } catch (err) {
+    container.innerHTML = '<div style="color:var(--danger);text-align:center;padding:20px;">加载失败：' + escapeHtml(err.message) + '</div>';
+  }
+}
+
+// ==================== 兼容：旧 loadCompetitionList 改为调用新 loadMatches ====================
+// 保留旧函数在过渡期，但内部调用新实现
+const _oldLoadCompetitionList = loadCompetitionList;
+async function loadCompetitionList() {
+  // 如果 Components 已加载，使用新 MatchCard 渲染
+  if (window.MatchCard) {
+    await loadMatches();
+    return;
+  }
+  // 否则走旧逻辑（兜底）
+  if (_oldLoadCompetitionList && _oldLoadCompetitionList !== loadCompetitionList) {
+    return _oldLoadCompetitionList.apply(this, arguments);
+  }
+  // 纯兜底
+  const container = document.getElementById('competitionList');
+  if (container) container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:40px;">正在升级组件系统，请刷新页面</div>';
+}
+
 // ====== Socket.IO 聊天客户端 ======
 let chatSocket = null;
 let chatSocketConnected = false;
@@ -287,9 +401,14 @@ function updateUI() {
     coinDisplay.textContent = '🪙 ' + dreamCoins.toLocaleString();
     document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="market"], #tabNav .tab-btn[data-tab="club"], #tabNav .tab-btn[data-tab="chat"]').forEach(b => b.style.display = '');
     ui('notificationBell').style.display = 'flex';
-    ui('btnNewbieGuide').style.display = '';
+    ui('btnOnboard').style.display = '';
     if (currentUser.id === 'mp4hmya7ad15v6') { ui('tabAdmin').style.display = ''; }
     ui('tabCompetition').style.display = '';
+    // 电竞世界观文案统一
+    const _ptab = document.querySelector('[data-tab="profile"]');
+    if (_ptab) _ptab.textContent = '电竞生涯';
+    const _ctab = document.querySelector('[data-tab="club"]');
+    if (_ctab) _ctab.textContent = '战队基地';
   } else {
     ui('userInfoDisplay').style.display = 'none';
     ui('btnLoginTop').style.display = 'inline-block';
@@ -297,7 +416,7 @@ function updateUI() {
     document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="admin"], #tabNav .tab-btn[data-tab="market"], #tabNav .tab-btn[data-tab="club"]').forEach(b => b.style.display = 'none');
     ui('tabCompetition').style.display = '';
     ui('notificationBell').style.display = 'none';
-    ui('btnNewbieGuide').style.display = 'none';
+    ui('btnOnboard').style.display = 'none';
   }
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === currentTab));
 }
@@ -3628,7 +3747,15 @@ async function switchTab(tab) {
     clearInterval(window._leaderboardTimer);
     window._leaderboardTimer = null;
   }
-  currentTab = tab; updateUI();
+  currentTab = tab;
+  // 埋点：Tab 切换
+  if (window.Tracker) Tracker.trackTabSwitch(tab);
+  // 首页Hero + 比赛列表显示控制
+  const hero = document.getElementById("homeHero");
+  if (hero) hero.style.display = (tab === "competition" || tab === "square") ? "" : "none";
+  const compList = document.getElementById("competitionList");
+  if (compList) compList.style.display = (tab === "competition") ? "" : "none";
+  updateUI();
     if (tab === 'team') cacheStore.delete('/api/teams/mine');
   const content = document.getElementById('tabContent');
   content.innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
@@ -3636,7 +3763,7 @@ async function switchTab(tab) {
     if (tab === 'profile') await renderProfileCenter();
     else if (tab === 'admin') await renderAdminPanel();
     else if (tab === 'team') await renderTeamPanel();
-    else if (tab === 'competition') await renderCompetitionPanel();
+    else if (tab === 'competition') await loadMatches();
     else if (tab === 'market') await renderMarketPanel();
     else if (tab === 'club') await renderClubPanel();
     else if (tab === 'leaderboard') await renderLeaderboardPanel();
@@ -4261,23 +4388,150 @@ async function adminDeleteTeam(teamId) {
 
 async function loadAdminDashboard(container) {
   const data = await api('/api/admin/dashboard');
-  const s = data.stats;
+  const d = data || {};
+  const s = d.stats || {};
+  const funnel = d.funnel || {};
+  const topTabs = (d.topTabs || []);
+  const coinStats = d.coinStats || {};
+
   container.innerHTML = `
-    <div class="stats-grid">
-      <div class="stat-card blue">
-        <div class="stat-value">${s.totalUsers}</div>
-        <div class="stat-label">总用户数</div>
+    <!-- 核心指标卡片 -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;">
+      <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px 14px;">
+        <div style="font-size:0.72rem;color:var(--color-text-secondary);margin-bottom:4px;">总用户</div>
+        <div style="font-size:1.4rem;font-weight:600;color:var(--color-text-primary);">${s.totalUsers||0}</div>
+        <div style="font-size:0.68rem;color:var(--color-text-tertiary);margin-top:2px;">今日 +${d.newUsersToday||0} / 本周 +${d.newUsersWeek||0}</div>
       </div>
-      <div class="stat-card purple">
-        <div class="stat-value">${s.totalSchedules}</div>
-        <div class="stat-label">总档期数</div>
+      <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px 14px;">
+        <div style="font-size:0.72rem;color:var(--color-text-secondary);margin-bottom:4px;">在线人数</div>
+        <div style="font-size:1.4rem;font-weight:600;color:var(--color-text-info);">${d.onlineNow||0}</div>
+        <div style="font-size:0.68rem;color:var(--color-text-tertiary);margin-top:2px;">过去5分钟活跃</div>
       </div>
-      <div class="stat-card red">
-        <div class="stat-value">${s.totalTeams || 0}</div>
-        <div class="stat-label">队伍总数</div>
+      <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px 14px;">
+        <div style="font-size:0.72rem;color:var(--color-text-secondary);margin-bottom:4px;">活跃比赛</div>
+        <div style="font-size:1.4rem;font-weight:600;color:var(--color-danger);">${s.activeMatches||0}</div>
+        <div style="font-size:0.68rem;color:var(--color-text-tertiary);margin-top:2px;">总计 ${s.totalMatches||0} 场</div>
+      </div>
+      <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px 14px;">
+        <div style="font-size:0.72rem;color:var(--color-text-secondary);margin-bottom:4px;">梦币流通</div>
+        <div style="font-size:1.4rem;font-weight:600;color:var(--color-success);">${(coinStats.totalCirculation||0).toLocaleString()}</div>
+        <div style="font-size:0.68rem;color:var(--color-text-tertiary);margin-top:2px;">今日 +${(d.todayFlow||0).toLocaleString()}</div>
+      </div>
+      <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px 14px;">
+        <div style="font-size:0.72rem;color:var(--color-text-secondary);margin-bottom:4px;">Onboarding 完成率</div>
+        <div style="font-size:1.4rem;font-weight:600;color:var(--color-warning);">${d.onboardingRate||0}%</div>
+        <div style="font-size:0.68rem;color:var(--color-text-tertiary);margin-top:2px;">报名转化率 ${d.matchRegisterRate||0}%</div>
+      </div>
+      <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:12px 14px;">
+        <div style="font-size:0.72rem;color:var(--color-text-secondary);margin-bottom:4px;">俱乐部 / 队伍</div>
+        <div style="font-size:1.4rem;font-weight:600;color:var(--color-text-primary);">${s.totalClubs||0} / ${s.totalTeams||0}</div>
+      </div>
+    </div>
+
+    <!-- 新手漏斗 -->
+    <div style="background:var(--color-background-primary);border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:16px;margin-bottom:20px;">
+      <h4 style="font-size:0.82rem;font-weight:500;color:var(--color-text-primary);margin:0 0 12px 0;">新手漏斗（最近30天）</h4>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:0.72rem;color:var(--color-text-secondary);">
+        <span style="flex:1;">进入首页</span><span>${funnel.step1_enter||0}</span>
+      </div>
+      <div style="height:8px;background:var(--color-background-tertiary);border-radius:4px;margin-bottom:10px;overflow:hidden;">
+        <div style="height:100%;width:${funnel.step1_enter>0?100:0}%;background:var(--color-info);border-radius:4px;"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:0.72rem;color:var(--color-text-secondary);">
+        <span style="flex:1;">打开引导</span><span>${funnel.step2_onboard||0}</span>
+      </div>
+      <div style="height:8px;background:var(--color-background-tertiary);border-radius:4px;margin-bottom:10px;overflow:hidden;">
+        <div style="height:100%;width:${funnel.step1_enter>0?Math.round(funnel.step2_onboard/funnel.step1_enter*100):0}%;background:var(--color-purple-600);border-radius:4px;"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:0.72rem;color:var(--color-text-secondary);">
+        <span style="flex:1;">选择身份</span><span>${funnel.step3_identity||0}</span>
+      </div>
+      <div style="height:8px;background:var(--color-background-tertiary);border-radius:4px;margin-bottom:10px;overflow:hidden;">
+        <div style="height:100%;width:${funnel.step1_enter>0?Math.round(funnel.step3_identity/funnel.step1_enter*100):0}%;background:var(--color-coral-600);border-radius:4px;"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:0.72rem;color:var(--color-text-secondary);">
+        <span style="flex:1;">完成引导</span><span>${funnel.step4_complete||0}</span>
+      </div>
+      <div style="height:8px;background:var(--color-background-tertiary);border-radius:4px;margin-bottom:10px;overflow:hidden;">
+        <div style="height:100%;width:${funnel.step1_enter>0?Math.round(funnel.step4_complete/funnel.step1_enter*100):0}%;background:var(--color-success);border-radius:4px;"></div>
+      </div>
+      <div style="font-size:0.72rem;color:var(--color-text-tertiary);margin-top:4px;">最终转化率：${funnel.conversionRate||0}%</div>
+    </div>
+
+    <!-- Tab 点击排行 -->
+    <div style="background:var(--color-background-primary);border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:16px;margin-bottom:20px;">
+      <h4 style="font-size:0.82rem;font-weight:500;color:var(--color-text-primary);margin:0 0 12px 0;">Tab 点击排行（最近7天）</h4>
+      <div id="topTabsChart" style="height:200px;"></div>
+    </div>
+
+    <!-- 梦币流通 + 报名转化率 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
+      <div style="background:var(--color-background-primary);border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:16px;">
+        <h4 style="font-size:0.82rem;font-weight:500;color:var(--color-text-primary);margin:0 0 12px 0;">梦币流通统计</h4>
+        <div style="font-size:0.78rem;color:var(--color-text-secondary);line-height:1.8;">
+          <div style="display:flex;justify-content:space-between;"><span>流通总量</span><span style="color:var(--color-text-primary);font-weight:500;">${(coinStats.totalCirculation||0).toLocaleString()}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span>今日增量</span><span style="color:var(--color-success);font-weight:500;">+${(d.todayFlow||0).toLocaleString()}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span>人均持有</span><span style="color:var(--color-text-primary);font-weight:500;">${(coinStats.avgPerUser||0).toLocaleString()}</span></div>
+        </div>
+      </div>
+      <div style="background:var(--color-background-primary);border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:16px;">
+        <h4 style="font-size:0.82rem;font-weight:500;color:var(--color-text-primary);margin:0 0 12px 0;">转化指标</h4>
+        <div style="font-size:0.78rem;color:var(--color-text-secondary);line-height:1.8;">
+          <div style="display:flex;justify-content:space-between;"><span>Onboarding 完成率</span><span style="color:var(--color-warning);font-weight:500;">${d.onboardingRate||0}%</span></div>
+          <div style="display:flex;justify-content:space-between;"><span>报名转化率</span><span style="color:var(--color-info);font-weight:500;">${d.matchRegisterRate||0}%</span></div>
+          <div style="display:flex;justify-content:space-between;"><span>在线密度</span><span style="color:var(--color-success);font-weight:500;">${s.totalUsers>0?Math.round((d.onlineNow||0)/s.totalUsers*100):0}%</span></div>
+        </div>
       </div>
     </div>
   `;
+
+  // 动态加载 Chart.js 并渲染 Tab 排行条形图
+  if (topTabs.length > 0) {
+    loadChartJs(() => {
+      const ctx = document.getElementById('topTabsChart');
+      if (!ctx) return;
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: topTabs.map(t => t.tab || 'unknown'),
+          datasets: [{
+            label: '点击次数',
+            data: topTabs.map(t => t.count || 0),
+            backgroundColor: '#818cf8',
+            borderRadius: 4,
+            maxBarThickness: 40
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { font: { size: 11 }, color: '#6b7280' }, grid: { display: false } },
+            y: { ticks: { font: { size: 11 }, color: '#6b7280', precision: 0 }, grid: { color: 'rgba(0,0,0,0.06)' } }
+          }
+        }
+      });
+    });
+  }
+}
+
+// 动态加载 Chart.js（避免每个页面都加载）
+let _chartJsLoaded = false;
+let _chartJsCallbacks = [];
+function loadChartJs(callback) {
+  if (window.Chart) { callback(); return; }
+  if (_chartJsLoaded) { _chartJsCallbacks.push(callback); return; }
+  _chartJsLoaded = true;
+  const script = document.createElement('script');
+  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js';
+  script.onload = () => {
+    _chartJsCallbacks.forEach(cb => cb());
+    _chartJsCallbacks = [];
+    callback();
+  };
+  script.onerror = () => { console.warn('[Chart.js] 加载失败'); };
+  document.head.appendChild(script);
 }
 
 async function loadAdminCompetitions(container) {
@@ -5396,7 +5650,7 @@ window.addEventListener('beforeunload', () => {
     updateUI();
     switchTab('competition');
     if (authToken) fetchUserInfo();
-    setTimeout(showWelcome, 800);
+    setTimeout(() => { if (window.OnboardingModal) window.OnboardingModal.autoOpenIfFirstTime(); }, 1200);
   } catch (e) {
     console.error('应用初始化错误:', e);
     window.APP_READY = true; // 即使出错也标记已加载
