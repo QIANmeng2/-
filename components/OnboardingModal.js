@@ -295,7 +295,7 @@
 
     const actionsEl = document.getElementById('obNavActions');
     actionsEl.innerHTML = cfg.actions.map(a =>
-      `<button class="ob-btn-primary" style="width:100%;" onclick="OnboardingModal._goToTab('${a.tab}')">${a.text} →</button>`
+      `<button class="ob-btn-primary" style="width:100%;" onclick="OnboardingModal.goToTab('${a.tab}')">${a.text} →</button>`
     ).join('') + '<button class="ob-btn-ghost" onclick="OnboardingModal.close()">我先随便看看</button>';
 
     _track('navigate', { identity: _selectedRole });
