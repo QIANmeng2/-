@@ -412,6 +412,120 @@ async function initDB() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_chat_messages_receiver ON chat_messages(receiver_id)`);
     await client.query('ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS recalled BOOLEAN DEFAULT false');
     await client.query('ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS mentions TEXT[] DEFAULT \'{}\'');
+    // ===== 赛事系统重构：Match 数据模型（兼容旧 competitions 表）=====
+    // 状态机：CREATED -> REGISTERING -> READY -> LIVE -> FINISHED -> ARCHIVED
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS matches (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        mode TEXT NOT NULL DEFAULT 'training', -- 'training' | 'arena' | 'regular'
+        status TEXT NOT NULL DEFAULT 'CREATED'
+          CONSTRAINT matches_status_check CHECK (status IN ('CREATED','REGISTERING','READY','LIVE','FINISHED','ARCHIVED')),
+        created_by TEXT NOT NULL,
+        start_time TIMESTAMP,
+        end_time TIMESTAMP,
+        bo INTEGER DEFAULT 1,
+        winner TEXT, -- 'red' | 'blue' | 'draw'
+        score JSONB DEFAULT '{"red":0,"blue":0}',
+        mvp_id TEXT,
+        meeting_code TEXT,
+        meeting_link TEXT,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    // 比赛参与者表（支持红蓝双方/自由报名）
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS match_participants (
+        id SERIAL PRIMARY KEY,
+        match_id TEXT NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL,
+        side TEXT DEFAULT 'neutral', -- 'red' | 'blue' | 'neutral'
+        lane TEXT DEFAULT '',
+        club_id INTEGER,
+        joined_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(match_id, user_id)
+      );
+    `);
+    // ===== Match Timeline 表（为未来功能预留）=====
+    // 用途：实时播报、比赛事件流、AI解说、比赛回放
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS match_timeline (
+        id SERIAL PRIMARY KEY,
+        match_id TEXT NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+        type TEXT NOT NULL,
+        -- 事件类型枚举：
+        -- 'KILL'       击杀
+        -- 'ASSIST'     助攻
+        -- 'GOAL'       推塔/目标（原设计，保留兼容）
+        -- 'DRAGON'     大龙
+        -- 'BARON'      男爵
+        -- 'TOWER'      推塔
+        -- 'WIN'        胜利
+        -- 'SCORE'      比分更新
+        -- 'MVPAWARD'   MVP 公布
+        -- 'STATUSCHANGE' 状态变更
+        -- 'CUSTOM'     自定义事件（AI解说用）
+        team TEXT DEFAULT NULL, -- 'red' | 'blue' | NULL（无队伍）
+        player_id TEXT DEFAULT NULL, -- 关联用户 ID
+        player_name TEXT DEFAULT NULL, -- 冗余：便于快速显示
+        text TEXT NOT NULL, -- 事件描述（如 "张三击杀了李四"）
+        data JSONB DEFAULT '{}', -- 扩展字段（如 { killer: 'xxx', victim: 'yyy', gold: 300 }）
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_timeline_match ON match_timeline(match_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_timeline_created ON match_timeline(created_at DESC)`);
+    // ===== 结束 Timeline 表 =====
+    // 索引优化
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_matches_status ON matches(status)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_matches_created_by ON matches(created_by)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_match_participants_match ON match_participants(match_id)`);
+
+    // ===== 第六阶段：用户行为埋点系统 =====
+    // 访问会话表（计算停留时长）
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_sessions (
+        id SERIAL PRIMARY KEY,
+        session_id TEXT UNIQUE NOT NULL,
+        user_id TEXT,
+        ip_address TEXT,
+        entry_page TEXT,
+        duration INTEGER,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    // 用户行为事件表（event_type 白名单约束）
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_events (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT,
+        session_id TEXT NOT NULL,
+        event_type TEXT NOT NULL CHECK (event_type IN (
+          'page_view','page_leave','tab_switch',
+          'match_open','match_register',
+          'onboarding_start','onboarding_step','onboarding_complete','onboarding_skip',
+          'task_view','task_complete','task_claim'
+        )),
+        event_data JSONB DEFAULT '{}',
+        page_url TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `);
+    // 新手任务完成表（持久化，替代纯 localStorage）
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_tasks (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        task_key TEXT NOT NULL,
+        reward_claimed INTEGER DEFAULT 0,
+        completed_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(user_id, task_key)
+      );
+    `);
+    // ===== 结束埋点系统 =====
   } finally { client.release(); }
 }
 
@@ -422,6 +536,44 @@ app.use(express.json({ limit: '20mb' }));
 // 健康检查
 app.get('/', (req, res) => res.send('OK'));
 app.get('/health', (req, res) => res.send('OK'));
+
+// ===== 第六阶段：用户行为埋点接收接口 =====
+// 开放接口，未登录也可发送（user_id 为 NULL）
+const VALID_EVENT_TYPES = [
+  'page_view','page_leave','tab_switch',
+  'match_open','match_register',
+  'onboarding_start','onboarding_step','onboarding_complete','onboarding_skip',
+  'task_view','task_complete','task_claim'
+];
+app.post('/api/track', async (req, res) => {
+  try {
+    let { event_type, event_data, session_id, page_url } = req.body;
+    if (!VALID_EVENT_TYPES.includes(event_type)) return badRequest(res, '非法事件类型：' + event_type);
+    if (!session_id) return badRequest(res, '缺少 session_id');
+    const userId = req.headers.authorization ? (() => {
+      try { return jwt.verify(req.headers.authorization.split(' ')[1], JWT_SECRET).userId; } catch { return null; }
+    })() : null;
+    await pool.query(
+      `INSERT INTO user_events (user_id, session_id, event_type, event_data, page_url) VALUES ($1,$2,$3,$4,$5)`,
+      [userId, session_id, event_type, JSON.stringify(event_data || {}), page_url || '']
+    );
+    // 如果是 page_leave 且带 duration，更新 user_sessions
+    if (event_type === 'page_leave' && event_data && event_data.duration) {
+      await pool.query(
+        `UPDATE user_sessions SET duration = $1, updated_at = NOW() WHERE session_id = $2`,
+        [parseInt(event_data.duration) || null, session_id]
+      );
+    }
+    ok(res);
+  } catch (e) { console.error('/api/track error:', e); serverError(res, '埋点失败'); }
+});
+
+app.get('/health', (req, res) => res.send('OK（埋点系统已加载）'));
+
+// ===== 注册 Match 路由（赛事系统重构）=====
+const matchesRouter = require('./routes/matches');
+app.use('/api/matches', matchesRouter);
+// ===== 结束 Match 路由 =====
 
 // 登录验证
 function authMiddleware(req, res, next) {
@@ -438,6 +590,27 @@ function adminMiddleware(req, res, next) {
   if (req.userId !== ADMIN_USER_ID) return forbidden(res, '无权限');
   next();
 }
+
+// ===== 导入 Match 状态机工具函数 =====
+const { MATCH_STATUS, isValidTransition, getNextStates } = require('./utils/matchState');
+
+// 异步：验证并更新比赛状态（返回新状态或抛错）
+async function transitionMatchStatus(matchId, fromStatus, toStatus, client = pool) {
+  if (!isValidTransition(fromStatus, toStatus)) {
+    throw new Error(`非法状态转换：${fromStatus} → ${toStatus}`);
+  }
+  const result = await client.query(`
+    UPDATE matches
+    SET status = $1, updated_at = NOW()
+    WHERE id = $2 AND status = $3
+    RETURNING *;
+  `, [toStatus, matchId, fromStatus]);
+  if (result.rows.length === 0) {
+    throw new Error(`状态已变更，请刷新重试（当前：${fromStatus}）`);
+  }
+  return result.rows[0];
+}
+// ===== 结束：Match 状态机 =====
 
 // 获取交易比例配置
 app.get('/api/admin/transaction-ratios', authMiddleware, adminMiddleware, async (req, res) => {
@@ -1078,18 +1251,163 @@ app.put('/api/notifications/read-all', authMiddleware, async (req, res) => {
   } catch (e) { serverError(res, '标记失败'); }
 });
 
-// 管理员仪表盘统计
+// 管理员仪表盘统计（第六阶段强化版）
 app.get('/api/admin/dashboard', authMiddleware, adminMiddleware, async (req, res) => {
   try {
-    const usersCount = await pool.query('SELECT COUNT(*) FROM users');
-    const teamsCount = await pool.query('SELECT COUNT(*) FROM teams');
-    res.json({
-      stats: {
-        totalUsers: parseInt(usersCount.rows[0].count),
-        totalTeams: parseInt(teamsCount.rows[0].count)
-      }
+    // 1. 基础指标
+    const totalUsersRes = await pool.query('SELECT COUNT(*) FROM users');
+    const newUsersTodayRes = await pool.query(
+      "SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_DATE"
+    );
+    const newUsersWeekRes = await pool.query(
+      "SELECT COUNT(*) FROM users WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'"
+    );
+    const totalTeamsRes = await pool.query('SELECT COUNT(*) FROM teams');
+    const totalClubsRes = await pool.query('SELECT COUNT(*) FROM clubs');
+    const activeMatchesRes = await pool.query(
+      "SELECT COUNT(*) FROM matches WHERE status IN ('READABLE','LIVE')"
+    );
+    const totalMatchesRes = await pool.query('SELECT COUNT(*) FROM matches');
+
+    // 2. 在线人数（过去5分钟有事件的去重 user_id，含 NULL 时用 session_id 兜底）
+    const onlineNowRes = await pool.query(`
+      SELECT COUNT(DISTINCT COALESCE(user_id, session_id)) AS cnt
+      FROM user_events
+      WHERE created_at >= NOW() - INTERVAL '5 minutes'
+    `);
+
+    // 3. 新手漏斗（最近30天注册用户）
+    // step1: 进入首页（page_view, page=home）
+    // step2: 打开引导（onboarding_start）
+    // step3: 选择身份（onboarding_step, step=2）
+    // step4: 完成引导（onboarding_complete）
+    const funnelRes = await pool.query(`
+      WITH recent_users AS (
+        SELECT id FROM users WHERE created_at >= NOW() - INTERVAL '30 days'
+      ),
+      step1 AS (
+        SELECT COUNT(DISTINCT COALESCE(user_id, session_id)) AS cnt
+        FROM user_events
+        WHERE event_type = 'page_view' AND (event_data->>'page' = 'home' OR page_url LIKE '%#competition%' OR page_url LIKE '%#square%')
+          AND created_at >= NOW() - INTERVAL '30 days'
+      ),
+      step2 AS (
+        SELECT COUNT(DISTINCT COALESCE(user_id, session_id)) AS cnt
+        FROM user_events
+        WHERE event_type = 'onboarding_start'
+          AND created_at >= NOW() - INTERVAL '30 days'
+      ),
+      step3 AS (
+        SELECT COUNT(DISTINCT COALESCE(user_id, session_id)) AS cnt
+        FROM user_events
+        WHERE event_type = 'onboarding_step' AND (event_data->>'step' = '2' OR event_data->>'step' = '3')
+          AND created_at >= NOW() - INTERVAL '30 days'
+      ),
+      step4 AS (
+        SELECT COUNT(DISTINCT COALESCE(user_id, session_id)) AS cnt
+        FROM user_events
+        WHERE event_type = 'onboarding_complete'
+          AND created_at >= NOW() - INTERVAL '30 days'
+      )
+      SELECT
+        (SELECT cnt FROM step1) AS step1_enter,
+        (SELECT cnt FROM step2) AS step2_onboard,
+        (SELECT cnt FROM step3) AS step3_identity,
+        (SELECT cnt FROM step4) AS step4_complete
+      FROM (SELECT 1) AS dummy
+    `);
+    const funnelRow = funnelRes.rows[0] || {};
+    const step1 = parseInt(funnelRow.step1_enter) || 0;
+    const step2 = parseInt(funnelRow.step2_onboard) || 0;
+    const step3 = parseInt(funnelRow.step3_identity) || 0;
+    const step4 = parseInt(funnelRow.step4_complete) || 0;
+    const funnelConversionRate = step1 > 0 ? Math.round(step4 / step1 * 100) : 0;
+
+    // 4. Tab 点击排行（最近7天）
+    const topTabsRes = await pool.query(`
+      SELECT event_data->>'tab' AS tab_name, COUNT(*) AS cnt
+      FROM user_events
+      WHERE event_type = 'tab_switch'
+        AND created_at >= NOW() - INTERVAL '7 days'
+      GROUP BY tab_name
+      ORDER BY cnt DESC
+      LIMIT 6
+    `);
+
+    // 5. 梦币流通统计
+    const totalCoinsRes = await pool.query('SELECT COALESCE(SUM(amount), 0) AS total FROM coin_transactions');
+    const todayCoinsRes = await pool.query(
+      "SELECT COALESCE(SUM(amount), 0) AS total FROM coin_transactions WHERE created_at >= CURRENT_DATE"
+    );
+    const avgCoinsRes = await pool.query('SELECT COALESCE(AVG(dream_coins), 0) AS avg FROM users');
+
+    // 6. Onboarding 完成率（最近30天有过 onboarding_start 的 session 中完成的比例）
+    const onboardingRateRes = await pool.query(`
+      WITH started AS (
+        SELECT DISTINCT COALESCE(user_id, session_id) AS sid
+        FROM user_events
+        WHERE event_type = 'onboarding_start'
+          AND created_at >= NOW() - INTERVAL '30 days'
+      ),
+      completed AS (
+        SELECT DISTINCT COALESCE(user_id, session_id) AS sid
+        FROM user_events
+        WHERE event_type = 'onboarding_complete'
+          AND created_at >= NOW() - INTERVAL '30 days'
+      )
+      SELECT
+        (SELECT COUNT(*) FROM started) AS started,
+        (SELECT COUNT(*) FROM completed) AS completed
+      FROM (SELECT 1) AS dummy
+    `);
+    const obRow = onboardingRateRes.rows[0] || {};
+    const obStarted = parseInt(obRow.started) || 0;
+    const obCompleted = parseInt(obRow.completed) || 0;
+    const onboardingRate = obStarted > 0 ? Math.round(obCompleted / obStarted * 100) : 0;
+
+    // 7. 报名转化率（查看比赛详情 → 报名）
+    const matchOpenRes = await pool.query(`
+      SELECT COUNT(DISTINCT COALESCE(user_id, session_id)) AS cnt
+      FROM user_events
+      WHERE event_type = 'match_open'
+        AND created_at >= NOW() - INTERVAL '30 days'
+    `);
+    const matchRegisterRes = await pool.query(`
+      SELECT COUNT(DISTINCT COALESCE(user_id, session_id)) AS cnt
+      FROM user_events
+      WHERE event_type = 'match_register'
+        AND created_at >= NOW() - INTERVAL '30 days'
+    `);
+    const matchOpeners = parseInt(matchOpenRes.rows[0]?.cnt) || 0;
+    const matchRegistrars = parseInt(matchRegisterRes.rows[0]?.cnt) || 0;
+    const matchRegisterRate = matchOpeners > 0 ? Math.round(matchRegistrars / matchOpeners * 100) : 0;
+
+    ok(res, {
+      totalUsers: parseInt(totalUsersRes.rows[0].count),
+      newUsersToday: parseInt(newUsersTodayRes.rows[0].count),
+      newUsersWeek: parseInt(newUsersWeekRes.rows[0].count),
+      totalTeams: parseInt(totalTeamsRes.rows[0].count),
+      totalClubs: parseInt(totalClubsRes.rows[0].count),
+      activeMatches: parseInt(activeMatchesRes.rows[0].count),
+      totalMatches: parseInt(totalMatchesRes.rows[0].count),
+      onlineNow: parseInt(onlineNowRes.rows[0].cnt) || 0,
+      funnel: {
+        step1_enter: step1,
+        step2_onboard: step2,
+        step3_identity: step3,
+        step4_complete: step4,
+        conversionRate: funnelConversionRate
+      },
+      topTabs: topTabsRes.rows.map(r => ({ tab: r.tab_name || 'unknown', count: parseInt(r.cnt) })),
+      coinStats: {
+        totalCirculation: parseInt(totalCoinsRes.rows[0].total) || 0,
+        todayFlow: parseInt(todayCoinsRes.rows[0].total) || 0,
+        avgPerUser: Math.round(parseFloat(avgCoinsRes.rows[0].avg)) || 0
+      },
+      onboardingRate,
+      matchRegisterRate
     });
-  } catch (e) { console.error(e); serverError(res, '加载失败'); }
+  } catch (e) { console.error('/api/admin/dashboard error:', e); serverError(res, '加载失败'); }
 });
 
 // 管理员获取所有用户（支持筛选）
@@ -3232,6 +3550,178 @@ async function startServer() {
       socket.on('disconnect', () => {
         console.log('[Socket.IO] 断开连接:', socket.id);
       });
+
+      // ===== 赛事系统重构：轻量 Socket 同步 =====
+      // 前端调用：socket.emit('match:create', matchData)
+      socket.on('match:create', async (data) => {
+        if (!socket.userId) return socket.emit('error', { message: '请先认证' });
+        try {
+          // 创建比赛（复用 routes/matches.js 的逻辑，这里简化）
+          const { title, mode = 'training' } = data;
+          const id = require('crypto').randomUUID();
+          const result = await pool.query(`
+            INSERT INTO matches (id, title, mode, status, created_by, created_at, updated_at)
+            VALUES ($1,$2,$3,'CREATED',$4,NOW(),NOW())
+            RETURNING *;
+          `, [id, title, mode, socket.userId]);
+          const match = result.rows[0];
+          // 广播：所有人收到新比赛通知
+          io.emit('matchCreated', match);
+          socket.emit('match:create:success', match);
+        } catch (e) {
+          console.error('[Socket] match:create', e);
+          socket.emit('match:create:error', { message: '创建失败' });
+        }
+      });
+
+      // 前端调用：socket.emit('match:update', { matchId, updates })
+      socket.on('match:update', async (data) => {
+        if (!socket.userId) return socket.emit('error', { message: '请先认证' });
+        try {
+          const { matchId, updates } = data;
+          if (!matchId || !updates) return socket.emit('match:update:error', { message: '参数错误' });
+
+          // ✅ 先查当前状态，校验状态机
+          const current = await pool.query('SELECT * FROM matches WHERE id = $1', [matchId]);
+          if (current.rows.length === 0) return socket.emit('match:update:error', { message: '比赛不存在' });
+
+          const currentStatus = current.rows[0].status;
+          const newStatus = updates.status?.toUpperCase();
+
+          // ✅ 如果有状态变更，校验状态机
+          if (newStatus && newStatus !== currentStatus) {
+            if (!isValidTransition(currentStatus, newStatus)) {
+              const nextStates = getNextStates(currentStatus).join(', ') || '无（终态）';
+              return socket.emit('match:update:error', {
+                message: `非法状态转换：${currentStatus} → ${newStatus}。允许转换：${nextStates}`
+              });
+            }
+          }
+
+          const fields = [];
+          const params = [];
+          let idx = 0;
+          if (updates.status) { fields.push(`status = $${++idx}`); params.push(updates.status); }
+          if (updates.winner !== undefined) { fields.push(`winner = $${++idx}`); params.push(updates.winner); }
+          if (updates.score) { fields.push(`score = $${++idx}`); params.push(JSON.stringify(updates.score)); }
+          if (updates.mvp_id) { fields.push(`mvp_id = $${++idx}`); params.push(updates.mvp_id); }
+          if (fields.length === 0) return socket.emit('match:update:error', { message: '没有要更新的字段' });
+
+          params.push(matchId, currentStatus);
+          const result = await pool.query(`
+            UPDATE matches SET ${fields.join(', ')}, updated_at = NOW()
+            WHERE id = $${params.length - 1} AND status = $${params.length}
+            RETURNING *;
+          `, params);
+          if (result.rows.length === 0) return socket.emit('match:update:error', { message: '状态已变更，请刷新重试' });
+
+          const match = result.rows[0];
+          io.emit('matchUpdated', { success: true, match });
+          // 特定状态转换事件
+          if (newStatus === 'LIVE') io.emit('matchStarted', { success: true, match });
+          if (newStatus === 'FINISHED') io.emit('matchFinished', { success: true, match });
+          socket.emit('match:update:success', { success: true, match });
+        } catch (e) {
+          console.error('[Socket] match:update', e);
+          socket.emit('match:update:error', { message: '更新失败：' + e.message });
+        }
+      });
+
+      // 前端调用：socket.emit('match:score', { matchId, score, mvp_id })
+      socket.on('match:score', async (data) => {
+        if (!socket.userId) return socket.emit('error', { message: '请先认证' });
+        try {
+          const { matchId, score, mvp_id } = data;
+          if (!matchId) return socket.emit('match:score:error', { message: 'matchId 必填' });
+
+          // ✅ 只允许 LIVE 状态的比赛更新比分
+          const current = await pool.query('SELECT * FROM matches WHERE id = $1 AND status = $2', [matchId, 'LIVE']);
+          if (current.rows.length === 0) {
+            return socket.emit('match:score:error', { message: '比赛不存在或非 LIVE 状态' });
+          }
+
+          const fields = [];
+          const params = [matchId];
+          let idx = 1;
+          if (score) { fields.push(`score = $${++idx}`); params.splice(idx - 1, 0, JSON.stringify(score)); }
+          if (mvp_id) { fields.push(`mvp_id = $${++idx}`); params.push(mvp_id); }
+          if (fields.length === 0) return socket.emit('match:score:error', { message: '没有要更新的字段' });
+
+          const result = await pool.query(`
+            UPDATE matches SET ${fields.join(', ')}, updated_at = NOW()
+            WHERE id = $1 AND status = 'LIVE'
+            RETURNING *;
+          `, params);
+
+          if (result.rows.length === 0) return socket.emit('match:score:error', { message: '更新失败' });
+
+          const match = result.rows[0];
+          io.emit('scoreUpdated', { success: true, matchId, score, mvp_id });
+          socket.emit('match:score:success', { success: true, match });
+        } catch (e) {
+          console.error('[Socket] match:score', e);
+          socket.emit('match:score:error', { message: '更新比分失败：' + e.message });
+        }
+      });
+      // ===== 结束赛事 Socket 同步 =====
+
+      // ===== Timeline 实时同步（为未来功能预留）=====
+      // 前端调用：socket.emit('timeline:add', { matchId, type, team, player_id, player_name, text, data })
+      socket.on('timeline:add', async (data) => {
+        if (!socket.userId) return socket.emit('error', { message: '请先认证' });
+        try {
+          const { matchId, type, team, player_id, player_name, text, data = {} } = data;
+          if (!matchId || !type || !text) {
+            return socket.emit('timeline:add:error', { message: 'matchId, type, text 必填' });
+          }
+
+          // 权限：只有管理员或比赛创建者可以添加事件
+          const match = await pool.query('SELECT * FROM matches WHERE id = $1', [matchId]);
+          if (match.rows.length === 0) {
+            return socket.emit('timeline:add:error', { message: '比赛不存在' });
+          }
+          const isAdmin = socket.userId === (process.env.ADMIN_USER_ID || 'mp4hmya7ad15v6');
+          if (!isAdmin && match.rows[0].created_by !== socket.userId) {
+            return socket.emit('timeline:add:error', { message: '无权限' });
+          }
+
+          const result = await pool.query(`
+            INSERT INTO match_timeline (match_id, type, team, player_id, player_name, text, data, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $8, NOW())
+            RETURNING *;
+          `, [matchId, type, team, player_id, player_name, text, JSON.stringify(data)]);
+
+          const event = result.rows[0];
+
+          // 广播：所有人收到新事件（实时播报）
+          io.emit('timelineAdded', { success: true, matchId, event });
+
+          socket.emit('timeline:add:success', { success: true, event });
+        } catch (e) {
+          console.error('[Socket] timeline:add', e);
+          socket.emit('timeline:add:error', { message: '添加事件失败：' + e.message });
+        }
+      });
+
+      // 前端调用：socket.emit('timeline:list', { matchId, limit, offset })
+      socket.on('timeline:list', async (data) => {
+        try {
+          const { matchId, limit = 50, offset = 0 } = data;
+          if (!matchId) return socket.emit('timeline:list:error', { message: 'matchId 必填' });
+
+          const result = await pool.query(
+            'SELECT * FROM match_timeline WHERE match_id = $1 ORDER BY created_at ASC LIMIT $2 OFFSET $3',
+            [matchId, parseInt(limit), parseInt(offset)]
+          );
+
+          socket.emit('timeline:list:success', { success: true, matchId, timeline: result.rows });
+        } catch (e) {
+          console.error('[Socket] timeline:list', e);
+          socket.emit('timeline:list:error', { message: '查询失败：' + e.message });
+        }
+      });
+      // ===== 结束 Timeline Socket 同步 =====
+
     });
 
     server.listen(PORT, '0.0.0.0', () => {
@@ -3286,9 +3776,15 @@ async function startServer() {
   }, 60 * 1000);
 }
 
-// 测试时只导出 app，不启动服务器
+// 测试时导出 app/pool/io，不启动服务器
 if (require.main === module) {
   startServer();
 } else {
-  module.exports = app;
+  module.exports = {
+    app,
+    pool,
+    io: () => io, // 延迟导出（io 在 startServer 后初始化）
+    transitionMatchStatus,
+    MATCH_STATUS: MATCH_STATUS
+  };
 }
