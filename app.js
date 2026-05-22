@@ -3950,25 +3950,44 @@ async function switchTab(tab) {
       content.appendChild(_md);
     }
     var _cl = document.getElementById('competitionList');
-    if (_cl) { _cl.style.display = 'none'; _cl.innerHTML = ''; }
+    if (!_cl) {
+      // 自愈：如果 competitionList 不存在，重建它
+      _cl = document.createElement('div');
+      _cl.id = 'competitionList';
+      content.appendChild(_cl);
+    }
+    _cl.style.display = 'none';
+    _cl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">加载中…</div>';
     var _mdv = document.getElementById('matchDetailView');
     if (_mdv) _mdv.style.display = 'none';
     var _hero = document.getElementById('homeHero');
     if (_hero) _hero.style.display = 'none'; // loading 期间隐藏 Hero，渲染完再显示
-    // 插入临时 spinner
-    var _spinner = document.createElement('div');
-    _spinner.id = '_tabSpinner';
-    _spinner.className = 'loading-spinner';
-    _spinner.innerHTML = '<div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div>';
-    content.appendChild(_spinner);
-    await _renderWithTimeout('competition', loadMatches);
-    // 清除 spinner，显示 Hero + 列表
-    var _s = document.getElementById('_tabSpinner');
-    if (_s) _s.remove();
+    // competition 面板不用 _renderWithTimeout（它会 destroy tabContent），改用独立超时
+    var _loadDone = false;
+    var _loadErr = null;
+    var _tid = setTimeout(function() {
+      if (!_loadDone) {
+        var __cl = document.getElementById('competitionList');
+        if (__cl) __cl.innerHTML = '<div class="card" style="text-align:center;padding:40px;"><p style="color:var(--warning);">赛事中心加载超时</p><button class="btn btn-sm btn-primary" onclick="switchTab(\'competition\')">重试</button></div>';
+      }
+    }, 15000);
+    try {
+      await loadMatches();
+      _loadDone = true;
+    } catch (e) {
+      _loadErr = e;
+      var __cl2 = document.getElementById('competitionList');
+      if (__cl2) __cl2.innerHTML = '<div class="card" style="text-align:center;padding:40px;"><p>加载失败：' + escapeHtml(e.message || '未知错误') + '</p><button class="btn btn-sm btn-primary" onclick="switchTab(\'competition\')">重试</button></div>';
+    } finally {
+      clearTimeout(_tid);
+    }
+    // 显示 Hero + 列表
     var _hero2 = document.getElementById('homeHero');
     if (_hero2) _hero2.style.display = '';
-    var _cl2 = document.getElementById('competitionList');
-    if (_cl2) _cl2.style.display = '';
+    var _cl3 = document.getElementById('competitionList');
+    if (_cl3 && _loadDone) _cl3.style.display = '';
+    // 如果加载失败/超时，确保列表可见（显示错误信息）
+    if (_cl3 && !_loadDone) _cl3.style.display = '';
     return;
   }
 
