@@ -1072,10 +1072,15 @@ app.post('/api/auth/register', async (req, res) => {
     if (exists.rows.length > 0) return badRequest(res, '用户名已存在');
     const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
     const hashed = bcrypt.hashSync(password, 10);
-    await pool.query('INSERT INTO users (id, username, password, teamName, coachName, wechat, level, bio, tags) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
-      [id, username, hashed, '', coachName, wechat, level || '大众', bio || '', '{spectator}']);
+    const INITIAL_COINS = 500;
+    await pool.query('INSERT INTO users (id, username, password, teamName, coachName, wechat, level, bio, tags, dream_coins) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+      [id, username, hashed, '', coachName, wechat, level || '大众', bio || '', '{spectator}', INITIAL_COINS]);
+    await pool.query(
+      "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1, $2, 'initial_grant', $3)",
+      [id, INITIAL_COINS, '新人礼包']
+    );
     const token = jwt.sign({ userId: id }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id, teamName: '', coachName, wechat, level: level || '大众', bio: bio || '', disabledDates: [], gameId: '', gameServer: '手Q区', gameRank: '星耀', peakScore: 0, laneStats: '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}', heroPool: '', dream_coins: 0, tags: ['spectator'] } });
+    res.json({ token, user: { id, teamName: '', coachName, wechat, level: level || '大众', bio: bio || '', disabledDates: [], gameId: '', gameServer: '手Q区', gameRank: '星耀', peakScore: 0, laneStats: '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}', heroPool: '', dream_coins: INITIAL_COINS, tags: ['spectator'] } });
   } catch (e) { serverError(res, '注册失败'); }
 });
 
