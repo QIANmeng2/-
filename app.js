@@ -8,6 +8,57 @@ let unreadNotifs = 0;
 let currentMatchId = null;
 let currentLeaderboardTab = 'player';
 
+// ==================== 全局错误监控 ====================
+(function() {
+  var _errors = [];
+  var MAX_ERRORS = 20;
+  
+  window.__errorLog = _errors;
+  
+  window.addEventListener('error', function(e) {
+    var msg = e.message || 'Unknown error';
+    // 跳过已知的外部脚本报错（Cloudflare beacon 等）
+    if (msg.indexOf('cloudflareinsights') !== -1) return;
+    
+    var entry = {
+      time: new Date().toISOString(),
+      message: msg,
+      source: e.filename ? e.filename.split('/').pop() : '',
+      lineno: e.lineno || 0,
+      colno: e.colno || 0
+    };
+    _errors.unshift(entry);
+    if (_errors.length > MAX_ERRORS) _errors.pop();
+    
+    console.error('[ErrorMonitor]', entry.message, '@', entry.source + ':' + entry.lineno);
+    
+    // 在页面底部显示错误计数器（开发调试用）
+    var badge = document.getElementById('errorBadge');
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.id = 'errorBadge';
+      badge.style.cssText = 'position:fixed;bottom:10px;right:10px;background:rgba(220,38,38,0.9);color:#fff;padding:4px 10px;border-radius:12px;font-size:12px;z-index:99999;cursor:pointer;';
+      badge.title = '点击查看错误日志';
+      badge.onclick = function() {
+        var log = '=== Error Log (last ' + MAX_ERRORS + ') ===\n' + _errors.map(function(e, i) {
+          return (i+1) + '. ' + e.time + ' | ' + e.message + ' @ ' + e.source + ':' + e.lineno;
+        }).join('\n');
+        alert(log);
+      };
+      document.body.appendChild(badge);
+    }
+    badge.textContent = _errors.length + ' err';
+    badge.style.display = 'block';
+  }, true);
+  
+  // 捕获未处理的 Promise rejection
+  window.addEventListener('unhandledrejection', function(e) {
+    var msg = (e.reason && e.reason.message) || String(e.reason);
+    if (msg.indexOf('cloudflareinsights') !== -1) return;
+    console.error('[ErrorMonitor:Promise]', msg);
+  });
+})();
+
 // ==================== 组件系统：MatchCard 点击 → 打开比赛详情 ====================
 window.onMatchCardClick = function (matchId, cardEl) {
   console.log('[app.js] MatchCard clicked:', matchId);
@@ -24,8 +75,8 @@ window.onMatchCardClick = function (matchId, cardEl) {
  * 后续替换 openCompetitionDetail 弹窗
  */
 async function openMatchDetailView(matchId) {
-  // 埋点：打开比赛详情
-  if (window.Tracker) Tracker.trackMatchOpen(matchId);
+  // 埋点：打开比赛详情（非阻塞）
+  try { if (window.Tracker) Tracker.trackMatchOpen(matchId); } catch(e) {}
   try {
     const data = await api('/api/matches/' + matchId);
     const match = data.match || data.data || data;
@@ -338,31 +389,45 @@ async function fetchUserInfo() {
 }
 function openAuthModal(mode) {
   authMode = mode;
-  document.getElementById('authModalOverlay').style.display = 'flex';
-  document.getElementById('authModalTitle').textContent = mode === 'login' ? '登录' : '注册';
-  document.getElementById('registerFields').style.display = mode === 'register' ? 'block' : 'none';
-  document.getElementById('authForm').reset();
+  var m = document.getElementById('authModal');
+  if (!m) return;
+  m.style.display = 'flex';
+  var t = document.getElementById('authModalTitle');
+  if (t) t.textContent = mode === 'login' ? '登录' : '注册';
+  var r = document.getElementById('registerFields');
+  if (r) r.style.display = mode === 'register' ? 'block' : 'none';
+  var f = document.getElementById('authForm');
+  if (f) f.reset();
 }
-function closeAuthModal() { document.getElementById('authModalOverlay').style.display = 'none'; }
+function closeAuthModal() {
+  var m = document.getElementById('authModal');
+  if (m) m.style.display = 'none';
+}
 function switchAuthMode() { openAuthModal(authMode === 'login' ? 'register' : 'login'); }
 async function handleAuth(e) {
   e.preventDefault();
-  const username = document.getElementById('authUsername').value.trim();
-  const password = document.getElementById('authPassword').value.trim();
+  var uEl = document.getElementById('authUsername');
+  var pEl = document.getElementById('authPassword');
+  if (!uEl || !pEl) return;
+  var username = uEl.value.trim();
+  var password = pEl.value.trim();
   if (!username || !password) { showToast('请填写用户名和密码','error'); return; }
   if (authMode === 'register') {
-    const coach = document.getElementById('regCoachName').value.trim();
-    const wechat = document.getElementById('regWechat').value.trim();
-    const level = document.getElementById('regLevel').value;
+    var cEl = document.getElementById('regCoachName');
+    var wEl = document.getElementById('regWechat');
+    var lEl = document.getElementById('regLevel');
+    var coach = cEl ? cEl.value.trim() : '';
+    var wechat = wEl ? wEl.value.trim() : '';
+    var level = lEl ? lEl.value : '大众';
     if (!coach || !wechat) { showToast('请填写完整注册信息','error'); return; }
     try {
-      const data = await api('/api/auth/register', { method:'POST', body: JSON.stringify({ username, password, teamName: coach, coachName: coach, wechat, level }) });
+      var data = await api('/api/auth/register', { method:'POST', body: JSON.stringify({ username: username, password: password, teamName: coach, coachName: coach, wechat: wechat, level: level }) });
       if (data && data.token) { authToken = data.token; localStorage.setItem('local_current_user', authToken); currentUser = data.user; closeAuthModal(); updateUI(); switchTab('competition'); showToast('注册成功！','success'); }
     } catch (e) { showToast(e.message,'error'); }
   } else {
     try {
-      const data = await api('/api/auth/login', { method:'POST', body: JSON.stringify({ username, password }) });
-      if (data && data.token) { authToken = data.token; localStorage.setItem('local_current_user', authToken); currentUser = data.user; closeAuthModal(); updateUI(); switchTab('competition'); showToast('登录成功！','success'); }
+      var data2 = await api('/api/auth/login', { method:'POST', body: JSON.stringify({ username: username, password: password }) });
+      if (data2 && data2.token) { authToken = data2.token; localStorage.setItem('local_current_user', authToken); currentUser = data2.user; closeAuthModal(); updateUI(); switchTab('competition'); showToast('登录成功！','success'); }
     } catch (e) { showToast(e.message,'error'); }
   }
 }
@@ -3749,8 +3814,8 @@ async function switchTab(tab) {
     window._leaderboardTimer = null;
   }
   currentTab = tab;
-  // 埋点：Tab 切换
-  if (window.Tracker) Tracker.trackTabSwitch(tab);
+  // 埋点：Tab 切换（非阻塞）
+  try { if (window.Tracker) Tracker.trackTabSwitch(tab); } catch(e) {}
   // 首页Hero + 比赛列表显示控制
   const hero = document.getElementById("homeHero");
   if (hero) hero.style.display = (tab === "competition" || tab === "square") ? "" : "none";
