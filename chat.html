@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>聊天 · 梦工厂</title>
+  <link rel="stylesheet" href="styles.css?v=20260523e">
+  <!-- Socket.IO client（必须在 socketManager.js 之前加载）-->
+  <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+  <style>
+    /* ===== 聊天独立页布局 ===== */
+    :root {
+      --bg: #1A1A2E;
+      --bg-card: rgba(255,255,255,.03);
+      --border: rgba(255,255,255,.06);
+      --gold: #c9a84c;
+      --gold-light: #fbbf24;
+      --text: #e0e0f0;
+      --text-muted: #7a7a90;
+      --danger: #ef4444;
+      --success: #10b981;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* 顶栏 */
+    .ch-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 20px;
+      background: rgba(26,26,46,.96);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      z-index: 100;
+    }
+    .ch-header__left { display: flex; align-items: center; gap: 12px; }
+    .ch-header__status {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #ef4444;
+      display: inline-block;
+      transition: background .3s;
+    }
+    .ch-header__room { font-size: .95rem; font-weight: 600; color: var(--gold); }
+    .ch-header__back {
+      color: var(--text-muted); text-decoration: none;
+      font-size: .82rem; padding: 5px 10px;
+      border: 1px solid var(--border); border-radius: 8px; transition: all .2s;
+    }
+    .ch-header__back:hover { border-color: var(--gold); color: var(--gold); }
+
+    /* 主体：侧边栏 + 聊天区 */
+    .ch-body {
+      display: flex; flex: 1; overflow: hidden;
+    }
+
+    /* 侧边栏 */
+    .ch-sidebar {
+      width: 240px; min-width: 200px;
+      background: rgba(255,255,255,.015);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .ch-sidebar__title {
+      font-size: .72rem; font-weight: 700; letter-spacing: .06em;
+      color: var(--text-muted); text-transform: uppercase;
+      padding: 14px 16px 8px;
+    }
+    .ch-sidebar__list {
+      flex: 1; overflow-y: auto; padding: 4px 8px;
+    }
+    .ch-room-item {
+      padding: 10px 12px; border-radius: 8px;
+      cursor: pointer; transition: background .15s;
+      margin-bottom: 2px;
+    }
+    .ch-room-item:hover { background: rgba(255,255,255,.04); }
+    .ch-room-item.active { background: rgba(201,168,76,.1); }
+
+    /* 聊天区 */
+    .ch-main {
+      flex: 1; display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .ch-messages {
+      flex: 1; overflow-y: auto; padding: 16px 20px;
+    }
+    /* 消息气泡 */
+    .ch-msg { margin: 6px 0; }
+    .ch-msg--self { text-align: right; }
+    .ch-msg--other { text-align: left; }
+    .ch-bubble {
+      display: inline-block;
+      padding: 8px 14px; border-radius: 14px;
+      max-width: 72%; word-break: break-word;
+      font-size: .88rem; line-height: 1.5;
+    }
+    .ch-msg--self .ch-bubble { background: rgba(201,168,76,.15); color: var(--text); }
+    .ch-msg--other .ch-bubble { background: rgba(255,255,255,.04); color: var(--text); }
+    .ch-msg--system { text-align: center; font-size: .78rem; color: var(--text-muted); font-style: italic; margin: 8px 0; }
+
+    /* 输入栏 */
+    .ch-input-bar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 20px;
+      background: rgba(26,26,46,.96);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .ch-input-bar__input {
+      flex: 1; background: rgba(255,255,255,.05);
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 14px; color: var(--text);
+      font-size: .9rem; outline: none;
+      transition: border-color .2s;
+    }
+    .ch-input-bar__input:focus { border-color: var(--gold); }
+    .ch-input-bar__input:disabled { opacity: .4; }
+    .ch-input-bar__btn {
+      background: linear-gradient(135deg, #c9a84c, #a88b3c);
+      color: #1A1A2E; border: none; border-radius: 10px;
+      padding: 10px 20px; font-size: .88rem; font-weight: 700;
+      cursor: pointer; transition: all .2s;
+    }
+    .ch-input-bar__btn:hover { transform: translateY(-1px); box-shadow: 0 2px 12px rgba(201,168,76,.3); }
+    .ch-input-bar__btn:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    /* 加载 / 错误 */
+    .ch-loading { text-align: center; padding: 40px; color: var(--text-muted); font-size: .85rem; }
+    .ch-error   { text-align: center; padding: 40px; color: var(--danger); font-size: .85rem; }
+
+    /* 响应式 */
+    @media (max-width: 640px) {
+      .ch-sidebar { width: 180px; min-width: 140px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 顶栏 -->
+  <header class="ch-header">
+    <div class="ch-header__left">
+      <span id="chStatusIcon" class="ch-header__status" title="disconnected"></span>
+      <span id="chRoomName" class="ch-header__room">选择房间</span>
+    </div>
+    <a href="./" class="ch-header__back">← 返回主页</a>
+  </header>
+
+  <!-- 主体 -->
+  <div class="ch-body">
+
+    <!-- 侧边栏：房间列表 -->
+    <aside class="ch-sidebar">
+      <div class="ch-sidebar__title">聊天房间</div>
+      <div id="chRoomList" class="ch-sidebar__list">
+        <div class="ch-loading">加载中…</div>
+      </div>
+    </aside>
+
+    <!-- 主聊天区 -->
+    <main class="ch-main">
+
+      <!-- 消息列表 -->
+      <div id="chMessages" class="ch-messages">
+        <div class="ch-loading">请选择房间开始聊天</div>
+      </div>
+
+      <!-- 输入栏 -->
+      <div class="ch-input-bar">
+        <input id="chInput"  class="ch-input-bar__input" type="text" placeholder="输入消息…（Enter 发送）" autocomplete="off" disabled>
+        <button id="chSendBtn" class="ch-input-bar__btn" disabled>发送</button>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ===== 依赖脚本（严格按顺序加载）===== -->
+  <!-- 1. SocketManager（必须先于所有模块）-->
+  <script src="modules/socket/socketManager.js?v=20260523e"></script>
+  <script src="modules/socket/socketChannels.js?v=20260523e"></script>
+  <script src="modules/socket/socketReconnect.js?v=20260523e"></script>
+  <script src="modules/socket/socketEvents.js?v=20260523e"></script>
+
+  <!-- 2. Chat 模块 -->
+  <script src="modules/chat/chatStore.js?v=20260523e"></script>
+  <script src="modules/chat/chatApi.js?v=20260523e"></script>
+  <script src="modules/chat/chatSocket.js?v=20260523e"></script>
+  <script src="modules/chat/chatView.js?v=20260523e"></script>
+  <script src="modules/chat/chatRoomManager.js?v=20260523e"></script>
+
+  <!-- 3. 页面入口 -->
+  <script src="modules/chat/chatPage.js?v=20260523e"></script>
+
+</body>
+</html>
