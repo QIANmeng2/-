@@ -4084,12 +4084,14 @@ async function switchTab(tab) {
   // competition 面板特殊处理：渲染目标是 competitionList（tabContent 子元素）
   // 不能清空 tabContent，否则 competitionList 被销毁，loadMatches 找到 null → 静默退出 → 卡 spinner
   if (tab === 'competition') {
-    // 重建可能被销毁的元素（如上次超时/错误导致 tabContent 被清空）
+    // 从其他 tab 切回时，先清除 tabContent 中旧 tab 的残留内容
+    content.innerHTML = '';
+    // 重建可能被销毁的元素
     if (!document.getElementById('homeHero')) {
       var _hh = document.createElement('div');
       _hh.id = 'homeHero';
       _hh.style.cssText = 'display:none;padding:32px 16px;text-align:center;';
-      _hh.innerHTML = '<h1 style="font-size:1.6rem;font-weight:800;margin:0 0 8px;background:linear-gradient(135deg,#c9a84c,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">梦工厂·王者</h1><p style="color:var(--text-secondary);font-size:0.88rem;margin:0 0 24px;">首个王者荣耀电竞训练赛生态平台</p><div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;"><button class="btn btn-primary" onclick="switchTab(\'competition\')" style="font-weight:700;">打比赛</button><button class="btn btn-secondary" onclick="switchTab(\'club\')" style="font-weight:700;">加入战队</button><button class="btn btn-outline" onclick="switchTab(\'market\')" style="font-weight:700;">转会市场</button><button class="btn btn-ghost" onclick="OnboardingModal.open()" style="font-weight:700;border:1px solid rgba(201,168,76,0.3);color:#c9a84c;">新手引导</button></div><div id="newbieTasksMount" style="margin-top:28px;"></div>';
+      _hh.innerHTML = '<h1 style="font-size:1.6rem;font-weight:800;margin:0 0 8px;background:linear-gradient(135deg,#c9a84c,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">梦工厂·MGC</h1><p style="color:var(--text-secondary);font-size:0.88rem;margin:0 0 24px;">电竞训练赛生态平台</p><div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;"><button class="btn btn-primary" onclick="switchTab(\'competition\')" style="font-weight:700;">打比赛</button><button class="btn btn-secondary" onclick="switchTab(\'club\')" style="font-weight:700;">加入战队</button><button class="btn btn-outline" onclick="switchTab(\'market\')" style="font-weight:700;">转会市场</button><button class="btn btn-ghost" onclick="OnboardingModal.open()" style="font-weight:700;border:1px solid rgba(201,168,76,0.3);color:#c9a84c;">新手引导</button></div><div id="newbieTasksMount" style="margin-top:28px;"></div>';
       content.insertBefore(_hh, content.firstChild);
     }
     if (!document.getElementById('matchDetailView')) {
