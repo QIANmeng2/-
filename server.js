@@ -1126,6 +1126,35 @@ app.get('/api/me/coins', authMiddleware, async (req, res) => {
   } catch (e) { console.error(e); serverError(res, '查询失败'); }
 });
 
+// 每日签到领取梦币
+app.post('/api/me/daily-checkin', authMiddleware, async (req, res) => {
+  try {
+    var today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    
+    // 检查今天是否已签到
+    var checkRes = await pool.query(
+      "SELECT id FROM coin_transactions WHERE user_id = $1 AND type = 'checkin' AND created_at::date = $2 LIMIT 1",
+      [req.userId, today]
+    );
+    if (checkRes.rows.length > 0) {
+      return badRequest(res, '今日已签到，明天再来吧');
+    }
+    
+    // 签到奖励：100 梦币
+    var amount = 100;
+    await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins, 0) + $1 WHERE id = $2', [amount, req.userId]);
+    await pool.query(
+      "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1, $2, 'checkin', $3)",
+      [req.userId, amount, '每日签到']
+    );
+    
+    var userRes = await pool.query('SELECT dream_coins FROM users WHERE id = $1', [req.userId]);
+    var newBalance = userRes.rows[0]?.dream_coins || 0;
+    
+    ok(res, { awarded: amount, newBalance: newBalance, checkinDate: today });
+  } catch (e) { console.error(e); serverError(res, '签到失败'); }
+});
+
 // 管理员发放梦币
 app.post('/api/admin/award-coins', authMiddleware, adminMiddleware, async (req, res) => {
   const { userId, amount, note } = req.body;
