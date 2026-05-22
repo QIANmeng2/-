@@ -1,18 +1,41 @@
 "use strict";
 // === 全局错误边界：防止任何 DOM 错误阻塞页面加载 ===
 window.addEventListener('error', function(e) {
-  if (e.message && e.message.includes('null') && e.message.includes('style')) {
-    console.warn('[ErrorBoundary] 忽略 DOM null.style 错误:', e.message, e.filename, e.lineno);
+  var msg = e.message || '';
+  // DOM 空指针（null.style / null.textContent / null.innerHTML / null.appendChild 等）
+  if (msg.includes('Cannot read propert') && (msg.includes('null') || msg.includes('undefined'))) {
+    console.warn('[ErrorBoundary] 忽略 DOM 空指针错误:', msg, e.filename, e.lineno);
     e.preventDefault();
     return true;
   }
-  console.error('[ErrorBoundary] 未捕获错误:', e.message, e.filename, e.lineno);
+  // 脚本加载失败（CDN/网络）
+  if (e.target && e.target.tagName === 'SCRIPT') {
+    console.warn('[ErrorBoundary] 脚本加载失败:', e.target.src);
+    e.preventDefault();
+    return true;
+  }
+  // 其他错误记录但不阻断
+  console.error('[ErrorBoundary] 未捕获错误:', msg, e.filename, e.lineno);
+  // 不 preventDefault，让浏览器正常处理
 });
 // === 安全 DOM 访问工具 ===
 window._safeEl = function(id) {
   const el = document.getElementById(id);
   if (!el) console.debug('[SafeDOM] 元素未找到:', id);
   return el;
+};
+// === 组件级降级包装器 ===
+// 用法 safeRender(el, () => Component.render(data), '<p>组件加载失败</p>')
+window.safeRender = function(container, renderFn, fallbackHtml) {
+  try {
+    if (!container) return;
+    renderFn();
+  } catch (e) {
+    console.warn('[SafeRender] 组件渲染失败:', e.message);
+    try {
+      container.innerHTML = fallbackHtml || '<div class="card" style="text-align:center;padding:20px;color:var(--text-muted);">该模块暂时不可用</div>';
+    } catch (e2) { /* 最后的兜底 */ }
+  }
 };
 const API_BASE = 'https://perpetual-enchantment-production-b163.up.railway.app';
 let currentUser = null;
@@ -39,34 +62,36 @@ window.onMatchCardClick = function (matchId, cardEl) {
  * 后续替换 openCompetitionDetail 弹窗
  */
 async function openMatchDetailView(matchId) {
-  // 埋点：打开比赛详情（非阻塞）
-  try { if (window.Tracker) Tracker.trackMatchOpen(matchId); } catch(e) {}
+  // 埋点：打开比赛详情
+  try { if (window.Tracker) Tracker.trackMatchOpen(matchId); } catch (e) {}
   try {
     const data = await api('/api/matches/' + matchId);
     const match = data.match || data.data || data;
     if (!match) return showToast('比赛不存在', 'error');
 
     // 显示详情容器，隐藏列表
-    document.getElementById('competitionList').style.display = 'none';
+    var compList2 = document.getElementById('competitionList');
+    if (compList2) compList2.style.display = 'none';
     const detail = document.getElementById('matchDetailView');
+    if (!detail) return showToast('详情面板未加载', 'error');
     detail.style.display = 'block';
 
     // 挂载 ScoreBoard
     const sb = document.getElementById('scoreboardMount');
     if (sb && window.ScoreBoard) {
-      window.ScoreBoard.mount(sb, match, { size: 'lg', showBoProgress: true });
+      try { window.ScoreBoard.mount(sb, match, { size: 'lg', showBoProgress: true }); } catch (e) { console.warn('[MatchDetail] ScoreBoard 挂载失败:', e); }
     }
 
     // 挂载 Timeline（传入 match.timeline 数据）
     const tl = document.getElementById('timelineMount');
     if (tl && window.Timeline) {
-      window.Timeline.mount(tl, match, { compact: false });
+      try { window.Timeline.mount(tl, match, { compact: false }); } catch (e) { console.warn('[MatchDetail] Timeline 挂载失败:', e); }
     }
 
     // 挂载 MVP 面板
     const mvp = document.getElementById('mvpMount');
     if (mvp && window.MVPPanel) {
-      window.MVPPanel.mount(mvp, match, { size: 'md', showStats: true });
+      try { window.MVPPanel.mount(mvp, match, { size: 'md', showStats: true }); } catch (e) { console.warn('[MatchDetail] MVPPanel 挂载失败:', e); }
     }
 
     // 返回按钮
@@ -78,8 +103,9 @@ async function openMatchDetailView(matchId) {
       backBtn.textContent = '← 返回列表';
       backBtn.onclick = () => {
         detail.style.display = 'none';
-        document.getElementById('competitionList').style.display = '';
-        loadMatches(); // 刷新列表
+        var cl = document.getElementById('competitionList');
+        if (cl) cl.style.display = '';
+        try { loadMatches(); } catch (e) {}
       };
       detail.prepend(backBtn);
     }
@@ -154,7 +180,9 @@ function initChatSocket() {
       transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionDelay: 1000,
-      reconnectionAttempts: 5
+      reconnectionDelayMax: 30000,
+      randomizationFactor: 0.5,
+      reconnectionAttempts: Infinity
     });
 
     chatSocket.on('connect', () => {
@@ -219,17 +247,37 @@ function initChatSocket() {
       }
     });
 
-    chatSocket.on('disconnect', () => {
-      console.log('[Chat] Socket.IO 断开连接');
+    chatSocket.on('disconnect', (reason) => {
+      console.log('[Chat] Socket.IO 断开连接:', reason);
       chatSocketConnected = false;
       updateChatIconStatus();
     });
 
+    // 重连尝试日志（用于排查网络抖动）
+    chatSocket.on('reconnect_attempt', (attempt) => {
+      console.log('[Chat] 重连尝试 #' + attempt);
+    });
+
     chatSocket.on('reconnect', () => {
-      console.log('[Chat] Socket.IO 重连');
+      console.log('[Chat] Socket.IO 重连成功');
       chatSocketConnected = true;
       if (authToken) {
         chatSocket.emit('authenticate', authToken);
+      }
+      // 重连后重入当前聊天房间
+      if (chatCurrentTarget) {
+        var rejoinType = chatCurrentType;
+        var rejoinTarget = chatCurrentTarget;
+        chatSocket.emit('join_room', { type: rejoinType, target: rejoinTarget });
+        console.log('[Chat] 重连后重入房间:', rejoinType, rejoinTarget);
+      }
+      // 重连后刷新数据（匹配列表、通知等）
+      try {
+        if (currentTab === 'competition') loadMatches();
+        if (currentTab === 'market') renderMarketPanel();
+        if (authToken) checkNotifications();
+      } catch (e) {
+        console.warn('[Chat] 重连后数据刷新失败:', e.message);
       }
       updateChatIconStatus();
     });
@@ -346,10 +394,42 @@ async function api(path, options = {}, retries = 2) {
 
 // ---------- 认证 ----------
 async function fetchUserInfo() {
-  try { const data = await api('/api/auth/me'); if (data && data.user) currentUser = data.user; } catch { logout(); }
+  try {
+    var data = await api('/api/auth/me');
+    if (data && data.user) {
+      currentUser = data.user;
+      return;
+    }
+  } catch (e) {
+    console.warn('[Auth] fetchUserInfo 失败:', e.message);
+  }
+  // 失败不注销（可能是网络抖动），保持已登录状态降级运行
+  if (authToken) {
+    console.warn('[Auth] 无法获取用户信息，以离线模式运行');
+    showToast('网络不稳定，部分功能受限', 'warning', 3000);
+  } else {
+    currentUser = null;
+  }
   updateUI();
   checkNotifications();
-  initChatSocket(); // 初始化聊天 Socket
+  initChatSocket();
+}
+// 手动恢复认证（供重试按钮调用）
+async function retryFetchUserInfo() {
+  try {
+    var data = await api('/api/auth/me', {}, 0);
+    if (data && data.user) {
+      currentUser = data.user;
+      showToast('已恢复连接', 'success');
+      updateUI();
+      checkNotifications();
+      initChatSocket();
+      return true;
+    }
+  } catch (e) {
+    showToast('仍无法连接：' + e.message, 'error');
+  }
+  return false;
 }
 function openAuthModal(mode) {
   authMode = mode;
@@ -2735,7 +2815,7 @@ function openCreateClubModal() {
         </div>
         <div style="display:flex;gap:10px;margin-top:16px;">
           <button type="submit" class="btn btn-primary" style="flex:1;">创建</button>
-          <button type="button" class="btn btn-secondary" onclick="document.getElementById('createClubModal').remove()" style="flex:1;">取消</button>
+          <button type="button" class="btn btn-secondary" onclick="var _ccm=document.getElementById('createClubModal');if(_ccm)_ccm.remove();" style="flex:1;">取消</button>
         </div>
       </form>
     </div>
@@ -2776,7 +2856,8 @@ async function handleCreateClub(e) {
   try {
     await api('/api/club/create', { method:'POST', body: JSON.stringify({ name, ownerId }) });
     showToast('俱乐部创建成功','success');
-    document.getElementById('createClubModal').remove();
+    var _ccm2 = document.getElementById('createClubModal');
+    if (_ccm2) _ccm2.remove();
     await renderClubPanel();
   } catch(e) { showToast(e.message,'error'); }
 }
@@ -3803,6 +3884,27 @@ function handleMentionKeydown(e) {
 }
 
 // ---------- Tab 切换 ----------
+// 面板渲染 10s 超时包装器（超时自动降级，不阻塞页面）
+async function _renderWithTimeout(tab, renderFn, timeoutMs) {
+  timeoutMs = timeoutMs || 10000;
+  const content = document.getElementById('tabContent');
+  if (!content) return;
+  var tid = setTimeout(function() {
+    if (content.querySelector('.loading-spinner')) {
+      content.innerHTML = '<div class="card" style="text-align:center;padding:40px;"><p style="color:var(--warning);">' + tab + ' 面板加载超时</p><button class="btn btn-sm btn-primary" onclick="switchTab(\'' + tab + '\')">重试</button></div>';
+    }
+  }, timeoutMs);
+  try {
+    await renderFn();
+  } catch (e) {
+    if (content.querySelector('.loading-spinner')) {
+      content.innerHTML = '<div class="card" style="text-align:center;padding:40px;"><p>加载失败：' + escapeHtml(e.message || '未知错误') + '</p><button class="btn btn-sm btn-primary" onclick="switchTab(\'' + tab + '\')">重试</button></div>';
+    }
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
 async function switchTab(tab) {
   // 离开榜单时清除刷新定时器
   if (tab !== 'leaderboard' && window._leaderboardTimer) {
@@ -3810,30 +3912,28 @@ async function switchTab(tab) {
     window._leaderboardTimer = null;
   }
   currentTab = tab;
-  // 埋点：Tab 切换（非阻塞）
-  try { if (window.Tracker) Tracker.trackTabSwitch(tab); } catch(e) {}
+  // 埋点：Tab 切换
+  try { if (window.Tracker) Tracker.trackTabSwitch(tab); } catch (e) {}
   // 首页Hero + 比赛列表显示控制
-  const hero = document.getElementById("homeHero");
+  var hero = document.getElementById("homeHero");
   if (hero) hero.style.display = (tab === "competition" || tab === "square") ? "" : "none";
-  const compList = document.getElementById("competitionList");
+  var compList = document.getElementById("competitionList");
   if (compList) compList.style.display = (tab === "competition") ? "" : "none";
   updateUI();
-    if (tab === 'team') cacheStore.delete('/api/teams/mine');
-  const content = document.getElementById('tabContent');
+  if (tab === 'team') cacheStore.delete('/api/teams/mine');
+  var content = document.getElementById('tabContent');
   if (!content) return;
   content.innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
-  try {
-    if (tab === 'profile') await renderProfileCenter();
-    else if (tab === 'admin') await renderAdminPanel();
-    else if (tab === 'team') await renderTeamPanel();
-    else if (tab === 'competition') await loadMatches();
-    else if (tab === 'market') await renderMarketPanel();
-    else if (tab === 'club') await renderClubPanel();
-    else if (tab === 'leaderboard') await renderLeaderboardPanel();
-    else if (tab === 'chat') await renderChatPanel();
-  } catch (e) {
-    content.innerHTML = '<div class="card"><p>加载失败</p><button class="btn btn-sm btn-primary" onclick="switchTab(\''+tab+'\')">重试</button></div>';
-  }
+
+  // 每个面板独立超时 + 独立 catch，失败不阻塞页面
+  if (tab === 'profile')        await _renderWithTimeout('profile', renderProfileCenter);
+  else if (tab === 'admin')     await _renderWithTimeout('admin', renderAdminPanel);
+  else if (tab === 'team')      await _renderWithTimeout('team', renderTeamPanel);
+  else if (tab === 'competition') await _renderWithTimeout('competition', loadMatches);
+  else if (tab === 'market')    await _renderWithTimeout('market', renderMarketPanel);
+  else if (tab === 'club')      await _renderWithTimeout('club', renderClubPanel);
+  else if (tab === 'leaderboard') await _renderWithTimeout('leaderboard', renderLeaderboardPanel);
+  else if (tab === 'chat')      await _renderWithTimeout('chat', renderChatPanel);
 }
 
 document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => {
@@ -5505,21 +5605,29 @@ function closeImagePreview() {
 
 // ---------- 使用说明 ----------
 function openGuideModal() {
-  document.getElementById('guideModal').style.display = 'block';
+  const el = document.getElementById('guideModal');
+  if (!el) return;
+  el.style.display = 'block';
   document.body.style.overflow = 'hidden';
 }
 function closeGuideModal() {
-  document.getElementById('guideModal').style.display = 'none';
+  const el = document.getElementById('guideModal');
+  if (!el) return;
+  el.style.display = 'none';
   document.body.style.overflow = '';
 }
 
 // ---------- 新手指南 ----------
 function openNewbieGuide() {
-  document.getElementById('newbieGuideModal').style.display = 'flex';
+  const el = document.getElementById('newbieGuideModal');
+  if (!el) return;
+  el.style.display = 'flex';
   document.body.style.overflow = 'hidden';
 }
 function closeNewbieGuide() {
-  document.getElementById('newbieGuideModal').style.display = 'none';
+  const el = document.getElementById('newbieGuideModal');
+  if (!el) return;
+  el.style.display = 'none';
   document.body.style.overflow = '';
 }
 function switchNbTab(tab) {
@@ -5694,12 +5802,28 @@ function _tickSpinners() {
 }
 
 // Visibility API：页面隐藏时暂停，恢复时重启
+// 页面可见性变化 — 返回时刷新数据
+var _lastHiddenTime = 0;
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
+    _lastHiddenTime = Date.now();
+    // 暂停动画
     if (_spinnerRafId) { cancelAnimationFrame(_spinnerRafId); _spinnerRafId = null; }
-  } else if (document.querySelector('.loading-spinner:not(.load-timeout)')) {
-    _spinnerLastTick = 0; // 重置节流，下次立即执行
-    _spinnerRafId = requestAnimationFrame(_tickSpinners);
+  } else {
+    // 恢复动画
+    if (document.querySelector('.loading-spinner:not(.load-timeout)')) {
+      _spinnerLastTick = 0;
+      _spinnerRafId = requestAnimationFrame(_tickSpinners);
+    }
+    // 离开超过 30 秒：刷新当前面板 + 清除相关缓存
+    if (_lastHiddenTime && (Date.now() - _lastHiddenTime) > 30000) {
+      console.log('[Visibility] 长时间离开后恢复，刷新数据');
+      if (currentTab === 'competition') { loadMatches(); cacheStore.delete('/api/competitions'); }
+      if (currentTab === 'market') { renderMarketPanel(); }
+      if (currentTab === 'leaderboard') { renderLeaderboardPanel(); }
+      if (authToken) try { checkNotifications(); } catch (e) {}
+    }
+    _lastHiddenTime = 0;
   }
 });
 
@@ -5709,15 +5833,24 @@ window.addEventListener('beforeunload', () => {
 });
 
 // 启动
-(async () => {
-  try {
-    window.APP_READY = true; // 标记应用已加载，解除兜底
-    updateUI();
-    switchTab('competition');
-    if (authToken) fetchUserInfo();
-    setTimeout(() => { if (window.OnboardingModal) window.OnboardingModal.autoOpenIfFirstTime(); }, 1200);
-  } catch (e) {
-    console.error('应用初始化错误:', e);
-    window.APP_READY = true; // 即使出错也标记已加载
+(function() {
+  window.APP_READY = true; // 立即标记（兜底机制不再触发）
+
+  // 步骤1: 更新基础 UI（同步，无网络依赖）
+  try { updateUI(); } catch (e) { console.error('[Boot] updateUI 失败:', e); }
+
+  // 步骤2: 渲染默认面板（异步，有独立超时保护）
+  try { switchTab('competition'); } catch (e) { console.error('[Boot] switchTab 失败:', e); }
+
+  // 步骤3: 异步获取用户信息（失败不阻塞）
+  if (authToken) {
+    fetchUserInfo().catch(function(e) { console.error('[Boot] fetchUserInfo 失败:', e); });
   }
+
+  // 步骤4: 新手引导（延迟加载，失败不阻塞）
+  setTimeout(function() {
+    try {
+      if (window.OnboardingModal) window.OnboardingModal.autoOpenIfFirstTime();
+    } catch (e) { console.error('[Boot] OnboardingModal 失败:', e); }
+  }, 1200);
 })();
