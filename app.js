@@ -436,7 +436,7 @@ async function fetchUserInfo() {
   try { const data = await api('/api/auth/me'); if (data && data.user) currentUser = data.user; } catch { logout(); }
   updateUI();
   checkNotifications();
-  initChatSocket(); // 初始化聊天 Socket
+  // socket.io 按需初始化，不在页面加载时抢占连接池
 }
 function openAuthModal(mode) {
   authMode = mode;
