@@ -94,6 +94,12 @@ async function openMatchDetailView(matchId) {
       try { window.MVPPanel.mount(mvp, match, { size: 'md', showStats: true }); } catch (e) { console.warn('[MatchDetail] MVPPanel 挂载失败:', e); }
     }
 
+    // ===== 预测/竞猜面板 =====
+    const pm = document.getElementById('predictionMount');
+    if (pm) {
+      try { await renderPredictionPanel(pm, match); } catch (e) { console.warn('[MatchDetail] Prediction 面板挂载失败:', e); }
+    }
+
     // 返回按钮
     let backBtn = document.getElementById('matchDetailBack');
     if (!backBtn) {
@@ -113,6 +119,120 @@ async function openMatchDetailView(matchId) {
 
   } catch (err) {
     showToast('加载比赛详情失败：' + err.message, 'error');
+  }
+}
+
+// ==================== 预测/竞猜面板 ====================
+
+async function renderPredictionPanel(container, match) {
+  container.innerHTML = '';
+
+  // 只在 REGISTERING / READY 状态显示预测
+  if (!['REGISTERING','READY'].includes(match.status)) {
+    if (match.winner && match.status === 'FINISHED') {
+      // 已结束：显示结果摘要
+      container.innerHTML = '<div class="card" style="margin-bottom:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:14px;">' +
+        '<div style="font-weight:700;font-size:15px;margin-bottom:8px;">' + (match.winner === 'draw' ? '🤝 比赛平局' : match.winner === 'red' ? '🔴 红方获胜' : '🔵 蓝方获胜') + '</div>' +
+        '<div style="color:var(--text-muted);font-size:13px;">预测系统已关闭</div></div>';
+    }
+    return;
+  }
+
+  var self = this;
+  var currentUser = getCurrentUser();
+  var isLoggedIn = !!currentUser;
+
+  // 查询我的预测
+  var myPred = null;
+  if (isLoggedIn) {
+    try {
+      var predRes = await api('/api/matches/' + match.id + '/predictions/my');
+      myPred = predRes.prediction || null;
+    } catch (e) { /* 静默 */ }
+  }
+
+  if (myPred) {
+    // 已预测：显示状态
+    var sideLabel = myPred.side === 'red' ? '🔴 红方' : myPred.side === 'blue' ? '🔵 蓝方' : '🤝 平局';
+    var resultLabel = myPred.settled ? (myPred.result === 'win' ? '✅ 获胜' : myPred.result === 'loss' ? '❌ 失败' : '↩️ 退款') : '⏳ 等待结算';
+    container.innerHTML = '<div class="card" style="margin-bottom:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:14px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+      '<div>' +
+      '<div style="font-weight:700;font-size:15px;color:var(--gold);">🎯 我的预测</div>' +
+      '<div style="margin-top:6px;color:var(--text);">你押了 ' + sideLabel + ' · ' + myPred.amount + ' 梦币</div>' +
+      '<div style="color:var(--text-muted);font-size:13px;margin-top:2px;">状态：' + resultLabel + '</div>' +
+      '</div>' +
+      '<div style="text-align:right;font-size:28px;">' + (myPred.settled ? (myPred.result === 'win' ? '🏆' : myPred.result === 'refund' ? '💰' : '💔') : '🔮') + '</div>' +
+      '</div></div>';
+    return;
+  }
+
+  // 未预测：显示投注面板
+  if (!isLoggedIn) {
+    container.innerHTML = '<div class="card" style="margin-bottom:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:14px;">' +
+      '<div style="font-weight:700;font-size:15px;color:var(--gold);margin-bottom:8px;">🔮 赛事预测</div>' +
+      '<div style="color:var(--text-muted);font-size:13px;margin-bottom:10px;">猜对赢方，投注翻倍！</div>' +
+      '<button class="btn btn-primary btn-sm" onclick="openAuthModal()" style="width:100%;">登录参与预测</button></div>';
+    return;
+  }
+
+  // 构建投注面板
+  var html = '<div class="card" style="margin-bottom:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:14px;">' +
+    '<div style="font-weight:700;font-size:15px;color:var(--gold);margin-bottom:8px;">🔮 赛事预测</div>' +
+    '<div style="color:var(--text-muted);font-size:13px;margin-bottom:4px;">猜对赢方，投注翻倍（猜错不返还，平局退款）</div>' +
+    '<div style="margin:10px 0;display:flex;gap:8px;">' +
+    '<button class="btn btn-outline btn-sm predict-btn" data-side="red" style="flex:1;border-color:#ef4444;color:#ef4444;">🔴 红方胜</button>' +
+    '<button class="btn btn-outline btn-sm predict-btn" data-side="blue" style="flex:1;border-color:#3b82f6;color:#3b82f6;">🔵 蓝方胜</button>' +
+    '<button class="btn btn-outline btn-sm predict-btn" data-side="draw" style="flex:1;border-color:#6b7280;color:#6b7280;">🤝 平局</button>' +
+    '</div>' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;">' +
+    '<input type="number" id="predictAmount" class="form-input" value="50" min="10" max="1000" step="10" style="width:80px;text-align:center;">' +
+    '<span style="font-size:13px;color:var(--text-muted);">梦币 (10-1000)</span>' +
+    '<button class="btn btn-primary btn-sm" id="btnPlacePredict" style="margin-left:auto;">下注</button>' +
+    '</div>' +
+    '<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">猜中可得 2x 投注额，每场限投一次</div>' +
+    '</div>';
+  container.innerHTML = html;
+
+  // 绑定事件
+  var sideBtns = container.querySelectorAll('.predict-btn');
+  var selectedSide = 'red';
+  sideBtns.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      sideBtns.forEach(function(b) { b.style.background = ''; b.style.color = ''; b.style.borderColor = ''; });
+      btn.style.background = btn.dataset.side === 'red' ? '#ef4444' : btn.dataset.side === 'blue' ? '#3b82f6' : '#6b7280';
+      btn.style.color = '#fff';
+      btn.style.borderColor = btn.style.background;
+      selectedSide = btn.dataset.side;
+    });
+  });
+  // 默认选中红色
+  sideBtns[0].click();
+
+  var placeBtn = document.getElementById('btnPlacePredict');
+  if (placeBtn) {
+    placeBtn.addEventListener('click', async function() {
+      var amount = parseInt(document.getElementById('predictAmount').value) || 50;
+      if (amount < 10 || amount > 1000) { showToast('投注金额 10-1000 梦币', 'error'); return; }
+      placeBtn.disabled = true;
+      placeBtn.textContent = '投注中…';
+      try {
+        var res = await api('/api/matches/' + match.id + '/predict', {
+          method: 'POST',
+          body: JSON.stringify({ side: selectedSide, amount: amount })
+        });
+        showToast('预测成功！押 ' + (selectedSide === 'red' ? '红方' : selectedSide === 'blue' ? '蓝方' : '平局') + ' ' + amount + ' 梦币', 'success');
+        // 更新余额
+        if (typeof displayDreamCoins === 'function') { displayDreamCoins(res.newBalance); }
+        if (typeof updateUI === 'function') { updateUI(); }
+        // 刷新面板
+        await renderPredictionPanel(container, match);
+      } catch (e) {
+        showToast(e.message || '预测失败', 'error');
+        placeBtn.disabled = false;
+        placeBtn.textContent = '下注';
+      }
+    });
   }
 }
 
