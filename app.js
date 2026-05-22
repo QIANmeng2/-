@@ -3867,7 +3867,7 @@ async function switchTab(tab) {
     if (tab === 'profile') await renderProfileCenter();
     else if (tab === 'admin') await renderAdminPanel();
     else if (tab === 'team') await renderTeamPanel();
-    else if (tab === 'competition') await loadMatches();
+    else if (tab === 'competition') { await loadMatches(); content.innerHTML = ''; }
     else if (tab === 'market') await renderMarketPanel();
     else if (tab === 'club') await renderClubPanel();
     else if (tab === 'leaderboard') await renderLeaderboardPanel();
