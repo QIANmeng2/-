@@ -39,8 +39,8 @@ window.onMatchCardClick = function (matchId, cardEl) {
  * 后续替换 openCompetitionDetail 弹窗
  */
 async function openMatchDetailView(matchId) {
-  // 埋点：打开比赛详情
-  if (window.Tracker) Tracker.trackMatchOpen(matchId);
+  // 埋点：打开比赛详情（非阻塞）
+  try { if (window.Tracker) Tracker.trackMatchOpen(matchId); } catch(e) {}
   try {
     const data = await api('/api/matches/' + matchId);
     const match = data.match || data.data || data;
@@ -3810,8 +3810,8 @@ async function switchTab(tab) {
     window._leaderboardTimer = null;
   }
   currentTab = tab;
-  // 埋点：Tab 切换
-  if (window.Tracker) Tracker.trackTabSwitch(tab);
+  // 埋点：Tab 切换（非阻塞）
+  try { if (window.Tracker) Tracker.trackTabSwitch(tab); } catch(e) {}
   // 首页Hero + 比赛列表显示控制
   const hero = document.getElementById("homeHero");
   if (hero) hero.style.display = (tab === "competition" || tab === "square") ? "" : "none";
