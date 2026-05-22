@@ -120,8 +120,15 @@ async function openMatchDetailView(matchId) {
 let _matchCache = {};
 
 async function loadMatches() {
-  const container = document.getElementById('competitionList');
-  if (!container) return;
+  var container = document.getElementById('competitionList');
+  // 自愈：如果 competitionList 被销毁（如超时降级时 tabContent 被清空），自动重建
+  if (!container) {
+    var tc = document.getElementById('tabContent');
+    if (!tc) return;
+    container = document.createElement('div');
+    container.id = 'competitionList';
+    tc.appendChild(container);
+  }
   container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">加载中…</div>';
   try {
     const data = await api('/api/competitions');
@@ -3923,13 +3930,54 @@ async function switchTab(tab) {
   if (tab === 'team') cacheStore.delete('/api/teams/mine');
   var content = document.getElementById('tabContent');
   if (!content) return;
+
+  // competition 面板特殊处理：渲染目标是 competitionList（tabContent 子元素）
+  // 不能清空 tabContent，否则 competitionList 被销毁，loadMatches 找到 null → 静默退出 → 卡 spinner
+  if (tab === 'competition') {
+    // 重建可能被销毁的元素（如上次超时/错误导致 tabContent 被清空）
+    if (!document.getElementById('homeHero')) {
+      var _hh = document.createElement('div');
+      _hh.id = 'homeHero';
+      _hh.style.cssText = 'display:none;padding:32px 16px;text-align:center;';
+      _hh.innerHTML = '<h1 style="font-size:1.6rem;font-weight:800;margin:0 0 8px;background:linear-gradient(135deg,#c9a84c,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">梦工厂·王者</h1><p style="color:var(--text-secondary);font-size:0.88rem;margin:0 0 24px;">首个王者荣耀电竞训练赛生态平台</p><div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;"><button class="btn btn-primary" onclick="switchTab(\'competition\')" style="font-weight:700;">打比赛</button><button class="btn btn-secondary" onclick="switchTab(\'club\')" style="font-weight:700;">加入战队</button><button class="btn btn-outline" onclick="switchTab(\'market\')" style="font-weight:700;">转会市场</button><button class="btn btn-ghost" onclick="OnboardingModal.open()" style="font-weight:700;border:1px solid rgba(201,168,76,0.3);color:#c9a84c;">新手引导</button></div><div id="newbieTasksMount" style="margin-top:28px;"></div>';
+      content.insertBefore(_hh, content.firstChild);
+    }
+    if (!document.getElementById('matchDetailView')) {
+      var _md = document.createElement('div');
+      _md.id = 'matchDetailView';
+      _md.style.display = 'none';
+      _md.innerHTML = '<div id="scoreboardMount"></div><div id="timelineMount"></div><div id="mvpMount"></div>';
+      content.appendChild(_md);
+    }
+    var _cl = document.getElementById('competitionList');
+    if (_cl) { _cl.style.display = 'none'; _cl.innerHTML = ''; }
+    var _mdv = document.getElementById('matchDetailView');
+    if (_mdv) _mdv.style.display = 'none';
+    var _hero = document.getElementById('homeHero');
+    if (_hero) _hero.style.display = 'none'; // loading 期间隐藏 Hero，渲染完再显示
+    // 插入临时 spinner
+    var _spinner = document.createElement('div');
+    _spinner.id = '_tabSpinner';
+    _spinner.className = 'loading-spinner';
+    _spinner.innerHTML = '<div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div>';
+    content.appendChild(_spinner);
+    await _renderWithTimeout('competition', loadMatches);
+    // 清除 spinner，显示 Hero + 列表
+    var _s = document.getElementById('_tabSpinner');
+    if (_s) _s.remove();
+    var _hero2 = document.getElementById('homeHero');
+    if (_hero2) _hero2.style.display = '';
+    var _cl2 = document.getElementById('competitionList');
+    if (_cl2) _cl2.style.display = '';
+    return;
+  }
+
   content.innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
 
   // 每个面板独立超时 + 独立 catch，失败不阻塞页面
   if (tab === 'profile')        await _renderWithTimeout('profile', renderProfileCenter);
   else if (tab === 'admin')     await _renderWithTimeout('admin', renderAdminPanel);
   else if (tab === 'team')      await _renderWithTimeout('team', renderTeamPanel);
-  else if (tab === 'competition') await _renderWithTimeout('competition', loadMatches);
   else if (tab === 'market')    await _renderWithTimeout('market', renderMarketPanel);
   else if (tab === 'club')      await _renderWithTimeout('club', renderClubPanel);
   else if (tab === 'leaderboard') await _renderWithTimeout('leaderboard', renderLeaderboardPanel);
