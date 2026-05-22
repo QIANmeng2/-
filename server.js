@@ -484,6 +484,24 @@ async function initDB() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_matches_created_by ON matches(created_by)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_match_participants_match ON match_participants(match_id)`);
 
+    // ===== 预测/竞猜系统 =====
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS predictions (
+        id SERIAL PRIMARY KEY,
+        match_id TEXT NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL,
+        side TEXT NOT NULL CHECK (side IN ('red','blue','draw')),
+        amount INTEGER NOT NULL CHECK (amount > 0),
+        result TEXT DEFAULT 'pending' CHECK (result IN ('pending','win','loss','refund')),
+        settled BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT NOW(),
+        settled_at TIMESTAMP,
+        UNIQUE(match_id, user_id)
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_predictions_match ON predictions(match_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_predictions_user ON predictions(user_id)`);
+
     // ===== 第六阶段：用户行为埋点系统 =====
     // 访问会话表（计算停留时长）
     await client.query(`

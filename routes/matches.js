@@ -331,4 +331,186 @@ router.post('/:id/timeline', async (req, res) => {
   }
 });
 
+// ===== 预测/竞猜系统 =====
+
+/**
+ * POST /matches/:id/predict
+ * 提交预测（需要登录）
+ * Body: { side: 'red'|'blue'|'draw', amount: 50 }
+ * 约束：比赛状态为 REGISTERING 或 READY，每场比赛每人只能预测一次
+ */
+router.post('/:id/predict', async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  try {
+    const matchId = req.params.id;
+    const { side, amount } = req.body;
+
+    if (!side || !['red','blue','draw'].includes(side)) {
+      return res.status(400).json({ success: false, message: 'side 必须是 red/blue/draw' });
+    }
+    if (!amount || amount < 10 || amount > 1000) {
+      return res.status(400).json({ success: false, message: '投注金额 10-1000 梦币' });
+    }
+
+    // 检查比赛状态
+    const match = await pool.query('SELECT * FROM matches WHERE id = $1', [matchId]);
+    if (match.rows.length === 0) {
+      return res.status(404).json({ success: false, message: '比赛不存在' });
+    }
+    const m = match.rows[0];
+    if (!['REGISTERING','READY'].includes(m.status)) {
+      return res.status(400).json({ success: false, message: '当前状态不可预测（仅 REGISTERING/READY 阶段）' });
+    }
+
+    // 检查是否已预测
+    const existing = await pool.query('SELECT id FROM predictions WHERE match_id = $1 AND user_id = $2', [matchId, userId]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ success: false, message: '你已参与本场预测，无法修改' });
+    }
+
+    // 检查梦币余额
+    const user = await pool.query('SELECT dream_coins FROM users WHERE id = $1', [userId]);
+    const balance = user.rows[0]?.dream_coins || 0;
+    if (balance < amount) {
+      return res.status(400).json({ success: false, message: '梦币不足，当前余额：' + balance });
+    }
+
+    // 扣除梦币 + 创建预测记录
+    await pool.query('UPDATE users SET dream_coins = dream_coins - $1 WHERE id = $2', [amount, userId]);
+    await pool.query(
+      "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1, $2, 'deduct', $3)",
+      [userId, -amount, '预测投注：' + m.title]
+    );
+    const pred = await pool.query(
+      'INSERT INTO predictions (match_id, user_id, side, amount) VALUES ($1,$2,$3,$4) RETURNING *',
+      [matchId, userId, side, amount]
+    );
+
+    const newBalance = balance - amount;
+    res.status(201).json({ success: true, prediction: pred.rows[0], newBalance });
+  } catch (err) {
+    console.error('[POST /matches/:id/predict]', err);
+    res.status(500).json({ success: false, message: '预测提交失败' });
+  }
+});
+
+/**
+ * GET /matches/:id/predictions/my
+ * 查询我的预测（需要登录）
+ */
+router.get('/:id/predictions/my', async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  try {
+    const pred = await pool.query(
+      'SELECT * FROM predictions WHERE match_id = $1 AND user_id = $2',
+      [req.params.id, userId]
+    );
+    res.json({ success: true, prediction: pred.rows[0] || null });
+  } catch (err) {
+    console.error('[GET /matches/:id/predictions/my]', err);
+    res.status(500).json({ success: false, message: '查询失败' });
+  }
+});
+
+/**
+ * POST /matches/:id/predictions/settle
+ * 结算预测（仅管理员/比赛创建者）
+ * 根据 match.winner 结算所有 pending 预测：
+ * - 猜中：返回 2x 投注金额（赢利=投注额）
+ * - 猜错：不返还
+ * - 平局(draw)：全部退款
+ */
+router.post('/:id/predictions/settle', async (req, res) => {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  try {
+    const matchId = req.params.id;
+
+    // 权限检查
+    const match = await pool.query('SELECT * FROM matches WHERE id = $1', [matchId]);
+    if (match.rows.length === 0) {
+      return res.status(404).json({ success: false, message: '比赛不存在' });
+    }
+    const m = match.rows[0];
+    const isAdmin = userId === (process.env.ADMIN_USER_ID || 'mp4hmya7ad15v6');
+    if (m.created_by !== userId && !isAdmin) {
+      return res.status(403).json({ success: false, message: '无权限' });
+    }
+    if (!m.winner) {
+      return res.status(400).json({ success: false, message: '比赛尚未决出胜者，无法结算预测' });
+    }
+
+    // 检查是否已结算
+    const settledCheck = await pool.query(
+      "SELECT COUNT(*) as cnt FROM predictions WHERE match_id = $1 AND settled = true",
+      [matchId]
+    );
+    if (settledCheck.rows[0].cnt > 0) {
+      return res.status(400).json({ success: false, message: '预测已结算，不可重复结算' });
+    }
+
+    // 获取所有 pending 预测
+    const preds = await pool.query(
+      "SELECT * FROM predictions WHERE match_id = $1 AND settled = false",
+      [matchId]
+    );
+
+    let winCount = 0, lossCount = 0, refundCount = 0;
+
+    for (const p of preds.rows) {
+      let newResult, rewardAmount, note;
+
+      if (m.winner === 'draw') {
+        // 平局：全部退款
+        newResult = 'refund';
+        rewardAmount = p.amount;
+        note = '预测退款（比赛平局）：' + m.title;
+        refundCount++;
+      } else if (p.side === m.winner) {
+        // 猜中：2x 回报
+        newResult = 'win';
+        rewardAmount = p.amount * 2;
+        note = '预测获胜（+' + (rewardAmount - p.amount) + '）：' + m.title;
+        winCount++;
+      } else {
+        // 猜错：不返还
+        newResult = 'loss';
+        rewardAmount = 0;
+        note = '预测失败：' + m.title;
+        lossCount++;
+      }
+
+      if (rewardAmount > 0) {
+        await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins,0) + $1 WHERE id = $2', [rewardAmount, p.user_id]);
+        await pool.query(
+          "INSERT INTO coin_transactions (user_id, amount, type, note) VALUES ($1, $2, 'reward', $3)",
+          [p.user_id, rewardAmount, note]
+        );
+      }
+
+      await pool.query(
+        'UPDATE predictions SET result = $1, settled = true, settled_at = NOW() WHERE id = $2',
+        [newResult, p.id]
+      );
+    }
+
+    res.json({
+      success: true,
+      total: preds.rows.length,
+      winCount,
+      lossCount,
+      refundCount,
+      winner: m.winner
+    });
+  } catch (err) {
+    console.error('[POST /matches/:id/predictions/settle]', err);
+    res.status(500).json({ success: false, message: '结算失败' });
+  }
+});
+
 module.exports = router;
