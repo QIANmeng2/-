@@ -161,6 +161,8 @@
       font-size: 1.3rem;
       letter-spacing: 1px;
       color: #fff;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
 
     .logo-icon {
