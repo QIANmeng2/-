@@ -235,10 +235,13 @@ function initChatSocket() {
   try {
     chatSocket = io(API_BASE, {
       path: '/socket.io',
-      transports: ['polling', 'websocket'],
+      transports: ['websocket', 'polling'], // websocket 优先，减少 HTTP 连接池压力
       reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionAttempts: 5
+      reconnectionDelay: 3000,
+      reconnectionDelayMax: 10000,
+      reconnectionAttempts: 3,
+      timeout: 10000,
+      upgrade: false  // 直接用指定 transport，不切换
     });
 
     chatSocket.on('connect', () => {
@@ -5759,8 +5762,10 @@ window.addEventListener('beforeunload', () => {
   try {
     window.APP_READY = true; // 标记应用已加载，解除兜底
     updateUI();
-    switchTab('competition');
-    if (authToken) fetchUserInfo();
+    await switchTab('competition');  // 等页面渲染完毕
+    if (authToken) {
+      fetchUserInfo();  // 内部会初始化 socket.io
+    }
     setTimeout(() => { if (window.OnboardingModal) window.OnboardingModal.autoOpenIfFirstTime(); }, 1200);
   } catch (e) {
     console.error('应用初始化错误:', e);
