@@ -1,20 +1,21 @@
 /**
- * Tracker.js — 用户行为埋点 SDK (非阻塞版 v2)
- * - 所有请求 fire-and-forget，永不阻塞主流程
- * - fetch 带 3s 超时自动取消
- * - beforeunload 使用 sendBeacon 保证不丢事件
- * - 手动调用 window.Tracker.init() 才开始工作（不再自动初始化）
+ * Tracker.js — 第六阶段用户行为埋点 SDK
+ * 硬编码白名单事件，禁止随意命名
+ * 所有事件发送必须通过本文件暴露的方法
  */
 (function () {
-  var API_BASE = window.API_BASE || 'https://perpetual-enchantment-production-b163.up.railway.app';
-  var TRACKER_ENABLED = true;
-  var SESSION_ID;
-  var pageEnterTime;
-  var currentPage;
-  var initCalled = false;
+  const API_BASE = window.API_BASE || 'https://perpetual-enchantment-production-b163.up.railway.app';
+  const SESSION_ID = (() => {
+    let sid = sessionStorage.getItem('qm_session_id');
+    if (!sid) {
+      sid = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      sessionStorage.setItem('qm_session_id', sid);
+    }
+    return sid;
+  })();
 
-  // ===== 白名单事件名 =====
-  var EVENTS = {
+  // ===== 白名单事件名（禁止修改，与数据库 CHECK 约束对应）=====
+  const EVENTS = {
     PAGE_VIEW:        'page_view',
     PAGE_LEAVE:       'page_leave',
     TAB_SWITCH:       'tab_switch',
@@ -29,202 +30,130 @@
     TASK_CLAIM:        'task_claim',
   };
 
-  var VALID_TYPES = Object.keys(EVENTS).map(function(k) { return EVENTS[k]; });
+  // 所有合法事件名（用于校验）
+  const VALID_TYPES = Object.values(EVENTS);
 
-  function _initSession() {
-    try {
-      var sid = sessionStorage.getItem('qm_session_id');
-      if (!sid) {
-        sid = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-        sessionStorage.setItem('qm_session_id', sid);
-      }
-      SESSION_ID = sid;
-      pageEnterTime = Date.now();
-      var hash = window.location.hash || 'home';
-      currentPage = hash.replace('#', '') || 'home';
-    } catch(e) {
-      // sessionStorage 不可用时静默降级
-      SESSION_ID = 'sess_mem_' + Date.now();
-      pageEnterTime = Date.now();
-      currentPage = 'home';
+  let pageEnterTime = Date.now();
+  let currentPage = null;
+
+  // 核心发送方法（内部使用，校验 eventType 是否在白名单中）
+  function _track(eventType, eventData = {}) {
+    if (!VALID_TYPES.includes(eventType)) {
+      console.warn('[Tracker] 非法事件名:', eventType, '已忽略。只允许：', VALID_TYPES.join(', '));
+      return;
     }
+    const body = {
+      event_type: eventType,
+      session_id: SESSION_ID,
+      page_url: window.location.href,
+      event_data: eventData || {}
+    };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    fetch(API_BASE + '/api/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    }).catch(() => {
+      // 静默失败，不阻塞用户操作
+    }).finally(() => clearTimeout(timeoutId));
   }
 
-  // 核心发送 — 带超时、fire-and-forget
-  function _send(body) {
-    if (!TRACKER_ENABLED) return;
-    try {
-      var controller = new AbortController();
-      var tid = setTimeout(function() { controller.abort(); }, 3000);
-      fetch(API_BASE + '/api/track', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-        // 低优先级，不抢占主请求带宽
-        // keepalive 使请求在页面卸载后继续
-        keepalive: true
-      }).then(function() {
-        clearTimeout(tid);
-      }).catch(function() {
-        clearTimeout(tid);
-        // 完全静默
-      });
-    } catch(e) {
-      // 静默
-    }
-  }
-
-  // 页面离开时使用 sendBeacon（更可靠）
-  function _sendBeacon(body) {
-    if (!TRACKER_ENABLED || !navigator.sendBeacon) return;
-    try {
-      var blob = new Blob([JSON.stringify(body)], { type: 'application/json' });
-      navigator.sendBeacon(API_BASE + '/api/track', blob);
-    } catch(e) {
-      // 静默
-    }
-  }
-
-  function _track(eventType, eventData) {
-    if (!TRACKER_ENABLED) return;
-    if (VALID_TYPES.indexOf(eventType) === -1) return;
-    try {
-      var body = {
-        event_type: eventType,
-        session_id: SESSION_ID,
-        page_url: window.location.href,
-        event_data: eventData || {}
-      };
-      _send(body);
-    } catch(e) {
-      // 静默
-    }
-  }
-
-  // ===== 初始化（手动调用，fire-and-forget） =====
+  // 初始化：生成 sessionId，绑定 page_leave，发送 page_view
   function init() {
-    if (initCalled) return;
-    initCalled = true;
-    try {
-      _initSession();
-      // 发送 page_view（fire-and-forget）
-      _track(EVENTS.PAGE_VIEW, { page: currentPage });
+    // 标记页面进入
+    const hash = window.location.hash || 'home';
+    currentPage = hash.replace('#', '') || 'home';
+    _track(EVENTS.PAGE_VIEW, { page: currentPage });
 
-      // 离开页面事件 — 使用 sendBeacon
-      window.addEventListener('beforeunload', function() {
-        try {
-          var duration = Math.round((Date.now() - pageEnterTime) / 1000);
-          var body = {
-            event_type: EVENTS.PAGE_LEAVE,
-            session_id: SESSION_ID,
-            page_url: window.location.href,
-            event_data: { page: currentPage, duration: duration }
-          };
-          _sendBeacon(body);
-        } catch(e) {}
-      });
+    // 离开页面时发送 page_leave + 停留时长
+    window.addEventListener('beforeunload', () => {
+      const duration = Math.round((Date.now() - pageEnterTime) / 1000);
+      _track(EVENTS.PAGE_LEAVE, { page: currentPage, duration });
+    });
 
-      // hash 变化（SPA 路由）
-      window.addEventListener('hashchange', function() {
-        try {
-          var newPage = (window.location.hash || 'home').replace('#', '') || 'home';
-          var duration = Math.round((Date.now() - pageEnterTime) / 1000);
-          _track(EVENTS.PAGE_LEAVE, { page: currentPage, duration: duration });
-          currentPage = newPage;
-          pageEnterTime = Date.now();
-          _track(EVENTS.PAGE_VIEW, { page: newPage });
-        } catch(e) {}
-      });
-    } catch(e) {
-      // 静默
-    }
+    // hash 变化时更新 currentPage（SPA 路由）
+    window.addEventListener('hashchange', () => {
+      const newPage = (window.location.hash || 'home').replace('#', '') || 'home';
+      // 发送旧页面离开
+      const duration = Math.round((Date.now() - pageEnterTime) / 1000);
+      _track(EVENTS.PAGE_LEAVE, { page: currentPage, duration });
+      // 进入新页面
+      currentPage = newPage;
+      pageEnterTime = Date.now();
+      _track(EVENTS.PAGE_VIEW, { page: newPage });
+    });
+
+    console.log('[Tracker] 初始化完成，session:', SESSION_ID);
   }
 
-  // ===== 快捷方法 =====
+  // ===== 快捷方法（对外暴露，只允许调这些方法）=====
+
   function trackTabSwitch(tabName) {
     if (!tabName) return;
-    try { _track(EVENTS.TAB_SWITCH, { tab: String(tabName) }); } catch(e) {}
+    _track(EVENTS.TAB_SWITCH, { tab: String(tabName) });
   }
 
   function trackMatchOpen(matchId) {
     if (!matchId) return;
-    try { _track(EVENTS.MATCH_OPEN, { match_id: String(matchId) }); } catch(e) {}
+    _track(EVENTS.MATCH_OPEN, { match_id: String(matchId) });
   }
 
   function trackMatchRegister(matchId, competitionId) {
     if (!matchId) return;
-    try {
-      _track(EVENTS.MATCH_REGISTER, {
-        match_id: String(matchId),
-        competition_id: competitionId ? String(competitionId) : null
-      });
-    } catch(e) {}
+    _track(EVENTS.MATCH_REGISTER, {
+      match_id: String(matchId),
+      competition_id: competitionId ? String(competitionId) : null
+    });
   }
 
-  function trackOnboarding(step, action, extra) {
+  function trackOnboarding(step, action, extra = {}) {
+    // action: 'start' | 'step' | 'complete' | 'skip'
     if (!action) return;
-    try {
-      var data = extra ? JSON.parse(JSON.stringify(extra)) : {};
-      data.action = action;
-      if (action === 'start')   _track(EVENTS.ONBOARDING_START, data);
-      else if (action === 'step') { data.step = step; _track(EVENTS.ONBOARDING_STEP, data); }
-      else if (action === 'complete') _track(EVENTS.ONBOARDING_COMPLETE, data);
-      else if (action === 'skip')    _track(EVENTS.ONBOARDING_SKIP, data);
-    } catch(e) {}
+    const data = { action, ...extra };
+    if (action === 'start')   _track(EVENTS.ONBOARDING_START, data);
+    else if (action === 'step') {
+      data.step = step;
+      _track(EVENTS.ONBOARDING_STEP, data);
+    }
+    else if (action === 'complete') _track(EVENTS.ONBOARDING_COMPLETE, data);
+    else if (action === 'skip')    _track(EVENTS.ONBOARDING_SKIP, data);
   }
 
   function trackTaskView() {
-    try { _track(EVENTS.TASK_VIEW, {}); } catch(e) {}
+    _track(EVENTS.TASK_VIEW, {});
   }
 
   function trackTaskComplete(taskKey) {
     if (!taskKey) return;
-    try { _track(EVENTS.TASK_COMPLETE, { task_key: String(taskKey) }); } catch(e) {}
+    _track(EVENTS.TASK_COMPLETE, { task_key: String(taskKey) });
   }
 
   function trackTaskClaim(taskKey, reward) {
     if (!taskKey) return;
-    try { _track(EVENTS.TASK_CLAIM, { task_key: String(taskKey), reward: parseInt(reward) || 0 }); } catch(e) {}
+    _track(EVENTS.TASK_CLAIM, { task_key: String(taskKey), reward: parseInt(reward) || 0 });
   }
 
   // 暴露全局 API
   window.Tracker = {
-    EVENTS: EVENTS,
-    init: init,
-    trackTabSwitch: trackTabSwitch,
-    trackMatchOpen: trackMatchOpen,
-    trackMatchRegister: trackMatchRegister,
-    trackOnboarding: trackOnboarding,
-    trackTaskView: trackTaskView,
-    trackTaskComplete: trackTaskComplete,
-    trackTaskClaim: trackTaskClaim,
-    _track: _track,
-    // 紧急开关：禁用所有埋点
-    disable: function() { TRACKER_ENABLED = false; },
-    enable: function() { TRACKER_ENABLED = true; },
-    isEnabled: function() { return TRACKER_ENABLED; }
+    EVENTS,
+    init,
+    trackTabSwitch,
+    trackMatchOpen,
+    trackMatchRegister,
+    trackOnboarding,
+    trackTaskView,
+    trackTaskComplete,
+    trackTaskClaim,
+    // 仅供调试用，生产环境不建议使用
+    _track
   };
 
-  // ===== 异步延迟初始化（不阻塞主流程） =====
-  // 使用 setTimeout 将 init 推迟到下一个事件循环，保证：
-  // 1. 不阻塞 DOMContentLoaded
-  // 2. 不阻塞 app.js 初始化
-  // 3. 即使失败也完全不影响页面
-  setTimeout(function() {
-    try {
-      // 可选：检查是否要禁用（URL 参数 ?notrack=1 或 localStorage 开关）
-      if (window.location.search.indexOf('notrack=1') !== -1) {
-        TRACKER_ENABLED = false;
-        return;
-      }
-      if (localStorage.getItem('qm_tracker_disabled') === '1') {
-        TRACKER_ENABLED = false;
-        return;
-      }
-      init();
-    } catch(e) {
-      // 绝对静默
-    }
-  }, 500); // 延迟 500ms，确保页面主流程已启动
+  // 自动初始化（DOM Ready）
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();
