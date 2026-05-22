@@ -59,6 +59,9 @@
     console.log('[Onboarding]', _currentState, '|', ...args);
   }
 
+  // 安全 DOM 访问
+  var _$ = function(id) { return document.getElementById(id); };
+
   // ===================== 状态流转核心 =====================
   /**
    * 统一状态转移入口
@@ -176,8 +179,9 @@
 
   // ===================== 渲染函数 =====================
   function _renderWelcome() {
-    const content = document.getElementById('obContent');
-    const footer  = document.getElementById('obFooter');
+    const content = _$('obContent');
+    const footer  = _$('obFooter');
+    if (!content || !footer) return _log('obContent/obFooter 未找到');
     content.innerHTML = `
       <div class="ob-icon-ring">
         <svg viewBox="0 0 40 40" fill="none" stroke="#fbbf24" stroke-width="1.8" stroke-linejoin="round">
@@ -190,13 +194,15 @@
     `;
     footer.style.display = 'flex';
     footer.innerHTML = `<button class="ob-btn-primary" id="obNextBtn">开始探索 →</button>`;
-    document.getElementById('obNextBtn').onclick = () => _transition('NEXT');
+    var nextBtn = _$('obNextBtn');
+    if (nextBtn) nextBtn.onclick = function() { _transition('NEXT'); };
     _track('start');
   }
 
   function _renderRoleSelect() {
-    const content = document.getElementById('obContent');
-    const footer  = document.getElementById('obFooter');
+    const content = _$('obContent');
+    const footer  = _$('obFooter');
+    if (!content || !footer) return _log('obContent/obFooter 未找到');
     content.innerHTML = `
       <h2 class="ob-title">选择你的身份</h2>
       <p class="ob-subtitle">不同身份，玩法完全不同</p>
@@ -212,8 +218,10 @@
       <button class="ob-btn-ghost" id="obPrevBtn">← 上一步</button>
       <button class="ob-btn-primary" id="obNextBtn" style="opacity:0.4;pointer-events:none;">确认身份，继续 →</button>
     `;
-    document.getElementById('obPrevBtn').onclick = () => _transition('PREV');
-    document.getElementById('obNextBtn').onclick = () => _transition('NEXT');
+    var prevBtn = _$('obPrevBtn');
+    var nextBtn2 = _$('obNextBtn');
+    if (prevBtn) prevBtn.onclick = function() { _transition('PREV'); };
+    if (nextBtn2) nextBtn2.onclick = function() { _transition('NEXT'); };
 
     // 绑定角色卡片点击（事件委托也可，但卡片少，直接绑定更清晰）
     document.querySelectorAll('.ob-role-card').forEach(card => {
@@ -254,8 +262,9 @@
 
   function _renderRoleConfirm() {
     const labels = { player: '选手', boss: '战队老板', spectator: '观战者', investor: '投资者' };
-    const content = document.getElementById('obContent');
-    const footer  = document.getElementById('obFooter');
+    const content = _$('obContent');
+    const footer  = _$('obFooter');
+    if (!content || !footer) return _log('obContent/obFooter 未找到');
     content.innerHTML = `
       <div class="ob-icon-ring" style="border-color:rgba(201,168,76,0.4);">
         <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -265,20 +274,23 @@
       </div>
       <h2 class="ob-title">确认你的身份</h2>
       <p class="ob-subtitle">你将以「${labels[_selectedRole] || '选手'}」的身份开始</p>
-      <p class="ob-desc">身份确认后不可修改，请仔细选择。</p>
+      <p class="ob-desc">你可以随时在个人设置中重新选择身份。</p>
     `;
     footer.style.display = 'flex';
     footer.innerHTML = `
       <button class="ob-btn-ghost" id="obPrevBtn">← 重新选择</button>
       <button class="ob-btn-primary" id="obNextBtn">确认，继续 →</button>
     `;
-    document.getElementById('obPrevBtn').onclick = () => _transition('PREV');
-    document.getElementById('obNextBtn').onclick = () => _transition('NEXT');
+    var prevBtn = _$('obPrevBtn');
+    var nextBtn = _$('obNextBtn');
+    if (prevBtn) prevBtn.onclick = function() { _transition('PREV'); };
+    if (nextBtn) nextBtn.onclick = function() { _transition('NEXT'); };
   }
 
   function _renderNavigate() {
-    const content = document.getElementById('obContent');
-    const footer  = document.getElementById('obFooter');
+    const content = _$('obContent');
+    const footer  = _$('obFooter');
+    if (!content || !footer) return _log('obContent/obFooter 未找到');
     const cfg = _getNavConfig();
     content.innerHTML = `
       <div class="ob-icon-ring" style="border-color:rgba(16,185,129,0.4);">
@@ -293,10 +305,8 @@
     `;
     footer.style.display = 'none';  // 操作按钮在内容区内
 
-    const actionsEl = document.getElementById('obNavActions');
-    actionsEl.innerHTML = cfg.actions.map(a =>
-      `<button class="ob-btn-primary" style="width:100%;" onclick="OnboardingModal.goToTab('${a.tab}')">${a.text} →</button>`
-    ).join('') + '<button class="ob-btn-ghost" onclick="OnboardingModal.close()">我先随便看看</button>';
+    const actionsEl = _$('obNavActions');
+    if (actionsEl) { actionsEl.innerHTML = cfg.actions.map(function(a) { return '<button class="ob-btn-primary" style="width:100%;" onclick="OnboardingModal.goToTab(\x27' + a.tab + '\x27)">' + a.text + ' →</button>'; }).join('') + '<button class="ob-btn-ghost" onclick="OnboardingModal.close()">我先随便看看</button>'; }
 
     _track('navigate', { identity: _selectedRole });
   }
