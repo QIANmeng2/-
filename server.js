@@ -170,6 +170,7 @@ async function initDB() {
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS dream_coins INTEGER DEFAULT 0');
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS muted_until TIMESTAMP DEFAULT NULL');
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS mute_reason TEXT DEFAULT NULL');
+    await client.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{spectator}'");
     await client.query(`
       CREATE TABLE IF NOT EXISTS competitions (
         id TEXT PRIMARY KEY,
@@ -1071,10 +1072,10 @@ app.post('/api/auth/register', async (req, res) => {
     if (exists.rows.length > 0) return badRequest(res, '用户名已存在');
     const id = Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
     const hashed = bcrypt.hashSync(password, 10);
-    await pool.query('INSERT INTO users (id, username, password, teamName, coachName, wechat, level, bio) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-      [id, username, hashed, '', coachName, wechat, level || '大众', bio || '']);
+    await pool.query('INSERT INTO users (id, username, password, teamName, coachName, wechat, level, bio, tags) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+      [id, username, hashed, '', coachName, wechat, level || '大众', bio || '', '{spectator}']);
     const token = jwt.sign({ userId: id }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id, teamName: '', coachName, wechat, level: level || '大众', bio: bio || '', disabledDates: [], gameId: '', gameServer: '手Q区', gameRank: '星耀', peakScore: 0, laneStats: '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}', heroPool: '' } });
+    res.json({ token, user: { id, teamName: '', coachName, wechat, level: level || '大众', bio: bio || '', disabledDates: [], gameId: '', gameServer: '手Q区', gameRank: '星耀', peakScore: 0, laneStats: '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}', heroPool: '', dream_coins: 0, tags: ['spectator'] } });
   } catch (e) { serverError(res, '注册失败'); }
 });
 
@@ -1085,7 +1086,7 @@ app.post('/api/auth/login', async (req, res) => {
     if (result.rows.length === 0 || !bcrypt.compareSync(password, result.rows[0].password)) return badRequest(res, '用户名或密码错误');
     const user = result.rows[0];
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id: user.id, teamName: user.teamname, coachName: user.coachname, wechat: user.wechat, level: user.level, bio: user.bio, disabledDates: user.disableddates || [], gameId: user.gameid || '', gameServer: user.gameserver || '手Q区', gameRank: user.gamerank || '星耀', peakScore: user.peakscore || 0, laneStats: user.lanestats || '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}', heroPool: user.heropool || '', dream_coins: user.dream_coins || 0 } });
+    res.json({ token, user: { id: user.id, teamName: user.teamname, coachName: user.coachname, wechat: user.wechat, level: user.level, bio: user.bio, disabledDates: user.disableddates || [], gameId: user.gameid || '', gameServer: user.gameserver || '手Q区', gameRank: user.gamerank || '星耀', peakScore: user.peakscore || 0, laneStats: user.lanestats || '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}', heroPool: user.heropool || '', dream_coins: user.dream_coins || 0, tags: user.tags || ['spectator'] } });
   } catch (e) { serverError(res, '登录失败'); }
 });
 
@@ -1094,7 +1095,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
     const result = await pool.query('SELECT * FROM users WHERE id = $1', [req.userId]);
     if (result.rows.length === 0) return notFound(res, '用户不存在');
     const u = result.rows[0];
-    res.json({ user: { id: u.id, teamName: u.teamname, coachName: u.coachname, wechat: u.wechat, level: u.level, bio: u.bio, disabledDates: u.disableddates || [], gameId: u.gameid || '', gameServer: u.gameserver || '手Q区', gameRank: u.gamerank || '星耀', peakScore: u.peakscore || 0, laneStats: u.lanestats || '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}', heroPool: u.heropool || '', dream_coins: u.dream_coins || 0 } });
+    res.json({ user: { id: u.id, teamName: u.teamname, coachName: u.coachname, wechat: u.wechat, level: u.level, bio: u.bio, disabledDates: u.disableddates || [], gameId: u.gameid || '', gameServer: u.gameserver || '手Q区', gameRank: u.gamerank || '星耀', peakScore: u.peakscore || 0, laneStats: u.lanestats || '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}', heroPool: u.heropool || '', dream_coins: u.dream_coins || 0, tags: u.tags || ['spectator'] } });
   } catch (e) { serverError(res, '获取失败'); }
 });
 
@@ -1248,7 +1249,7 @@ app.get('/api/users/:id', authMiddleware, async (req, res) => {
         id: u.id, username: u.username, teamName: u.teamname, coachName: u.coachname, level: u.level, bio: u.bio || '',
         gameId: u.gameid || '', gameServer: u.gameserver || '手Q区', gameRank: u.gamerank || '星耀',
         peakScore: u.peakscore || 0, laneStats: u.lanestats || '{"对抗路":"0","打野":"0","中路":"0","发育路":"0","游走":"0"}',
-        heroPool: u.heropool || '', wechat: u.wechat || ''
+        heroPool: u.heropool || '', wechat: u.wechat || '', tags: u.tags || ['spectator']
       },
       player: {
         status: p.status || null,
@@ -1575,6 +1576,17 @@ app.put('/api/users/me/profile', authMiddleware, async (req, res) => {
     );
     ok(res);
   } catch (e) { console.error(e); serverError(res, '更新失败'); }
+});
+
+// 更新用户标签（身份切换，支持多标签并存）
+app.put('/api/users/me/tags', authMiddleware, async (req, res) => {
+  const { tags } = req.body; // string[] like ['spectator','player','investor']
+  if (!Array.isArray(tags)) return badRequest(res, 'tags 必须是字符串数组');
+  if (tags.length === 0) return badRequest(res, '至少保留一个标签');
+  try {
+    await pool.query('UPDATE users SET tags = $1 WHERE id = $2', [tags, req.userId]);
+    ok(res, { tags });
+  } catch (e) { console.error(e); serverError(res, '更新标签失败'); }
 });
 
 // ====================== 队伍系统 ======================
@@ -2162,6 +2174,17 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
       );
       const currentCount = parseInt(countRes.rows[0].count);
       if (currentCount >= 10) { await client.query('ROLLBACK'); return badRequest(res, '房间已满（10人上限）'); }
+    }
+    // 单选手重复报名检测：同一选手不能被不同队伍/俱乐部重复报名
+    const playerIds = players.map(p => p.user_id);
+    const dupCheck = await client.query(
+      'SELECT player_user_id FROM competition_registrations WHERE competition_id = $1 AND status != $2 AND player_user_id = ANY($3)',
+      [req.params.id, 'cancelled', playerIds]
+    );
+    if (dupCheck.rows.length > 0) {
+      const dupNames = dupCheck.rows.map(r => r.player_user_id).join(', ');
+      await client.query('ROLLBACK');
+      return badRequest(res, '以下选手已报名本赛事：' + dupNames);
     }
     // 创建5人报名
     for (const p of players) {
