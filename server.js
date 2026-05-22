@@ -2304,7 +2304,30 @@ app.get('/api/competitions/:id/results', authMiddleware, adminMiddleware, async 
 app.post('/api/competitions/:id/submit-result', authMiddleware, async (req, res) => {
   const { winner, screenshots, players, mvp_player_id, coin_rewards } = req.body;
   if (!winner || !screenshots || !players) return badRequest(res, '参数不完整');
+  if (!['red','blue','draw'].includes(winner)) return badRequest(res, 'winner 只接受 red/blue/draw');
   try {
+    // 校验：赛事必须存在且状态为 open/ongoing/review
+    var comp = await pool.query('SELECT * FROM competitions WHERE id = $1', [req.params.id]);
+    if (comp.rows.length === 0) return notFound(res, '赛事不存在');
+    var c = comp.rows[0];
+    if (c.comp_status !== 'open' && c.comp_status !== 'ongoing' && c.comp_status !== 'review') {
+      return badRequest(res, '赛事当前状态不可提交结果（状态：' + c.comp_status + '）');
+    }
+    
+    // 校验：用户是否已报名此赛事
+    var reg = await pool.query(
+      "SELECT * FROM competition_registrations WHERE competition_id = $1 AND (user_id = $2 OR team_id IN (SELECT id FROM teams WHERE captainid = $2) OR club_id IN (SELECT id FROM clubs WHERE owner_id = $2)) AND status != 'cancelled'",
+      [req.params.id, req.userId]
+    );
+    if (reg.rows.length === 0) return forbidden(res, '你未报名此赛事，无法提交结果');
+    
+    // 校验：防止重复提交
+    var existing = await pool.query(
+      'SELECT * FROM competition_results WHERE competition_id = $1 ORDER BY created_at DESC LIMIT 1',
+      [req.params.id]
+    );
+    if (existing.rows.length > 0) return badRequest(res, '该赛事已有结果提交，如需修改请联系管理员');
+    
     await pool.query(
       'INSERT INTO competition_results (competition_id, winner, screenshot_urls, player_data, mvp_player_id, coin_rewards) VALUES ($1,$2,$3,$4,$5,$6)',
       [req.params.id, winner, JSON.stringify(screenshots), JSON.stringify(players), mvp_player_id || null, JSON.stringify(coin_rewards || {})]
