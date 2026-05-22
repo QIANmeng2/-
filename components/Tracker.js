@@ -6,12 +6,17 @@
 (function () {
   const API_BASE = window.API_BASE || 'https://perpetual-enchantment-production-b163.up.railway.app';
   const SESSION_ID = (() => {
-    let sid = sessionStorage.getItem('qm_session_id');
-    if (!sid) {
-      sid = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-      sessionStorage.setItem('qm_session_id', sid);
+    try {
+      let sid = sessionStorage.getItem('qm_session_id');
+      if (!sid) {
+        sid = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        sessionStorage.setItem('qm_session_id', sid);
+      }
+      return sid;
+    } catch(e) {
+      // sessionStorage 不可用（隐私模式/iframe），退回内存模式
+      return 'sess_mem_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     }
-    return sid;
   })();
 
   // ===== 白名单事件名（禁止修改，与数据库 CHECK 约束对应）=====
