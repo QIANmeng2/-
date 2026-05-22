@@ -359,7 +359,7 @@ function statusBadge(r) {
 }
 
 const cacheStore = new Map();
-async function api(path, options = {}, retries = 2) {
+async function api(path, options = {}, retries = 1) {
   const isGet = !options.method || options.method === 'GET';
   const cacheKey = path + JSON.stringify(options.body || '');
   // 优先使用缓存
@@ -373,7 +373,7 @@ async function api(path, options = {}, retries = 2) {
   if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 12000);
+    const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 8000);
     const res = await fetch(url, { ...options, headers, signal: controller.signal });
     clearTimeout(timeout);
     let data = await res.json();
@@ -385,7 +385,7 @@ async function api(path, options = {}, retries = 2) {
     return data;
   } catch (err) {
     if (retries > 0) {
-      if (retries === 2) showToast('正在唤醒服务器...', 'info');
+      if (retries === 1) showToast('正在唤醒服务器...', 'info');
       await new Promise(r => setTimeout(r, 1500));
       return api(path, options, retries - 1);
     }
@@ -3893,7 +3893,7 @@ function handleMentionKeydown(e) {
 // ---------- Tab 切换 ----------
 // 面板渲染 10s 超时包装器（超时自动降级，不阻塞页面）
 async function _renderWithTimeout(tab, renderFn, timeoutMs) {
-  timeoutMs = timeoutMs || 10000;
+  timeoutMs = timeoutMs || 25000;
   const content = document.getElementById('tabContent');
   if (!content) return;
   var tid = setTimeout(function() {
@@ -3970,7 +3970,7 @@ async function switchTab(tab) {
         var __cl = document.getElementById('competitionList');
         if (__cl) __cl.innerHTML = '<div class="card" style="text-align:center;padding:40px;"><p style="color:var(--warning);">赛事中心加载超时</p><button class="btn btn-sm btn-primary" onclick="switchTab(\'competition\')">重试</button></div>';
       }
-    }, 15000);
+    }, 25000);
     try {
       await loadMatches();
       _loadDone = true;
