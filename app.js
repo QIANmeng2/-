@@ -3433,15 +3433,15 @@ function createChatMessageHTML(msg) {
   const showRecallBtn = isMe && !msg.recalled && msgAge < 120;
   const recallBtn = showRecallBtn ? `<span class="chat-recall-btn" onclick="event.stopPropagation();handleRecallMessage(${msgId})" title="撤回">撤回</span>` : '';
 
+  // 安全的 senderName 用于 data 属性（必须在 moreBtn 之前声明，避免 TDZ 错误）
+  const safeSenderName = senderName.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
   // 更多操作按钮（移动端：长按替代方案，仅管理员看他人消息时显示）
   const isCurrentAdmin = currentUser?.id === 'mp4hmya7ad15v6';
   const moreBtn = (!isMe && isCurrentAdmin) ? `<span class="chat-message-more-btn" onclick="event.stopPropagation();handleChatLongPress(${msgId}, '${safeSenderName}', '${msg.sender_id}', event)" title="更多">⋮</span>` : '';
 
   const recalledClass = msg.recalled ? ' chat-message-recalled' : '';
   const bubbleClass = msg.recalled ? ' chat-bubble-recalled' : '';
-
-  // 安全的 senderName 用于 data 属性
-  const safeSenderName = senderName.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
   return `
     <div class="chat-message ${isMe ? 'chat-message-me' : 'chat-message-other'}${recalledClass}" data-msg-id="${msgId}" data-sender-name="${safeSenderName}" data-sender-id="${msg.sender_id}" oncontextmenu="event.preventDefault();showChatContextMenu(event, ${msgId}, '${safeSenderName}', '${msg.sender_id}')">

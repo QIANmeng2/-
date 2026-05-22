@@ -6,7 +6,12 @@
 
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../server'); // 复用连接池
+const { Pool } = require('pg');
+// 独立创建连接池，避免与 server.js 循环依赖导致 pool 为 undefined
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 5, idleTimeoutMillis: 30000, connectionTimeoutMillis: 5000
+});
 const { MATCH_STATUS, isValidTransition, getNextStates, isValidStatus } = require('../utils/matchState');
 
 // ===== 工具函数 =====
