@@ -35,7 +35,7 @@
   <script src="components/OnboardingModal.js?v=20260522f"></script>
   <script src="components/NewbieTasks.js?v=20260522f"></script>
   <!-- app.js 必须在组件之后，因为 app.js 会调用 Components.* -->
-  <script src="app.js?v=20260522h" defer></script>
+  <script src="app.js?v=20260522i" defer></script>
 <body>
 <!-- 背景网格装饰 -->
 <div style="position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:-2;background:radial-gradient(ellipse 100% 60% at 20% -10%,rgba(79,70,229,0.08) 0%,transparent 50%),radial-gradient(ellipse 80% 50% at 80% 10%,rgba(124,58,237,0.06) 0%,transparent 50%);"></div>
@@ -60,6 +60,10 @@
       <!-- 新手引导按钮（登录后显示） -->
       <button class="btn btn-sm" id="btnOnboard" onclick="OnboardingModal.open()" style="display:none;background:linear-gradient(135deg,rgba(201,168,76,0.15),rgba(201,168,76,0.05));color:#c9a84c;border:1px solid rgba(201,168,76,0.25);font-weight:600;" title="新手引导">
         新手引导
+      </button>
+      <!-- 每日签到按钮 -->
+      <button class="btn btn-sm" id="btnCheckin" onclick="doDailyCheckin()" style="display:none;background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(16,185,129,0.05));color:#10b981;border:1px solid rgba(16,185,129,0.3);font-weight:600;" title="每日签到领梦币">
+        签到领币
       </button>
       <button class="btn btn-outline btn-sm" id="btnLoginTop" onclick="openAuthModal('login')">登录</button>
       <div class="notification-bell" id="notificationBell" onclick="openNotifications()" style="display:none;">
