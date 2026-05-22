@@ -2608,6 +2608,59 @@
       }
     }
 
+    /* ===== 移动端按钮溢出修复 ===== */
+    @media (max-width: 480px) {
+      /* 转会市场筛选栏横向滚动 */
+      .card > div[style*="display:flex;gap"] {
+        flex-wrap: wrap;
+      }
+      /* 市场玩家卡片 */
+      .market-player-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      .market-player-value {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      /* 采买/交易按钮全宽 */
+      .market-buy-btn, .market-trade-btn {
+        width: 100%;
+        text-align: center;
+      }
+      /* 转会市场筛选芯片横向滚动 */
+      .market-chip {
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      /* 预测按钮组全宽 */
+      #predictionMount .card > div[style*="display:flex;gap:8px"] {
+        flex-direction: column;
+      }
+      #predictionMount .predict-btn {
+        width: 100%;
+      }
+      /* 持仓摘要 */
+      .portfolio-summary > div {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .portfolio-summary > div > div:last-child {
+        width: 100%;
+        justify-content: space-between;
+      }
+      /* 俱乐部大名单按钮不溢出 */
+      .btn-xs {
+        padding: 5px 8px;
+        font-size: 0.68rem;
+      }
+    }
+
     /* ===== 动画 ===== */
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(5px); }
@@ -4060,220 +4113,4 @@ a.btn-primary, button.btn-primary {
 [style*="background:#22c55e"], [style*="background:#10b981"],
 [style*="background: #22c55e"], [style*="background: #10b981"] {
   background-color: #c9a84c !important;
-}
-
-/* ===== OnboardingModal 样式 ===== */
-/* 强制挂载在 body，不受 #app/.main-layout 影响 */
-body.onboarding-open {
-  overflow: hidden !important;
-  touch-action: none;
-}
-
-.onboarding-overlay {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100vw !important;
-  height: 100dvh !important;
-  min-height: 100dvh !important;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999 !important;
-  background: rgba(10, 10, 18, 0.72);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  padding: 16px;
-  box-sizing: border-box;
-  /* 防止父级 transform/filter 影响 fixed 定位 */
-  transform: none !important;
-}
-
-.onboarding-overlay[style*="display:flex"],
-.onboarding-overlay[style*="display: flex"] {
-  display: flex !important;
-}
-
-.onboarding-panel {
-  position: relative !important;
-  top: auto !important;
-  left: auto !important;
-  transform: none !important;
-  width: 100%;
-  max-width: 480px;
-  max-height: calc(100dvh - 32px);
-  overflow-y: auto;
-  background: linear-gradient(168deg, rgba(18,18,31,0.96) 0%, rgba(10,10,18,0.99) 100%);
-  border: 1px solid rgba(201,168,76,0.25);
-  border-radius: 16px;
-  padding: 32px 28px 24px;
-  box-shadow: 0 0 40px rgba(201,168,76,0.12);
-  text-align: center;
-  animation: obFadeIn 0.28s ease-out;
-}
-
-@keyframes obFadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* Step 通用 */
-.ob-step {
-  display: none;
-}
-.ob-step[style*="display:"] {
-  display: block !important;
-}
-
-.ob-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #fbbf24;
-  margin: 12px 0 6px;
-}
-
-.ob-subtitle {
-  font-size: 0.82rem;
-  color: rgba(255,255,255,0.55);
-  margin-bottom: 16px;
-}
-
-.ob-desc {
-  font-size: 0.78rem;
-  color: rgba(255,255,255,0.7);
-  line-height: 1.55;
-  margin-bottom: 20px;
-}
-
-/* 图标光环 */
-.ob-icon-ring {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: 2px solid rgba(201,168,76,0.35);
-  margin-bottom: 4px;
-}
-.ob-icon-ring svg {
-  width: 32px;
-  height: 32px;
-}
-
-/* 身份选择卡片 */
-.ob-roles {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.ob-role-card {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 12px;
-  padding: 14px 10px;
-  cursor: pointer;
-  transition: all 0.18s;
-}
-.ob-role-card:hover {
-  background: rgba(201,168,76,0.08);
-  border-color: rgba(201,168,76,0.3);
-}
-.ob-role-card.active {
-  background: rgba(201,168,76,0.12);
-  border-color: rgba(201,168,76,0.5);
-  box-shadow: 0 0 12px rgba(201,168,76,0.15);
-}
-
-.ob-role-icon {
-  color: rgba(255,255,255,0.6);
-  margin-bottom: 6px;
-}
-.ob-role-card.active .ob-role-icon {
-  color: #fbbf24;
-}
-
-.ob-role-name {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: rgba(255,255,255,0.85);
-  margin-bottom: 4px;
-}
-.ob-role-card.active .ob-role-name {
-  color: #fbbf24;
-}
-
-.ob-role-desc {
-  font-size: 0.68rem;
-  color: rgba(255,255,255,0.4);
-  line-height: 1.45;
-}
-
-/* 按钮 */
-.ob-btn-primary {
-  background: linear-gradient(135deg, #c9a84c 0%, #b8941f 100%);
-  color: #0a0a12;
-  font-weight: 600;
-  font-size: 0.82rem;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 20px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.ob-btn-primary:hover { filter: brightness(1.08); }
-
-.ob-btn-ghost {
-  background: transparent;
-  color: rgba(255,255,255,0.5);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 8px;
-  padding: 8px 16px;
-  font-size: 0.78rem;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.ob-btn-ghost:hover { color: rgba(255,255,255,0.8); border-color: rgba(255,255,255,0.2); }
-
-/* 步骤指示点 */
-.ob-dots {
-  display: flex;
-  justify-content: center;
-  gap: 6px;
-  margin-top: 16px;
-}
-
-.ob-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.15);
-  transition: all 0.2s;
-}
-.ob-dot.active {
-  background: #fbbf24;
-  box-shadow: 0 0 6px rgba(251,191,36,0.5);
-}
-
-/* 移动端适配 */
-@media (max-width: 640px) {
-  .onboarding-overlay {
-    padding: 12px;
-  }
-  .onboarding-panel {
-    max-width: 100%;
-    padding: 24px 18px 18px;
-    border-radius: 14px;
-  }
-  .ob-roles {
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-  .ob-role-card {
-    padding: 12px 8px;
-  }
-  .ob-title { font-size: 1.1rem; }
-  .ob-subtitle { font-size: 0.78rem; }
 }
