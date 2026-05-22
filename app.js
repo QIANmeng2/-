@@ -1,41 +1,18 @@
 "use strict";
 // === 全局错误边界：防止任何 DOM 错误阻塞页面加载 ===
 window.addEventListener('error', function(e) {
-  var msg = e.message || '';
-  // DOM 空指针（null.style / null.textContent / null.innerHTML / null.appendChild 等）
-  if (msg.includes('Cannot read propert') && (msg.includes('null') || msg.includes('undefined'))) {
-    console.warn('[ErrorBoundary] 忽略 DOM 空指针错误:', msg, e.filename, e.lineno);
+  if (e.message && e.message.includes('null') && e.message.includes('style')) {
+    console.warn('[ErrorBoundary] 忽略 DOM null.style 错误:', e.message, e.filename, e.lineno);
     e.preventDefault();
     return true;
   }
-  // 脚本加载失败（CDN/网络）
-  if (e.target && e.target.tagName === 'SCRIPT') {
-    console.warn('[ErrorBoundary] 脚本加载失败:', e.target.src);
-    e.preventDefault();
-    return true;
-  }
-  // 其他错误记录但不阻断
-  console.error('[ErrorBoundary] 未捕获错误:', msg, e.filename, e.lineno);
-  // 不 preventDefault，让浏览器正常处理
+  console.error('[ErrorBoundary] 未捕获错误:', e.message, e.filename, e.lineno);
 });
 // === 安全 DOM 访问工具 ===
 window._safeEl = function(id) {
   const el = document.getElementById(id);
   if (!el) console.debug('[SafeDOM] 元素未找到:', id);
   return el;
-};
-// === 组件级降级包装器 ===
-// 用法 safeRender(el, () => Component.render(data), '<p>组件加载失败</p>')
-window.safeRender = function(container, renderFn, fallbackHtml) {
-  try {
-    if (!container) return;
-    renderFn();
-  } catch (e) {
-    console.warn('[SafeRender] 组件渲染失败:', e.message);
-    try {
-      container.innerHTML = fallbackHtml || '<div class="card" style="text-align:center;padding:20px;color:var(--text-muted);">该模块暂时不可用</div>';
-    } catch (e2) { /* 最后的兜底 */ }
-  }
 };
 const API_BASE = 'https://perpetual-enchantment-production-b163.up.railway.app';
 let currentUser = null;
@@ -45,15 +22,17 @@ let authMode = 'login';
 let unreadNotifs = 0;
 let currentMatchId = null;
 let currentLeaderboardTab = 'player';
+let _tabVersion = 0; // tab切换竞态守卫
 
 // ==================== 组件系统：MatchCard 点击 → 打开比赛详情 ====================
 window.onMatchCardClick = function (matchId, cardEl) {
   console.log('[app.js] MatchCard clicked:', matchId);
-  // 优先调用已有的 openCompetitionDetail（兼容旧代码），否则弹窗显示详情
-  if (typeof window.openCompetitionDetail === 'function') {
-    window.openCompetitionDetail(matchId);
-  } else {
+  // 新组件系统已加载 → 优先使用组件化详情视图
+  if (window.Components && window.ScoreBoard) {
     openMatchDetailView(matchId);
+  } else if (typeof window.openCompetitionDetail === 'function') {
+    // 兜底：旧弹窗模式（组件未加载或旧赛事数据）
+    window.openCompetitionDetail(matchId);
   }
 };
 
@@ -63,232 +42,178 @@ window.onMatchCardClick = function (matchId, cardEl) {
  */
 async function openMatchDetailView(matchId) {
   // 埋点：打开比赛详情
-  try { if (window.Tracker) Tracker.trackMatchOpen(matchId); } catch (e) {}
+  if (window.Tracker) Tracker.trackMatchOpen(matchId);
   try {
-    const data = await api('/api/matches/' + matchId);
-    const match = data.match || data.data || data;
+    var data = await api('/api/matches/' + matchId);
+    var match = data.match || data.data || data;
+    
+    // 降级：matches 表里没有 → 尝试旧 competitions API
+    if (!match && typeof window.openCompetitionDetail === 'function') {
+      return window.openCompetitionDetail(matchId);
+    }
     if (!match) return showToast('比赛不存在', 'error');
 
     // 显示详情容器，隐藏列表
-    var compList2 = document.getElementById('competitionList');
-    if (compList2) compList2.style.display = 'none';
-    const detail = document.getElementById('matchDetailView');
-    if (!detail) return showToast('详情面板未加载', 'error');
+    document.getElementById('competitionList').style.display = 'none';
+    var detail = document.getElementById('matchDetailView');
     detail.style.display = 'block';
 
     // 挂载 ScoreBoard
-    const sb = document.getElementById('scoreboardMount');
+    var sb = document.getElementById('scoreboardMount');
     if (sb && window.ScoreBoard) {
-      try { window.ScoreBoard.mount(sb, match, { size: 'lg', showBoProgress: true }); } catch (e) { console.warn('[MatchDetail] ScoreBoard 挂载失败:', e); }
+      window.ScoreBoard.mount(sb, match, { size: 'lg', showBoProgress: true });
     }
 
-    // 挂载 Timeline（传入 match.timeline 数据）
-    const tl = document.getElementById('timelineMount');
+    // 挂载 Timeline
+    var tl = document.getElementById('timelineMount');
     if (tl && window.Timeline) {
-      try { window.Timeline.mount(tl, match, { compact: false }); } catch (e) { console.warn('[MatchDetail] Timeline 挂载失败:', e); }
+      window.Timeline.mount(tl, match, { compact: false });
     }
 
     // 挂载 MVP 面板
-    const mvp = document.getElementById('mvpMount');
+    var mvp = document.getElementById('mvpMount');
     if (mvp && window.MVPPanel) {
-      try { window.MVPPanel.mount(mvp, match, { size: 'md', showStats: true }); } catch (e) { console.warn('[MatchDetail] MVPPanel 挂载失败:', e); }
+      window.MVPPanel.mount(mvp, match, { size: 'md', showStats: true });
     }
 
-    // ===== 预测/竞猜面板 =====
-    const pm = document.getElementById('predictionMount');
-    if (pm) {
-      try { await renderPredictionPanel(pm, match); } catch (e) { console.warn('[MatchDetail] Prediction 面板挂载失败:', e); }
+    // 挂载参赛人员列表（PlayerList 组件）
+    var pl = document.getElementById('playerListMount');
+    if (pl && window.PlayerList) {
+      try {
+        var regData = await api('/api/competitions/' + matchId + '/registrations');
+        var registrations = regData.registrations || [];
+        var freeMode = (match.mode || match.tier) === 'arena';
+        window.PlayerList.mount(pl, registrations, { freeMode: freeMode, showFee: true });
+      } catch (e) {
+        if (pl) pl.innerHTML = '<div class="player-list__empty">加载参赛人员失败</div>';
+      }
+    }
+
+    // 挂载报名面板（RegistrationPanel 组件）
+    var rm = document.getElementById('registrationMount');
+    if (rm && window.RegistrationPanel) {
+      var userState = { loggedIn: !!currentUser, myReg: null };
+      if (currentUser) {
+        try {
+          var myRegData = await api('/api/competitions/' + matchId + '/my-reg');
+          var myRegs = myRegData.registrations || [];
+          userState.myReg = myRegs.find(function(r) { return r.player_user_id === currentUser.id; }) || null;
+        } catch (e) {}
+      }
+      window.RegistrationPanel.mount(rm, match, userState);
     }
 
     // 返回按钮
-    let backBtn = document.getElementById('matchDetailBack');
+    var backBtn = document.getElementById('matchDetailBack');
     if (!backBtn) {
       backBtn = document.createElement('button');
       backBtn.id = 'matchDetailBack';
       backBtn.className = 'btn btn-ghost btn-sm';
       backBtn.textContent = '← 返回列表';
-      backBtn.onclick = () => {
+      backBtn.onclick = function() {
         detail.style.display = 'none';
-        var cl = document.getElementById('competitionList');
-        if (cl) cl.style.display = '';
-        try { loadMatches(); } catch (e) {}
+        document.getElementById('competitionList').style.display = '';
+        loadMatches();
       };
       detail.prepend(backBtn);
     }
     backBtn.style.display = '';
 
   } catch (err) {
+    // 网络错误也降级到旧详情
+    if (typeof window.openCompetitionDetail === 'function') {
+      return window.openCompetitionDetail(matchId);
+    }
     showToast('加载比赛详情失败：' + err.message, 'error');
   }
 }
 
-// ==================== 预测/竞猜面板 ====================
-
-async function renderPredictionPanel(container, match) {
-  container.innerHTML = '';
-
-  // 只在 REGISTERING / READY 状态显示预测
-  if (!['REGISTERING','READY'].includes(match.status)) {
-    if (match.winner && match.status === 'FINISHED') {
-      // 已结束：显示结果摘要
-      container.innerHTML = '<div class="card" style="margin-bottom:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:14px;">' +
-        '<div style="font-weight:700;font-size:15px;margin-bottom:8px;">' + (match.winner === 'draw' ? '🤝 比赛平局' : match.winner === 'red' ? '🔴 红方获胜' : '🔵 蓝方获胜') + '</div>' +
-        '<div style="color:var(--text-muted);font-size:13px;">预测系统已关闭</div></div>';
-    }
-    return;
-  }
-
-  var self = this;
-  var currentUser = getCurrentUser();
-  var isLoggedIn = !!currentUser;
-
-  // 查询我的预测
-  var myPred = null;
-  if (isLoggedIn) {
-    try {
-      var predRes = await api('/api/matches/' + match.id + '/predictions/my');
-      myPred = predRes.prediction || null;
-    } catch (e) { /* 静默 */ }
-  }
-
-  if (myPred) {
-    // 已预测：显示状态
-    var sideLabel = myPred.side === 'red' ? '🔴 红方' : myPred.side === 'blue' ? '🔵 蓝方' : '🤝 平局';
-    var resultLabel = myPred.settled ? (myPred.result === 'win' ? '✅ 获胜' : myPred.result === 'loss' ? '❌ 失败' : '↩️ 退款') : '⏳ 等待结算';
-    container.innerHTML = '<div class="card" style="margin-bottom:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:14px;">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;">' +
-      '<div>' +
-      '<div style="font-weight:700;font-size:15px;color:var(--gold);">🎯 我的预测</div>' +
-      '<div style="margin-top:6px;color:var(--text);">你押了 ' + sideLabel + ' · ' + myPred.amount + ' 梦币</div>' +
-      '<div style="color:var(--text-muted);font-size:13px;margin-top:2px;">状态：' + resultLabel + '</div>' +
-      '</div>' +
-      '<div style="text-align:right;font-size:28px;">' + (myPred.settled ? (myPred.result === 'win' ? '🏆' : myPred.result === 'refund' ? '💰' : '💔') : '🔮') + '</div>' +
-      '</div></div>';
-    return;
-  }
-
-  // 未预测：显示投注面板
-  if (!isLoggedIn) {
-    container.innerHTML = '<div class="card" style="margin-bottom:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:14px;">' +
-      '<div style="font-weight:700;font-size:15px;color:var(--gold);margin-bottom:8px;">🔮 赛事预测</div>' +
-      '<div style="color:var(--text-muted);font-size:13px;margin-bottom:10px;">猜对赢方，投注翻倍！</div>' +
-      '<button class="btn btn-primary btn-sm" onclick="openAuthModal()" style="width:100%;">登录参与预测</button></div>';
-    return;
-  }
-
-  // 构建投注面板
-  var html = '<div class="card" style="margin-bottom:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:14px;">' +
-    '<div style="font-weight:700;font-size:15px;color:var(--gold);margin-bottom:8px;">🔮 赛事预测</div>' +
-    '<div style="color:var(--text-muted);font-size:13px;margin-bottom:4px;">猜对赢方，投注翻倍（猜错不返还，平局退款）</div>' +
-    '<div style="margin:10px 0;display:flex;gap:8px;">' +
-    '<button class="btn btn-outline btn-sm predict-btn" data-side="red" style="flex:1;border-color:#ef4444;color:#ef4444;">🔴 红方胜</button>' +
-    '<button class="btn btn-outline btn-sm predict-btn" data-side="blue" style="flex:1;border-color:#3b82f6;color:#3b82f6;">🔵 蓝方胜</button>' +
-    '<button class="btn btn-outline btn-sm predict-btn" data-side="draw" style="flex:1;border-color:#6b7280;color:#6b7280;">🤝 平局</button>' +
-    '</div>' +
-    '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;">' +
-    '<input type="number" id="predictAmount" class="form-input" value="50" min="10" max="1000" step="10" style="width:80px;text-align:center;">' +
-    '<span style="font-size:13px;color:var(--text-muted);">梦币 (10-1000)</span>' +
-    '<button class="btn btn-primary btn-sm" id="btnPlacePredict" style="margin-left:auto;">下注</button>' +
-    '</div>' +
-    '<div style="font-size:12px;color:var(--text-muted);margin-top:6px;">猜中可得 2x 投注额，每场限投一次</div>' +
-    '</div>';
-  container.innerHTML = html;
-
-  // 绑定事件
-  var sideBtns = container.querySelectorAll('.predict-btn');
-  var selectedSide = 'red';
-  sideBtns.forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      sideBtns.forEach(function(b) { b.style.background = ''; b.style.color = ''; b.style.borderColor = ''; });
-      btn.style.background = btn.dataset.side === 'red' ? '#ef4444' : btn.dataset.side === 'blue' ? '#3b82f6' : '#6b7280';
-      btn.style.color = '#fff';
-      btn.style.borderColor = btn.style.background;
-      selectedSide = btn.dataset.side;
-    });
-  });
-  // 默认选中红色
-  sideBtns[0].click();
-
-  var placeBtn = document.getElementById('btnPlacePredict');
-  if (placeBtn) {
-    placeBtn.addEventListener('click', async function() {
-      var amount = parseInt(document.getElementById('predictAmount').value) || 50;
-      if (amount < 10 || amount > 1000) { showToast('投注金额 10-1000 梦币', 'error'); return; }
-      placeBtn.disabled = true;
-      placeBtn.textContent = '投注中…';
-      try {
-        var res = await api('/api/matches/' + match.id + '/predict', {
-          method: 'POST',
-          body: JSON.stringify({ side: selectedSide, amount: amount })
-        });
-        showToast('预测成功！押 ' + (selectedSide === 'red' ? '红方' : selectedSide === 'blue' ? '蓝方' : '平局') + ' ' + amount + ' 梦币', 'success');
-        // 更新余额
-        if (typeof displayDreamCoins === 'function') { displayDreamCoins(res.newBalance); }
-        if (typeof updateUI === 'function') { updateUI(); }
-        // 刷新面板
-        await renderPredictionPanel(container, match);
-      } catch (e) {
-        showToast(e.message || '预测失败', 'error');
-        placeBtn.disabled = false;
-        placeBtn.textContent = '下注';
-      }
-    });
-  }
+// ==================== 数据适配器：旧 Competition → 新 Match 对象 ====================
+function competitionToMatch(c) {
+  var STATUS_MAP = {
+    'upcoming': 'CREATED',
+    'open':     'REGISTERING',
+    'locked':   'READY',
+    'live':     'LIVE',
+    'finished': 'FINISHED',
+    'review':   'CREATED'
+  };
+  var MODE_MAP = {
+    'training':  'training',
+    'arena':     'arena',
+    'regular':   'regular',
+    'elite':     'arena',
+    'secondary': 'arena'
+  };
+  return {
+    id:          c.id,
+    title:       c.name || c.title || '未命名赛事',
+    mode:        MODE_MAP[c.tier] || 'training',
+    status:      STATUS_MAP[c.comp_status] || c.status || 'CREATED',
+    bo:          c.bo || 1,
+    start_time:  c.start_time || null,
+    end_time:    c.end_time || null,
+    winner:      c.winner || null,
+    score:       c.score || { red: 0, blue: 0 },
+    mvp_id:      c.mvp_id || null,
+    meeting_code: c.meeting_code || null,
+    meeting_link: c.meeting_link || null,
+    description: c.description || '',
+    created_by:  c.created_by || '',
+    prize_pool:  (c.reg_stats && c.reg_stats.prizePool) || c.prize_pool || 0,
+    created_at:  c.created_at,
+    updated_at:  c.updated_at
+  };
 }
 
 // ==================== 新：使用 /api/matches + MatchCard 组件渲染比赛列表 ====================
 let _matchCache = {};
 
 async function loadMatches() {
+  var _v = _tabVersion;
   var container = document.getElementById('competitionList');
-  // 自愈：如果 competitionList 被销毁（如超时降级时 tabContent 被清空），自动重建
-  if (!container) {
-    var tc = document.getElementById('tabContent');
-    if (!tc) return;
-    container = document.createElement('div');
-    container.id = 'competitionList';
-    tc.appendChild(container);
-  }
+  if (!container) return;
+  if (_tabVersion !== _v) return;
   container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">加载中…</div>';
   try {
-    const data = await api('/api/competitions');
-    const matches = data.competitions || data.matches || data.data || [];
-    _matchCache = {};
-    matches.forEach(m => { _matchCache[m.id] = m; });
+    // ① 优先调用新 Match API（/api/matches）
+    var data = await api('/api/matches');
+    if (_tabVersion !== _v) return;
+    var matches = data.matches || data.data || [];
 
-    // 使用 MatchCard 组件渲染列表
+    // ② 如果 matches 表为空，回退到旧 competitions API（数据适配）
+    if (!matches.length) {
+      data = await api('/api/competitions');
+      if (_tabVersion !== _v) return;
+      var comps = data.competitions || [];
+      matches = comps.map(competitionToMatch);
+    }
+
+    _matchCache = {};
+    matches.forEach(function(m) { _matchCache[m.id] = m; });
+
+    // ③ 使用 MatchCard 组件渲染列表
     if (window.MatchCard) {
       container.innerHTML = window.MatchCard.renderList(matches, { clickable: true, showMode: true, showTime: true });
     } else {
       // 兜底：组件未加载时显示纯文字列表
-      // 兼容两种字段名：title/name, status/comp_status
-      container.innerHTML = matches.map(m =>
-        '<div style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;" onclick="openMatchDetailView(\'' + m.id + '\')">' +
+      container.innerHTML = matches.map(function(m) {
+        return '<div style="padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;" onclick="openMatchDetailView(\'' + m.id + '\')">' +
         '<b>' + escapeHtml(m.title || m.name || '赛事') + '</b> · ' + escapeHtml(m.status || m.comp_status || '') +
-        '</div>'
-      ).join('') || '<div style="color:var(--text-muted);text-align:center;padding:40px;">暂无赛事</div>';
+        '</div>';
+      }).join('') || '<div style="color:var(--text-muted);text-align:center;padding:40px;">暂无赛事</div>';
     }
   } catch (err) {
+    if (_tabVersion !== _v) return;
     container.innerHTML = '<div style="color:var(--danger);text-align:center;padding:20px;">加载失败：' + escapeHtml(err.message) + '</div>';
   }
 }
 
-// ==================== 兼容：旧 loadCompetitionList 改为调用新 loadMatches ====================
-// 保留旧函数在过渡期，但内部调用新实现
-const _oldLoadCompetitionList = loadCompetitionList;
+// ==================== 兼容：旧 loadCompetitionList → 统一走 loadMatches ====================
+// 旧代码中 admin 操作后仍调用 loadCompetitionList（如创建/删除/取消赛事后刷新列表）
 async function loadCompetitionList() {
-  // 如果 Components 已加载，使用新 MatchCard 渲染
-  if (window.MatchCard) {
-    await loadMatches();
-    return;
-  }
-  // 否则走旧逻辑（兜底）
-  if (_oldLoadCompetitionList && _oldLoadCompetitionList !== loadCompetitionList) {
-    return _oldLoadCompetitionList.apply(this, arguments);
-  }
-  // 纯兜底
-  const container = document.getElementById('competitionList');
-  if (container) container.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:40px;">正在升级组件系统，请刷新页面</div>';
+  delete window._compCache;
+  await loadMatches();
 }
 
 // ====== Socket.IO 聊天客户端 ======
@@ -307,9 +232,7 @@ function initChatSocket() {
       transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 30000,
-      randomizationFactor: 0.5,
-      reconnectionAttempts: Infinity
+      reconnectionAttempts: 5
     });
 
     chatSocket.on('connect', () => {
@@ -374,37 +297,17 @@ function initChatSocket() {
       }
     });
 
-    chatSocket.on('disconnect', (reason) => {
-      console.log('[Chat] Socket.IO 断开连接:', reason);
+    chatSocket.on('disconnect', () => {
+      console.log('[Chat] Socket.IO 断开连接');
       chatSocketConnected = false;
       updateChatIconStatus();
     });
 
-    // 重连尝试日志（用于排查网络抖动）
-    chatSocket.on('reconnect_attempt', (attempt) => {
-      console.log('[Chat] 重连尝试 #' + attempt);
-    });
-
     chatSocket.on('reconnect', () => {
-      console.log('[Chat] Socket.IO 重连成功');
+      console.log('[Chat] Socket.IO 重连');
       chatSocketConnected = true;
       if (authToken) {
         chatSocket.emit('authenticate', authToken);
-      }
-      // 重连后重入当前聊天房间
-      if (chatCurrentTarget) {
-        var rejoinType = chatCurrentType;
-        var rejoinTarget = chatCurrentTarget;
-        chatSocket.emit('join_room', { type: rejoinType, target: rejoinTarget });
-        console.log('[Chat] 重连后重入房间:', rejoinType, rejoinTarget);
-      }
-      // 重连后刷新数据（匹配列表、通知等）
-      try {
-        if (currentTab === 'competition') loadMatches();
-        if (currentTab === 'market') renderMarketPanel();
-        if (authToken) checkNotifications();
-      } catch (e) {
-        console.warn('[Chat] 重连后数据刷新失败:', e.message);
       }
       updateChatIconStatus();
     });
@@ -479,7 +382,7 @@ function statusBadge(r) {
 }
 
 const cacheStore = new Map();
-async function api(path, options = {}, retries = 1) {
+async function api(path, options = {}, retries = 2) {
   const isGet = !options.method || options.method === 'GET';
   const cacheKey = path + JSON.stringify(options.body || '');
   // 优先使用缓存
@@ -493,7 +396,7 @@ async function api(path, options = {}, retries = 1) {
   if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 8000);
+    const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 12000);
     const res = await fetch(url, { ...options, headers, signal: controller.signal });
     clearTimeout(timeout);
     let data = await res.json();
@@ -505,7 +408,7 @@ async function api(path, options = {}, retries = 1) {
     return data;
   } catch (err) {
     if (retries > 0) {
-      if (retries === 1) showToast('正在唤醒服务器...', 'info');
+      if (retries === 2) showToast('正在唤醒服务器...', 'info');
       await new Promise(r => setTimeout(r, 1500));
       return api(path, options, retries - 1);
     }
@@ -521,42 +424,10 @@ async function api(path, options = {}, retries = 1) {
 
 // ---------- 认证 ----------
 async function fetchUserInfo() {
-  try {
-    var data = await api('/api/auth/me');
-    if (data && data.user) {
-      currentUser = data.user;
-      return;
-    }
-  } catch (e) {
-    console.warn('[Auth] fetchUserInfo 失败:', e.message);
-  }
-  // 失败不注销（可能是网络抖动），保持已登录状态降级运行
-  if (authToken) {
-    console.warn('[Auth] 无法获取用户信息，以离线模式运行');
-    showToast('网络不稳定，部分功能受限', 'warning', 3000);
-  } else {
-    currentUser = null;
-  }
+  try { const data = await api('/api/auth/me'); if (data && data.user) currentUser = data.user; } catch { logout(); }
   updateUI();
   checkNotifications();
-  initChatSocket();
-}
-// 手动恢复认证（供重试按钮调用）
-async function retryFetchUserInfo() {
-  try {
-    var data = await api('/api/auth/me', {}, 0);
-    if (data && data.user) {
-      currentUser = data.user;
-      showToast('已恢复连接', 'success');
-      updateUI();
-      checkNotifications();
-      initChatSocket();
-      return true;
-    }
-  } catch (e) {
-    showToast('仍无法连接：' + e.message, 'error');
-  }
-  return false;
+  initChatSocket(); // 初始化聊天 Socket
 }
 function openAuthModal(mode) {
   authMode = mode;
@@ -686,86 +557,6 @@ function isFreeMode(tier) { return tier === 'arena'; }
 // 判断是否需要入场券（仅常规赛事/入场券模式需要）
 function needsEntryFee(tier) { return tier === 'regular'; }
 
-async function renderCompetitionPanel() {
-  const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
-  const content = document.getElementById('tabContent');
-  const tc = TIER_CONFIG[compTier];
-  content.innerHTML = `
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-        <div>
-          <h2 style="font-size:1.1rem;margin:0;">${tc.label}</h2>
-          <p style="font-size:0.78rem;color:var(--text-muted);margin:4px 0 0;">${tc.desc}</p>
-        </div>
-        ${isAdmin ? '<button class="btn btn-primary btn-sm" onclick="openCreateCompetitionModal()">+ 创建赛事</button>' : ''}
-      </div>
-      <div class="comp-tier-tabs" style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
-        ${['elite','secondary','regular'].map(t => {
-          const cfg = TIER_CONFIG[t];
-          return '<button class="comp-tier-tab '+(compTier===t?'active-'+t:'')+'" onclick="switchCompTier(\''+t+'\')">'+cfg.label+'</button>';
-        }).join('')}
-      </div>
-      <div id="competitionList"><div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div></div>
-    </div>`;
-  await loadCompetitionList();
-}
-async function switchCompTier(t) { compTier = t; await renderCompetitionPanel(); }
-
-async function loadCompetitionList() {
-  const container = document.getElementById('competitionList');
-  try {
-    const data = await api('/api/competitions');
-    const all = data.competitions || [];
-    window._compCache = {};
-    all.forEach(c => { window._compCache[c.id] = c; });
-    const tierMatch = compTier === 'regular'
-      ? ['regular','arena','training']
-      : [compTier];
-    const comps = all.filter(c => tierMatch.includes(c.tier || 'regular'));
-    if (!comps.length) {
-      container.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:40px;">暂无'+TIER_CONFIG[compTier].label+'，请管理员创建</p>';
-      return;
-    }
-    const isRegularTab = compTier === 'regular';
-    container.innerHTML = comps.map(c => {
-      const rs = c.reg_stats || {};
-      const s = c.comp_status || c.status || '';
-      const statusLabel = { upcoming:'即将开始', open:'报名中', locked:'已满员', live:'比赛中', review:'审核中', finished:'已结束' }[s] || '';
-      const statusColor = { upcoming:'var(--text-muted)', open:'#10b981', locked:'var(--warning)', live:'var(--danger)' }[s] || 'var(--text-muted)';
-      const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
-      const adminBtn = isAdmin ? '<button class="btn btn-xs btn-danger" style="margin-left:8px;" onclick="event.stopPropagation();adminDeleteCompetition(\''+c.id+'\')">删除</button>' : '';
-      const timeStr = c.start_time ? new Date(c.start_time).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
-      const subBadge = SUB_MODE_BADGE[c.tier || 'regular'];
-      const subLabel = SUB_MODE_LABELS[c.tier || 'regular'];
-      const modeTag = '<span style="font-size:0.68rem;padding:2px 8px;border-radius:4px;margin-left:6px;font-weight:600;background:'+subBadge.bg+';color:'+subBadge.color+';border:1px solid '+subBadge.border+';">'+subLabel+'</span>';
-      // 常规赛事tab内的卡片（包含入场奖池/擂台赛/训练赛）
-      if (isRegularTab) {
-        const freeMode = isFreeMode(c.tier);
-        return '<div style="padding:14px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:10px;margin-bottom:8px;cursor:pointer;" onclick="openCompetitionDetail(\''+c.id+'\')">'+
-          '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">'+
-            '<div><span style="font-weight:700;color:var(--text-primary);font-size:0.95rem;">'+c.name+'</span>'+modeTag+'<span style="color:'+statusColor+';font-size:0.72rem;margin-left:8px;font-weight:600;">'+statusLabel+'</span>'+adminBtn+'</div>'+
-            '<span style="font-size:0.75rem;color:var(--text-muted);">'+timeStr+'</span>'+
-          '</div>'+
-          '<div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap;">'+
-            (freeMode
-              ? '<span style="font-size:0.78rem;color:var(--text-secondary);">👥 '+rs.count+'人已报名</span><span style="font-size:0.72rem;color:var(--text-muted);">不限人数 · 无需入场券</span>'
-              : '<span style="font-size:0.78rem;color:var(--text-secondary);">👥 '+rs.count+'/10人</span>'+
-                (rs.prizePool>0?'<span style="font-size:0.78rem;color:var(--warning);">💰 '+rs.prizePool+'梦币</span>':'')+
-                '<span style="font-size:0.72rem;color:var(--text-muted);">500×'+(rs.fee500||0)+' | 1000×'+(rs.fee1000||0)+' | 2000×'+(rs.fee2000||0)+'</span>')+
-          '</div></div>';
-      }
-      // 顶级/次级联赛卡片（简洁版）
-      return '<div style="padding:14px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:10px;margin-bottom:8px;cursor:pointer;" onclick="openCompetitionDetail(\''+c.id+'\')">'+
-        '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'+
-          '<div><span style="font-weight:700;color:var(--text-primary);">'+c.name+'</span>'+
-          '<span style="font-size:0.72rem;color:var(--text-muted);margin-left:8px;">BO'+(c.bo||1)+'</span>'+adminBtn+'</div>'+
-          '<span style="font-size:0.72rem;color:var(--text-muted);">'+timeStr+'</span>'+
-        '</div></div>';
-    }).join('');
-  } catch(e) { container.innerHTML = '<p style="color:var(--danger);">加载失败</p>'; }
-}
-
-// 赛事详情（所有人可见，显示参赛人员+操作区）
 async function openCompetitionDetail(id) {
   const c = window._compCache[id];
   if (!c) return;
@@ -993,11 +784,17 @@ function onCompTierChange() {
 
 async function handleCreateCompetition(e) {
   e.preventDefault();
-  const name = document.getElementById('compName').value.trim();
-  const tier = document.getElementById('compTierSel').value;
-  const start_time = document.getElementById('compStartTime').value;
-  const bo = parseInt(document.getElementById('compBo').value);
-  const description = (document.getElementById('compDesc')?.value || '').trim();
+  const nameEl = document.getElementById('compName');
+  const tierEl = document.getElementById('compTierSel');
+  const startEl = document.getElementById('compStartTime');
+  const boEl = document.getElementById('compBo');
+  const descEl = document.getElementById('compDesc');
+  if (!nameEl || !tierEl || !startEl || !boEl) { showToast('页面元素缺失，请刷新','error'); return; }
+  const name = nameEl.value.trim();
+  const tier = tierEl.value;
+  const start_time = startEl.value;
+  const bo = parseInt(boEl.value);
+  const description = descEl ? descEl.value.trim() : '';
   if (!name) { showToast('请输入赛事名称','error'); return; }
   let qr_code_url = null;
   const file = document.getElementById('compImage')?.files?.[0];
@@ -1556,15 +1353,18 @@ async function openClubPlayerSelect(compId, clubId, clubName) {
     const freeRoster = data.free || [];
 
     if (freeRoster.length === 0) {
-      document.getElementById('clubSelectStatus').innerHTML = '<span style="color:#f87171;">该俱乐部自由名单为空，请先在俱乐部管理中设置自由名单</span>';
+      const st = document.getElementById('clubSelectStatus');
+      if (st) st.innerHTML = '<span style="color:#f87171;">该俱乐部自由名单为空，请先在俱乐部管理中设置自由名单</span>';
       return;
     }
     if (freeRoster.length < 5) {
-      document.getElementById('clubSelectStatus').innerHTML = '<span style="color:#f87171;">自由名单不足5人（当前'+freeRoster.length+'人），无法报名</span>';
+      const st = document.getElementById('clubSelectStatus');
+      if (st) st.innerHTML = '<span style="color:#f87171;">自由名单不足5人（当前'+freeRoster.length+'人），无法报名</span>';
       return;
     }
 
     const form = document.getElementById('clubPlayerForm');
+    if (!form) return;
     form.innerHTML = freeRoster.map(m => {
       const uid = m.player_user_id || m.user_id;
       const label = m.game_id || m.coachName || m.username || uid;
@@ -1588,8 +1388,8 @@ async function openClubPlayerSelect(compId, clubId, clubName) {
           showToast('最多选择5人', 'warn');
           return;
         }
-        document.getElementById('selectedCount').textContent = `已选 ${count}/5 人`;
-        document.getElementById('selectedCount').style.color = count === 5 ? '#4ade80' : 'var(--text-muted)';
+        const sel = document.getElementById('selectedCount');
+        if (sel) { sel.textContent = `已选 ${count}/5 人`; sel.style.color = count === 5 ? '#4ade80' : 'var(--text-muted)'; }
         form.querySelectorAll('.player-item').forEach(item => {
           const check = item.querySelector('input');
           item.style.background = check.checked ? 'rgba(123,47,255,.12)' : '';
@@ -1597,7 +1397,8 @@ async function openClubPlayerSelect(compId, clubId, clubName) {
       });
     });
 
-    document.getElementById('clubSelectStatus').textContent = '共 ' + freeRoster.length + ' 名自由名单成员，请选择5人上场';
+    const st2 = document.getElementById('clubSelectStatus');
+    if (st2) st2.textContent = '共 ' + freeRoster.length + ' 名自由名单成员，请选择5人上场';
     form.style.display = 'block';
   } catch(e) {
     const el = document.getElementById('clubSelectStatus');
@@ -1798,7 +1599,9 @@ async function handleAwardCoins(e) {
 
 // ==================== 转会市场 ====================
 async function renderMarketPanel() {
+  const _v = _tabVersion;
   const content = document.getElementById('tabContent');
+  if (_tabVersion !== _v) return;
   content.innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
   try {
     // 管理员或俱乐部老板跳过选手认证，直接进入转会市场
@@ -2126,37 +1929,8 @@ function renderMarketPlayerList() {
   if (window._marketSort === 'value') list.sort((a,b) => b.market_value - a.market_value);
   else list.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
 
-  // ===== 投资组合摘要（俱乐部老板专用）=====
-  var portfolioHtml = '';
-  if (isBoss && list.length > 0) {
-    var ownedPlayers = list.filter(function(p) {
-      return p.club_id && myClubs.some(function(c) { return c.id === p.club_id; });
-    });
-    if (ownedPlayers.length > 0) {
-      var totalValue = ownedPlayers.reduce(function(s, p) { return s + (p.market_value || 0); }, 0);
-      var totalChange = ownedPlayers.reduce(function(s, p) {
-        var change = parseFloat(p.last_change_percentage) || 0;
-        return s + (p.market_value || 0) * change / 100;
-      }, 0);
-      var upCount = ownedPlayers.filter(function(p) { return parseFloat(p.last_change_percentage) > 0; }).length;
-      var downCount = ownedPlayers.filter(function(p) { return parseFloat(p.last_change_percentage) < 0; }).length;
-      portfolioHtml = '<div class="portfolio-summary" style="background:linear-gradient(135deg,rgba(251,191,36,0.06),rgba(245,158,11,0.03));border:1px solid rgba(251,191,36,0.15);border-radius:10px;padding:14px 16px;margin-bottom:8px;">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
-        '<div style="font-weight:700;font-size:14px;color:#fbbf24;">' + '我的持仓' +
-        '</div>' +
-        '<div style="display:flex;gap:16px;flex-wrap:wrap;">' +
-        '<div><span style="font-size:0.72rem;color:var(--text-muted);">持有选手</span><br><b>' + ownedPlayers.length + '</b></div>' +
-        '<div><span style="font-size:0.72rem;color:var(--text-muted);">总市值</span><br><b style="color:#fbbf24;">' + totalValue + '万</b></div>' +
-        '<div><span style="font-size:0.72rem;color:var(--text-muted);">涨跌</span><br><b style="color:' + (totalChange >= 0 ? '#10b981' : '#ef4444') + ';">' + (totalChange >= 0 ? '+' : '') + totalChange.toFixed(1) + '万</b></div>' +
-        '<div><span style="font-size:0.72rem;color:var(--text-muted);">走势</span><br><span style="font-size:0.85rem;">' +
-        '<span style="color:#10b981;">' + upCount + '</span>/<span style="color:#ef4444;">' + downCount + '</span>' +
-        '</span></div>' +
-        '</div></div></div>';
-    }
-  }
-
-  if (!list.length) { container.innerHTML = portfolioHtml + '<p style="text-align:center;color:var(--text-muted);padding:20px;">暂无选手</p>'; return; }
-  container.innerHTML = portfolioHtml + list.map(p => {
+  if (!list.length) { container.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">暂无选手</p>'; return; }
+  container.innerHTML = list.map(p => {
     let positions = [];
     try { positions = JSON.parse(p.positions || '[]'); } catch(e) {}
     const isFree = !p.club_id;
@@ -2180,7 +1954,6 @@ function renderMarketPlayerList() {
           ${parseFloat(p.last_change_percentage)>0?'\u25B2':'\u25BC'}${Math.abs(parseFloat(p.last_change_percentage))}%
         </span>` : ''}
         ${p.last_match_mvp ? '<span style="font-size:0.68rem;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#1a1a2e;padding:1px 6px;border-radius:4px;font-weight:700;">MVP</span>' : ''}
-        ${p.last_match_count ? '<span style="font-size:0.68rem;color:var(--text-muted);margin-left:4px;">' + '近' + p.last_match_count + '场' + (p.last_match_win_count ? ' <span style="color:#10b981;">' + p.last_match_win_count + 'W</span>' : '') + (p.last_match_loss_count ? ' <span style="color:#ef4444;">' + p.last_match_loss_count + 'L</span>' : '') + '</span>' : ''}
         <span style="font-size:0.7rem;color:var(--text-muted);">${p.club_name ? '已签约: '+p.club_name : '自由选手'}</span>
         ${canBuy ? `<button class="market-buy-btn" onclick="event.stopPropagation();buyPlayer('${p.user_id}',${p.market_value})">采买</button>` : ''}
         ${canTrade ? `<button class="market-trade-btn" onclick="event.stopPropagation();showTradeDialog('${p.user_id}',${p.club_id},'${p.club_name}','${p.game_id}',${p.market_value})">交易</button>` : ''}
@@ -2360,17 +2133,20 @@ async function openPlayerDetailModal(userId) {
       </div>`;
     }
 
-    document.getElementById('playerDetailContent').innerHTML = detailHtml;
+    const pdc = document.getElementById('playerDetailContent');
+    if (pdc) pdc.innerHTML = detailHtml;
     // 老板视角：查询身价调整冷却状态
     if (canEdit && p.club_id) checkPriceCooldown(p.club_id, userId);
   } catch(e) {
-    document.getElementById('playerDetailContent').innerHTML = `<p style="color:var(--danger);">加载失败：${e.message}</p>`;
+    const pdc = document.getElementById('playerDetailContent');
+    if (pdc) pdc.innerHTML = `<p style="color:var(--danger);">加载失败：${e.message}</p>`;
   }
 }
 
 async function handleUpdatePlayerInfo(e, userId, clubId) {
   e.preventDefault();
-  const marketValue = document.getElementById('editMarketValue').value;
+  const emv = document.getElementById('editMarketValue');
+  const marketValue = emv ? emv.value : '';
   try {
     await api('/api/club/' + clubId + '/player/' + userId + '/update', {
       method: 'POST',
@@ -2591,7 +2367,9 @@ function closeTradeModal() {
 
 // ==================== 俱乐部页面 ====================
 async function renderClubPanel() {
+  const _v = _tabVersion;
   const content = document.getElementById('tabContent');
+  if (_tabVersion !== _v) return;
   content.innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
   const isAdmin = currentUser && currentUser.id === 'mp4hmya7ad15v6';
   try {
@@ -2972,7 +2750,7 @@ function openCreateClubModal() {
         </div>
         <div style="display:flex;gap:10px;margin-top:16px;">
           <button type="submit" class="btn btn-primary" style="flex:1;">创建</button>
-          <button type="button" class="btn btn-secondary" onclick="var _ccm=document.getElementById('createClubModal');if(_ccm)_ccm.remove();" style="flex:1;">取消</button>
+          <button type="button" class="btn btn-secondary" onclick="document.getElementById('createClubModal').remove()" style="flex:1;">取消</button>
         </div>
       </form>
     </div>
@@ -3013,8 +2791,7 @@ async function handleCreateClub(e) {
   try {
     await api('/api/club/create', { method:'POST', body: JSON.stringify({ name, ownerId }) });
     showToast('俱乐部创建成功','success');
-    var _ccm2 = document.getElementById('createClubModal');
-    if (_ccm2) _ccm2.remove();
+    document.getElementById('createClubModal').remove();
     await renderClubPanel();
   } catch(e) { showToast(e.message,'error'); }
 }
@@ -3046,7 +2823,8 @@ async function checkNotifications() {
   if (!currentUser) return;
   const existing = document.getElementById('notifPanel');
   if (existing) { existing.remove(); return; }
-  const data = await api('/api/notifications', { skipCache: true });
+  try {
+    const data = await api('/api/notifications', { skipCache: true });
   const annData = await api('/api/announcements', { skipCache: true }).catch(() => ({ announcements: [] }));
   let html = '<div style="padding:14px 0;">';
 
@@ -3149,6 +2927,7 @@ async function checkNotifications() {
   panel.querySelector('#notifPanelClose').addEventListener('click', () => panel.remove());
   const closeOnOutside = (e) => { if (!panel.contains(e.target) && e.target.id !== 'notificationBell') { panel.remove(); document.removeEventListener('click', closeOnOutside); } };
   setTimeout(() => document.addEventListener('click', closeOnOutside), 0);
+  } catch(e) { console.warn('[openNotifications] 渲染失败:', e.message); }
 }
 async function markAllRead() {
   await api('/api/notifications/read-all', { method:'PUT' });
@@ -3168,7 +2947,9 @@ async function acceptTeamInvite(teamId) {
 
 // ==================== 榜单 ====================
 async function renderLeaderboardPanel() {
+  const _v = _tabVersion;
   const content = document.getElementById('tabContent');
+  if (_tabVersion !== _v) return;
   content.innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
 
   // 清除旧定时器，设置30秒自动刷新
@@ -3311,6 +3092,7 @@ let chatPanelData = {
 };
 
 async function renderChatPanel() {
+  const _v = _tabVersion;
   const content = document.getElementById('tabContent');
   const userId = currentUser?.id;
 
@@ -3400,6 +3182,7 @@ async function renderChatPanel() {
 
 async function switchChatType(type) {
   chatPanelData.currentChatType = type;
+  chatCurrentType = type; // 同步全局状态
 
   // 更新按钮状态
   document.querySelectorAll('.chat-type-btn').forEach(btn => {
@@ -3408,9 +3191,10 @@ async function switchChatType(type) {
 
   // 离开旧的聊天室
   if (chatSocketConnected) {
+    const oldType = chatPanelData.currentChatType === type ? chatCurrentType : chatPanelData.currentChatType;
     const oldTarget = chatPanelData.currentChatTarget;
     chatSocket.emit('leave_room', {
-      type: type,
+      type: oldType,
       team_id: oldTarget?.team_id,
       club_id: oldTarget?.club_id
     });
@@ -3422,26 +3206,33 @@ async function switchChatType(type) {
   chatPanelData.currentChatTarget = null;
 
   if (type === 'public') {
-    headerTitle.textContent = '公聊大厅';
-    headerSub.textContent = '所有人可见';
-    targetList.innerHTML = '<div class="chat-target-item active" onclick="selectChatTarget(null)"><span>🌐</span><span>公聊大厅</span></div>';
+    if (headerTitle) headerTitle.textContent = '公聊大厅';
+    if (headerSub) headerSub.textContent = '所有人可见';
+    if (targetList) targetList.innerHTML = '<div class="chat-target-item active" onclick="selectChatTarget(null)"><span>🌐</span><span>公聊大厅</span></div>';
     joinChatRoom('public', null);
     await loadChatMessages('public', null, null, null);
   } else if (type === 'private') {
-    headerTitle.textContent = '私聊';
-    headerSub.textContent = '选择联系人';
-    await renderPrivateTargets(targetList);
-    document.getElementById('chatMessages').innerHTML = '<div class="chat-empty">请选择一个联系人开始私聊</div>';
+    if (headerTitle) headerTitle.textContent = '私聊';
+    if (headerSub) headerSub.textContent = '选择联系人';
+    if (targetList) await renderPrivateTargets(targetList);
+    const cm = document.getElementById('chatMessages');
+    if (cm) cm.innerHTML = '<div class="chat-empty">请选择一个联系人开始私聊</div>';
   } else if (type === 'team') {
     headerTitle.textContent = '队伍聊天';
     headerSub.textContent = '选择队伍';
     await renderTeamTargets(targetList);
-    document.getElementById('chatMessages').innerHTML = '<div class="chat-empty">请选择一个队伍开始聊天</div>';
+  } else if (type === 'team') {
+    if (headerTitle) headerTitle.textContent = '队伍聊天';
+    if (headerSub) headerSub.textContent = '选择队伍';
+    if (targetList) await renderTeamTargets(targetList);
+    const cm = document.getElementById('chatMessages');
+    if (cm) cm.innerHTML = '<div class="chat-empty">请选择一个队伍开始聊天</div>';
   } else if (type === 'club') {
-    headerTitle.textContent = '俱乐部聊天';
-    headerSub.textContent = '选择俱乐部';
-    await renderClubTargets(targetList);
-    document.getElementById('chatMessages').innerHTML = '<div class="chat-empty">请选择一个俱乐部开始聊天</div>';
+    if (headerTitle) headerTitle.textContent = '俱乐部聊天';
+    if (headerSub) headerSub.textContent = '选择俱乐部';
+    if (targetList) await renderClubTargets(targetList);
+    const cm = document.getElementById('chatMessages');
+    if (cm) cm.innerHTML = '<div class="chat-empty">请选择一个俱乐部开始聊天</div>';
   }
 
   updateChatBadge();
@@ -3642,15 +3433,15 @@ function createChatMessageHTML(msg) {
   const showRecallBtn = isMe && !msg.recalled && msgAge < 120;
   const recallBtn = showRecallBtn ? `<span class="chat-recall-btn" onclick="event.stopPropagation();handleRecallMessage(${msgId})" title="撤回">撤回</span>` : '';
 
-  // 安全的 senderName 用于 data 属性和内联事件
-  const safeSenderName = senderName.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-
   // 更多操作按钮（移动端：长按替代方案，仅管理员看他人消息时显示）
   const isCurrentAdmin = currentUser?.id === 'mp4hmya7ad15v6';
   const moreBtn = (!isMe && isCurrentAdmin) ? `<span class="chat-message-more-btn" onclick="event.stopPropagation();handleChatLongPress(${msgId}, '${safeSenderName}', '${msg.sender_id}', event)" title="更多">⋮</span>` : '';
 
   const recalledClass = msg.recalled ? ' chat-message-recalled' : '';
   const bubbleClass = msg.recalled ? ' chat-bubble-recalled' : '';
+
+  // 安全的 senderName 用于 data 属性
+  const safeSenderName = senderName.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
   return `
     <div class="chat-message ${isMe ? 'chat-message-me' : 'chat-message-other'}${recalledClass}" data-msg-id="${msgId}" data-sender-name="${safeSenderName}" data-sender-id="${msg.sender_id}" oncontextmenu="event.preventDefault();showChatContextMenu(event, ${msgId}, '${safeSenderName}', '${msg.sender_id}')">
@@ -3877,10 +3668,10 @@ function showMuteDialog(userId, userName) {
       <div style="margin-bottom:12px;">
         <label style="display:block;font-size:0.85rem;color:var(--text-secondary);margin-bottom:6px;">禁言时长（分钟）</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
-          <button class="mute-preset-btn btn btn-sm" onclick="document.getElementById('muteMinutes').value=10" style="padding:4px 12px;">10分钟</button>
-          <button class="mute-preset-btn btn btn-sm" onclick="document.getElementById('muteMinutes').value=60" style="padding:4px 12px;">1小时</button>
-          <button class="mute-preset-btn btn btn-sm" onclick="document.getElementById('muteMinutes').value=1440" style="padding:4px 12px;">1天</button>
-          <button class="mute-preset-btn btn btn-sm" onclick="document.getElementById('muteMinutes').value=10080" style="padding:4px 12px;">7天</button>
+          <button class="mute-preset-btn btn btn-sm" onclick="var el=document.getElementById('muteMinutes');if(el)el.value=10" style="padding:4px 12px;">10分钟</button>
+          <button class="mute-preset-btn btn btn-sm" onclick="var el=document.getElementById('muteMinutes');if(el)el.value=60" style="padding:4px 12px;">1小时</button>
+          <button class="mute-preset-btn btn btn-sm" onclick="var el=document.getElementById('muteMinutes');if(el)el.value=1440" style="padding:4px 12px;">1天</button>
+          <button class="mute-preset-btn btn btn-sm" onclick="var el=document.getElementById('muteMinutes');if(el)el.value=10080" style="padding:4px 12px;">7天</button>
         </div>
         <input type="number" id="muteMinutes" class="form-input" value="10" min="1" max="10080" style="width:100%;">
       </div>
@@ -3889,7 +3680,7 @@ function showMuteDialog(userId, userName) {
         <input type="text" id="muteReason" class="form-input" placeholder="违规原因" style="width:100%;">
       </div>
       <div style="display:flex;gap:12px;justify-content:flex-end;">
-        <button class="btn btn-sm" onclick="document.getElementById('muteOverlay').remove()">取消</button>
+        <button class="btn btn-sm" onclick="var el=document.getElementById('muteOverlay');if(el)el.remove()">取消</button>
         <button class="btn btn-sm btn-danger" onclick="executeMute('${userId}')">确认禁言</button>
       </div>
     </div>
@@ -3899,8 +3690,10 @@ function showMuteDialog(userId, userName) {
 }
 
 async function executeMute(userId) {
-  const minutes = parseInt(document.getElementById('muteMinutes').value);
-  const reason = document.getElementById('muteReason').value.trim();
+  const mm = document.getElementById('muteMinutes');
+  const minutes = mm ? parseInt(mm.value) : 10;
+  const mr = document.getElementById('muteReason');
+  const reason = mr ? mr.value.trim() : '';
   if (!minutes || minutes < 1 || minutes > 10080) { showToast('请输入有效的禁言时长（1~10080分钟）', 'warning'); return; }
   try {
     await api('/api/admin/mute', { method: 'POST', body: JSON.stringify({ userId, minutes, reason }) });
@@ -4041,27 +3834,6 @@ function handleMentionKeydown(e) {
 }
 
 // ---------- Tab 切换 ----------
-// 面板渲染 10s 超时包装器（超时自动降级，不阻塞页面）
-async function _renderWithTimeout(tab, renderFn, timeoutMs) {
-  timeoutMs = timeoutMs || 25000;
-  const content = document.getElementById('tabContent');
-  if (!content) return;
-  var tid = setTimeout(function() {
-    if (content.querySelector('.loading-spinner')) {
-      content.innerHTML = '<div class="card" style="text-align:center;padding:40px;"><p style="color:var(--warning);">' + tab + ' 面板加载超时</p><button class="btn btn-sm btn-primary" onclick="switchTab(\'' + tab + '\')">重试</button></div>';
-    }
-  }, timeoutMs);
-  try {
-    await renderFn();
-  } catch (e) {
-    if (content.querySelector('.loading-spinner')) {
-      content.innerHTML = '<div class="card" style="text-align:center;padding:40px;"><p>加载失败：' + escapeHtml(e.message || '未知错误') + '</p><button class="btn btn-sm btn-primary" onclick="switchTab(\'' + tab + '\')">重试</button></div>';
-    }
-  } finally {
-    clearTimeout(tid);
-  }
-}
-
 async function switchTab(tab) {
   // 离开榜单时清除刷新定时器
   if (tab !== 'leaderboard' && window._leaderboardTimer) {
@@ -4069,90 +3841,31 @@ async function switchTab(tab) {
     window._leaderboardTimer = null;
   }
   currentTab = tab;
+  const _myVersion = ++_tabVersion; // 竞态守卫
   // 埋点：Tab 切换
-  try { if (window.Tracker) Tracker.trackTabSwitch(tab); } catch (e) {}
+  if (window.Tracker) Tracker.trackTabSwitch(tab);
   // 首页Hero + 比赛列表显示控制
-  var hero = document.getElementById("homeHero");
+  const hero = document.getElementById("homeHero");
   if (hero) hero.style.display = (tab === "competition" || tab === "square") ? "" : "none";
-  var compList = document.getElementById("competitionList");
+  const compList = document.getElementById("competitionList");
   if (compList) compList.style.display = (tab === "competition") ? "" : "none";
   updateUI();
-  if (tab === 'team') cacheStore.delete('/api/teams/mine');
-  var content = document.getElementById('tabContent');
+    if (tab === 'team') cacheStore.delete('/api/teams/mine');
+  const content = document.getElementById('tabContent');
   if (!content) return;
-
-  // competition 面板特殊处理：渲染目标是 competitionList（tabContent 子元素）
-  // 不能清空 tabContent，否则 competitionList 被销毁，loadMatches 找到 null → 静默退出 → 卡 spinner
-  if (tab === 'competition') {
-    // 从其他 tab 切回时，先清除 tabContent 中旧 tab 的残留内容
-    content.innerHTML = '';
-    // 重建可能被销毁的元素
-    if (!document.getElementById('homeHero')) {
-      var _hh = document.createElement('div');
-      _hh.id = 'homeHero';
-      _hh.style.cssText = 'display:none;padding:32px 16px;text-align:center;';
-      _hh.innerHTML = '<h1 style="font-size:1.6rem;font-weight:800;margin:0 0 8px;background:linear-gradient(135deg,#c9a84c,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">梦工厂·MGC</h1><p style="color:var(--text-secondary);font-size:0.88rem;margin:0 0 24px;">电竞训练赛生态平台</p><div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;"><button class="btn btn-primary" onclick="switchTab(\'competition\')" style="font-weight:700;">打比赛</button><button class="btn btn-secondary" onclick="switchTab(\'club\')" style="font-weight:700;">加入战队</button><button class="btn btn-outline" onclick="switchTab(\'market\')" style="font-weight:700;">转会市场</button><button class="btn btn-ghost" onclick="OnboardingModal.open()" style="font-weight:700;border:1px solid rgba(201,168,76,0.3);color:#c9a84c;">新手引导</button></div><div id="newbieTasksMount" style="margin-top:28px;"></div>';
-      content.insertBefore(_hh, content.firstChild);
-    }
-    if (!document.getElementById('matchDetailView')) {
-      var _md = document.createElement('div');
-      _md.id = 'matchDetailView';
-      _md.style.display = 'none';
-      _md.innerHTML = '<div id="scoreboardMount"></div><div id="timelineMount"></div><div id="mvpMount"></div>';
-      content.appendChild(_md);
-    }
-    var _cl = document.getElementById('competitionList');
-    if (!_cl) {
-      // 自愈：如果 competitionList 不存在，重建它
-      _cl = document.createElement('div');
-      _cl.id = 'competitionList';
-      content.appendChild(_cl);
-    }
-    _cl.style.display = 'none';
-    _cl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);">加载中…</div>';
-    var _mdv = document.getElementById('matchDetailView');
-    if (_mdv) _mdv.style.display = 'none';
-    var _hero = document.getElementById('homeHero');
-    if (_hero) _hero.style.display = 'none'; // loading 期间隐藏 Hero，渲染完再显示
-    // competition 面板不用 _renderWithTimeout（它会 destroy tabContent），改用独立超时
-    var _loadDone = false;
-    var _loadErr = null;
-    var _tid = setTimeout(function() {
-      if (!_loadDone) {
-        var __cl = document.getElementById('competitionList');
-        if (__cl) __cl.innerHTML = '<div class="card" style="text-align:center;padding:40px;"><p style="color:var(--warning);">赛事中心加载超时</p><button class="btn btn-sm btn-primary" onclick="switchTab(\'competition\')">重试</button></div>';
-      }
-    }, 25000);
-    try {
-      await loadMatches();
-      _loadDone = true;
-    } catch (e) {
-      _loadErr = e;
-      var __cl2 = document.getElementById('competitionList');
-      if (__cl2) __cl2.innerHTML = '<div class="card" style="text-align:center;padding:40px;"><p>加载失败：' + escapeHtml(e.message || '未知错误') + '</p><button class="btn btn-sm btn-primary" onclick="switchTab(\'competition\')">重试</button></div>';
-    } finally {
-      clearTimeout(_tid);
-    }
-    // 显示 Hero + 列表
-    var _hero2 = document.getElementById('homeHero');
-    if (_hero2) _hero2.style.display = '';
-    var _cl3 = document.getElementById('competitionList');
-    if (_cl3 && _loadDone) _cl3.style.display = '';
-    // 如果加载失败/超时，确保列表可见（显示错误信息）
-    if (_cl3 && !_loadDone) _cl3.style.display = '';
-    return;
-  }
-
   content.innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
-
-  // 每个面板独立超时 + 独立 catch，失败不阻塞页面
-  if (tab === 'profile')        await _renderWithTimeout('profile', renderProfileCenter);
-  else if (tab === 'admin')     await _renderWithTimeout('admin', renderAdminPanel);
-  else if (tab === 'team')      await _renderWithTimeout('team', renderTeamPanel);
-  else if (tab === 'market')    await _renderWithTimeout('market', renderMarketPanel);
-  else if (tab === 'club')      await _renderWithTimeout('club', renderClubPanel);
-  else if (tab === 'leaderboard') await _renderWithTimeout('leaderboard', renderLeaderboardPanel);
-  else if (tab === 'chat')      await _renderWithTimeout('chat', renderChatPanel);
+  try {
+    if (tab === 'profile') await renderProfileCenter();
+    else if (tab === 'admin') await renderAdminPanel();
+    else if (tab === 'team') await renderTeamPanel();
+    else if (tab === 'competition') await loadMatches();
+    else if (tab === 'market') await renderMarketPanel();
+    else if (tab === 'club') await renderClubPanel();
+    else if (tab === 'leaderboard') await renderLeaderboardPanel();
+    else if (tab === 'chat') await renderChatPanel();
+  } catch (e) {
+    content.innerHTML = '<div class="card"><p>加载失败</p><button class="btn btn-sm btn-primary" onclick="switchTab(\''+tab+'\')">重试</button></div>';
+  }
 }
 
 document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => {
@@ -4167,7 +3880,9 @@ document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', (
 let currentProfileTab = 'info'; // info | account
 
 async function renderProfileCenter() {
+  const _v = _tabVersion;
   const content = document.getElementById('tabContent');
+  if (_tabVersion !== _v) return;
   content.innerHTML = `
     <div class="card" style="padding:0;overflow:hidden;">
       <div class="profile-center-tabs">
@@ -4337,12 +4052,16 @@ async function handleUpdateGameProfile(e) {
 // ==================== 队伍系统 ====================
 
 async function renderTeamPanel() {
+  const _v = _tabVersion;
   const content = document.getElementById('tabContent');
+  if (_tabVersion !== _v) return;
   content.innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
   try {
     const data = await api('/api/teams/mine', { skipCache: true });
+    if (_tabVersion !== _v) return;
     renderMyTeam((data.data || {}).team || data.team);
   } catch {
+    if (_tabVersion !== _v) return;
     content.innerHTML = '<div class="card"><p>加载失败</p><button class="btn btn-sm btn-primary" onclick="renderTeamPanel()">重试</button></div>';
   }
 }
@@ -4545,7 +4264,9 @@ async function transferCaptain(teamId, userId) {
 let currentAdminSubTab = 'dashboard';
 
 async function renderAdminPanel() {
+  const _v = _tabVersion;
   const content = document.getElementById('tabContent');
+  if (_tabVersion !== _v) return;
   content.innerHTML = `
     <div class="card">
       <h3 style="margin-bottom:16px;">管理员面板</h3>
@@ -5824,29 +5545,21 @@ function closeImagePreview() {
 
 // ---------- 使用说明 ----------
 function openGuideModal() {
-  const el = document.getElementById('guideModal');
-  if (!el) return;
-  el.style.display = 'block';
+  document.getElementById('guideModal').style.display = 'block';
   document.body.style.overflow = 'hidden';
 }
 function closeGuideModal() {
-  const el = document.getElementById('guideModal');
-  if (!el) return;
-  el.style.display = 'none';
+  document.getElementById('guideModal').style.display = 'none';
   document.body.style.overflow = '';
 }
 
 // ---------- 新手指南 ----------
 function openNewbieGuide() {
-  const el = document.getElementById('newbieGuideModal');
-  if (!el) return;
-  el.style.display = 'flex';
+  document.getElementById('newbieGuideModal').style.display = 'flex';
   document.body.style.overflow = 'hidden';
 }
 function closeNewbieGuide() {
-  const el = document.getElementById('newbieGuideModal');
-  if (!el) return;
-  el.style.display = 'none';
+  document.getElementById('newbieGuideModal').style.display = 'none';
   document.body.style.overflow = '';
 }
 function switchNbTab(tab) {
@@ -6021,28 +5734,12 @@ function _tickSpinners() {
 }
 
 // Visibility API：页面隐藏时暂停，恢复时重启
-// 页面可见性变化 — 返回时刷新数据
-var _lastHiddenTime = 0;
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
-    _lastHiddenTime = Date.now();
-    // 暂停动画
     if (_spinnerRafId) { cancelAnimationFrame(_spinnerRafId); _spinnerRafId = null; }
-  } else {
-    // 恢复动画
-    if (document.querySelector('.loading-spinner:not(.load-timeout)')) {
-      _spinnerLastTick = 0;
-      _spinnerRafId = requestAnimationFrame(_tickSpinners);
-    }
-    // 离开超过 30 秒：刷新当前面板 + 清除相关缓存
-    if (_lastHiddenTime && (Date.now() - _lastHiddenTime) > 30000) {
-      console.log('[Visibility] 长时间离开后恢复，刷新数据');
-      if (currentTab === 'competition') { loadMatches(); cacheStore.delete('/api/competitions'); }
-      if (currentTab === 'market') { renderMarketPanel(); }
-      if (currentTab === 'leaderboard') { renderLeaderboardPanel(); }
-      if (authToken) try { checkNotifications(); } catch (e) {}
-    }
-    _lastHiddenTime = 0;
+  } else if (document.querySelector('.loading-spinner:not(.load-timeout)')) {
+    _spinnerLastTick = 0; // 重置节流，下次立即执行
+    _spinnerRafId = requestAnimationFrame(_tickSpinners);
   }
 });
 
@@ -6052,24 +5749,15 @@ window.addEventListener('beforeunload', () => {
 });
 
 // 启动
-(function() {
-  window.APP_READY = true; // 立即标记（兜底机制不再触发）
-
-  // 步骤1: 更新基础 UI（同步，无网络依赖）
-  try { updateUI(); } catch (e) { console.error('[Boot] updateUI 失败:', e); }
-
-  // 步骤2: 渲染默认面板（异步，有独立超时保护）
-  try { switchTab('competition'); } catch (e) { console.error('[Boot] switchTab 失败:', e); }
-
-  // 步骤3: 异步获取用户信息（失败不阻塞）
-  if (authToken) {
-    fetchUserInfo().catch(function(e) { console.error('[Boot] fetchUserInfo 失败:', e); });
+(async () => {
+  try {
+    window.APP_READY = true; // 标记应用已加载，解除兜底
+    updateUI();
+    switchTab('competition');
+    if (authToken) fetchUserInfo();
+    setTimeout(() => { if (window.OnboardingModal) window.OnboardingModal.autoOpenIfFirstTime(); }, 1200);
+  } catch (e) {
+    console.error('应用初始化错误:', e);
+    window.APP_READY = true; // 即使出错也标记已加载
   }
-
-  // 步骤4: 新手引导（延迟加载，失败不阻塞）
-  setTimeout(function() {
-    try {
-      if (window.OnboardingModal) window.OnboardingModal.autoOpenIfFirstTime();
-    } catch (e) { console.error('[Boot] OnboardingModal 失败:', e); }
-  }, 1200);
 })();

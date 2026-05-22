@@ -4119,3 +4119,192 @@ a.btn-primary, button.btn-primary {
 [style*="background: #22c55e"], [style*="background: #10b981"] {
   background-color: #c9a84c !important;
 }
+
+/* ================================================================
+   PlayerList 组件样式
+   ================================================================ */
+.player-list__empty {
+  padding: 16px;
+  background: rgba(255,255,255,.02);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  text-align: center;
+}
+.player-list__side-group,
+.player-list__free-group {
+  margin-bottom: 16px;
+}
+.player-list__side-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.player-list__side-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+.player-list__side-count {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.player-list__free-header {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.player-list__free-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+.player-list__grid {
+  display: grid;
+  gap: 8px;
+}
+.player-list__card {
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 8px;
+  transition: border-color 0.2s;
+}
+.player-list__card:hover {
+  border-color: rgba(201,168,76,.25);
+}
+.player-list__name {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.player-list__fee {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.player-list__badge-row {
+  margin-top: 4px;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.player-list__status-badge {
+  font-size: 0.68rem;
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  display: inline-block;
+}
+
+/* ================================================================
+   RegistrationPanel 组件样式
+   ================================================================ */
+.reg-panel {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  margin-bottom: 12px;
+}
+.reg-panel--guest {
+  background: rgba(255,255,255,.03);
+  color: var(--text-muted);
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.reg-panel--guest:hover {
+  background: rgba(255,255,255,.06);
+}
+.reg-panel__icon {
+  margin-right: 4px;
+}
+.reg-panel--confirmed {
+  background: rgba(16,185,129,.08);
+  border: 1px solid rgba(16,185,129,.2);
+  color: #10b981;
+  font-weight: 600;
+}
+.reg-panel__fee {
+  color: var(--text-muted);
+  margin-left: 8px;
+  font-size: 0.78rem;
+  font-weight: 400;
+}
+.reg-panel--pending {
+  background: rgba(245,158,11,.08);
+  border: 1px solid rgba(245,158,11,.2);
+}
+.reg-panel__title {
+  color: var(--warning);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.reg-panel--locked {
+  background: rgba(255,255,255,.02);
+  border: 1px solid rgba(255,255,255,.06);
+  color: var(--text-muted);
+}
+.reg-panel--locked b {
+  color: var(--text-primary);
+}
+.reg-panel__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.reg-panel__fee-options {
+  display: flex;
+  gap: 8px;
+}
+.reg-panel__btn {
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+  flex: 1;
+  min-width: 120px;
+  text-align: center;
+}
+.reg-panel__btn--primary {
+  background: var(--primary, #c9a84c);
+  color: #1A1A2E;
+}
+.reg-panel__btn--primary:hover {
+  filter: brightness(1.1);
+}
+.reg-panel__btn--ghost {
+  background: transparent;
+  border: 1px solid rgba(245,158,11,.3);
+  color: #f59e0b;
+}
+.reg-panel__btn--ghost:hover {
+  background: rgba(245,158,11,.1);
+}
+.reg-panel__btn--success {
+  background: rgba(16,185,129,.15);
+  border: 1px solid rgba(16,185,129,.3);
+  color: #10b981;
+}
+.reg-panel__btn--success:hover {
+  background: rgba(16,185,129,.25);
+}
+.reg-panel__btn--warning {
+  background: rgba(245,158,11,.15);
+  border: 1px solid rgba(245,158,11,.3);
+  color: #f59e0b;
+}
+.reg-panel__btn--warning:hover {
+  background: rgba(245,158,11,.25);
+}
+.reg-panel__btn--danger {
+  background: rgba(239,68,68,.15);
+  border: 1px solid rgba(239,68,68,.3);
+  color: #ef4444;
+}
+.reg-panel__btn--danger:hover {
+  background: rgba(239,68,68,.25);
+}

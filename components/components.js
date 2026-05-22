@@ -12,6 +12,8 @@
  *  <script src="components/ScoreBoard.js"></script>
  *  <script src="components/Timeline.js"></script>
  *  <script src="components/MVPPanel.js"></script>
+ *  <script src="components/PlayerList.js"></script>
+ *  <script src="components/RegistrationPanel.js"></script>
  *  <script src="components.js"></script>   ← 必须在所有组件之后
  */
 
@@ -20,11 +22,13 @@
 
   // ─── 暴露统一命名空间 ──────────────────────────────
   window.Components = {
-    MatchStatusBadge: window.MatchStatusBadge,
-    MatchCard:          window.MatchCard,
-    ScoreBoard:          window.ScoreBoard,
-    Timeline:            window.Timeline,
-    MVPPanel:           window.MVPPanel,
+    MatchStatusBadge:  window.MatchStatusBadge,
+    MatchCard:         window.MatchCard,
+    ScoreBoard:        window.ScoreBoard,
+    Timeline:          window.Timeline,
+    MVPPanel:          window.MVPPanel,
+    PlayerList:        window.PlayerList,
+    RegistrationPanel: window.RegistrationPanel,
   };
 
   // ─── MatchCard 点击委托（事件委托，只绑一次）───
@@ -147,5 +151,23 @@
     window.MatchStatusBadge.mount(container, match, opts);
   };
 
-  console.log('[Components] 组件系统已加载，5 个组件就绪。');
+  /**
+   * 渲染参赛人员列表到容器
+   * Components.renderPlayerList(container, registrations, opts)
+   */
+  Components.renderPlayerList = function (container, registrations, opts) {
+    if (!container || !window.PlayerList) return;
+    window.PlayerList.mount(container, registrations, opts);
+  };
+
+  /**
+   * 渲染报名面板到容器
+   * Components.renderRegistrationPanel(container, match, userState, opts)
+   */
+  Components.renderRegistrationPanel = function (container, match, userState, opts) {
+    if (!container || !window.RegistrationPanel) return;
+    window.RegistrationPanel.mount(container, match, userState, opts);
+  };
+
+  console.log('[Components] 组件系统已加载，7 个组件就绪。');
 })();
