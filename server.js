@@ -1164,7 +1164,7 @@ app.post('/api/me/daily-checkin', authMiddleware, async (req, res) => {
       return badRequest(res, '今日已签到，明天再来吧');
     }
     
-    // 签到奖励：100 梦币
+    // 签到奖励：100 梦币（后续可做连续签到递增）
     var amount = 100;
     await pool.query('UPDATE users SET dream_coins = COALESCE(dream_coins, 0) + $1 WHERE id = $2', [amount, req.userId]);
     await pool.query(
@@ -1603,7 +1603,7 @@ app.put('/api/users/me/profile', authMiddleware, async (req, res) => {
 
 // 更新用户标签（身份切换，支持多标签并存）
 app.put('/api/users/me/tags', authMiddleware, async (req, res) => {
-  const { tags } = req.body; // string[] like ['spectator','player','investor']
+  const { tags } = req.body;
   if (!Array.isArray(tags)) return badRequest(res, 'tags 必须是字符串数组');
   if (tags.length === 0) return badRequest(res, '至少保留一个标签');
   try {
@@ -2352,7 +2352,7 @@ app.post('/api/competitions/:id/submit-result', authMiddleware, async (req, res)
   if (!winner || !screenshots || !players) return badRequest(res, '参数不完整');
   if (!['red','blue','draw'].includes(winner)) return badRequest(res, 'winner 只接受 red/blue/draw');
   try {
-    // 校验：赛事必须存在且状态为 open/ongoing/review
+    // 校验：赛事必须存在且状态为 open/ongoing
     var comp = await pool.query('SELECT * FROM competitions WHERE id = $1', [req.params.id]);
     if (comp.rows.length === 0) return notFound(res, '赛事不存在');
     var c = comp.rows[0];
@@ -2806,10 +2806,22 @@ app.get('/api/market/players', authMiddleware, async (req, res) => {
   const { sort, maxValue } = req.query;
   try {
     let query = `
-      SELECT p.*, u.username, u.coachName, u.heroPool, c.name AS club_name
+      SELECT p.*, u.username, u.coachName, u.heroPool, c.name AS club_name,
+        COALESCE(ms.match_count, 0) AS last_match_count,
+        COALESCE(ms.win_count, 0) AS last_match_win_count,
+        COALESCE(ms.loss_count, 0) AS last_match_loss_count
       FROM players p
       LEFT JOIN users u ON p.user_id = u.id
       LEFT JOIN clubs c ON p.club_id = c.id
+      LEFT JOIN (
+        SELECT mp.user_id,
+          COUNT(*) FILTER (WHERE m.winner IS NOT NULL) AS match_count,
+          COUNT(*) FILTER (WHERE (m.winner = 'red' AND mp.side = 'red') OR (m.winner = 'blue' AND mp.side = 'blue')) AS win_count,
+          COUNT(*) FILTER (WHERE (m.winner = 'red' AND mp.side != 'red') OR (m.winner = 'blue' AND mp.side != 'blue')) AS loss_count
+        FROM match_participants mp
+        JOIN matches m ON mp.match_id = m.id AND m.status = 'FINISHED'
+        GROUP BY mp.user_id
+      ) ms ON p.user_id = ms.user_id
       WHERE p.status = 'approved'
     `;
     const params = [];

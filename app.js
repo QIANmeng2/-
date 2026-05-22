@@ -2126,8 +2126,37 @@ function renderMarketPlayerList() {
   if (window._marketSort === 'value') list.sort((a,b) => b.market_value - a.market_value);
   else list.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
 
-  if (!list.length) { container.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px;">暂无选手</p>'; return; }
-  container.innerHTML = list.map(p => {
+  // ===== 投资组合摘要（俱乐部老板专用）=====
+  var portfolioHtml = '';
+  if (isBoss && list.length > 0) {
+    var ownedPlayers = list.filter(function(p) {
+      return p.club_id && myClubs.some(function(c) { return c.id === p.club_id; });
+    });
+    if (ownedPlayers.length > 0) {
+      var totalValue = ownedPlayers.reduce(function(s, p) { return s + (p.market_value || 0); }, 0);
+      var totalChange = ownedPlayers.reduce(function(s, p) {
+        var change = parseFloat(p.last_change_percentage) || 0;
+        return s + (p.market_value || 0) * change / 100;
+      }, 0);
+      var upCount = ownedPlayers.filter(function(p) { return parseFloat(p.last_change_percentage) > 0; }).length;
+      var downCount = ownedPlayers.filter(function(p) { return parseFloat(p.last_change_percentage) < 0; }).length;
+      portfolioHtml = '<div class="portfolio-summary" style="background:linear-gradient(135deg,rgba(251,191,36,0.06),rgba(245,158,11,0.03));border:1px solid rgba(251,191,36,0.15);border-radius:10px;padding:14px 16px;margin-bottom:8px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">' +
+        '<div style="font-weight:700;font-size:14px;color:#fbbf24;">' + '我的持仓' +
+        '</div>' +
+        '<div style="display:flex;gap:16px;flex-wrap:wrap;">' +
+        '<div><span style="font-size:0.72rem;color:var(--text-muted);">持有选手</span><br><b>' + ownedPlayers.length + '</b></div>' +
+        '<div><span style="font-size:0.72rem;color:var(--text-muted);">总市值</span><br><b style="color:#fbbf24;">' + totalValue + '万</b></div>' +
+        '<div><span style="font-size:0.72rem;color:var(--text-muted);">涨跌</span><br><b style="color:' + (totalChange >= 0 ? '#10b981' : '#ef4444') + ';">' + (totalChange >= 0 ? '+' : '') + totalChange.toFixed(1) + '万</b></div>' +
+        '<div><span style="font-size:0.72rem;color:var(--text-muted);">走势</span><br><span style="font-size:0.85rem;">' +
+        '<span style="color:#10b981;">' + upCount + '</span>/<span style="color:#ef4444;">' + downCount + '</span>' +
+        '</span></div>' +
+        '</div></div></div>';
+    }
+  }
+
+  if (!list.length) { container.innerHTML = portfolioHtml + '<p style="text-align:center;color:var(--text-muted);padding:20px;">暂无选手</p>'; return; }
+  container.innerHTML = portfolioHtml + list.map(p => {
     let positions = [];
     try { positions = JSON.parse(p.positions || '[]'); } catch(e) {}
     const isFree = !p.club_id;
@@ -2151,6 +2180,7 @@ function renderMarketPlayerList() {
           ${parseFloat(p.last_change_percentage)>0?'\u25B2':'\u25BC'}${Math.abs(parseFloat(p.last_change_percentage))}%
         </span>` : ''}
         ${p.last_match_mvp ? '<span style="font-size:0.68rem;background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#1a1a2e;padding:1px 6px;border-radius:4px;font-weight:700;">MVP</span>' : ''}
+        ${p.last_match_count ? '<span style="font-size:0.68rem;color:var(--text-muted);margin-left:4px;">' + '近' + p.last_match_count + '场' + (p.last_match_win_count ? ' <span style="color:#10b981;">' + p.last_match_win_count + 'W</span>' : '') + (p.last_match_loss_count ? ' <span style="color:#ef4444;">' + p.last_match_loss_count + 'L</span>' : '') + '</span>' : ''}
         <span style="font-size:0.7rem;color:var(--text-muted);">${p.club_name ? '已签约: '+p.club_name : '自由选手'}</span>
         ${canBuy ? `<button class="market-buy-btn" onclick="event.stopPropagation();buyPlayer('${p.user_id}',${p.market_value})">采买</button>` : ''}
         ${canTrade ? `<button class="market-trade-btn" onclick="event.stopPropagation();showTradeDialog('${p.user_id}',${p.club_id},'${p.club_name}','${p.game_id}',${p.market_value})">交易</button>` : ''}
