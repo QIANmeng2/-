@@ -1,4 +1,19 @@
 "use strict";
+// === 全局错误边界：防止任何 DOM 错误阻塞页面加载 ===
+window.addEventListener('error', function(e) {
+  if (e.message && e.message.includes('null') && e.message.includes('style')) {
+    console.warn('[ErrorBoundary] 忽略 DOM null.style 错误:', e.message, e.filename, e.lineno);
+    e.preventDefault();
+    return true;
+  }
+  console.error('[ErrorBoundary] 未捕获错误:', e.message, e.filename, e.lineno);
+});
+// === 安全 DOM 访问工具 ===
+window._safeEl = function(id) {
+  const el = document.getElementById(id);
+  if (!el) console.debug('[SafeDOM] 元素未找到:', id);
+  return el;
+};
 const API_BASE = 'https://perpetual-enchantment-production-b163.up.railway.app';
 let currentUser = null;
 let authToken = localStorage.getItem('local_current_user') || null;
@@ -7,57 +22,6 @@ let authMode = 'login';
 let unreadNotifs = 0;
 let currentMatchId = null;
 let currentLeaderboardTab = 'player';
-
-// ==================== 全局错误监控 ====================
-(function() {
-  var _errors = [];
-  var MAX_ERRORS = 20;
-  
-  window.__errorLog = _errors;
-  
-  window.addEventListener('error', function(e) {
-    var msg = e.message || 'Unknown error';
-    // 跳过已知的外部脚本报错（Cloudflare beacon 等）
-    if (msg.indexOf('cloudflareinsights') !== -1) return;
-    
-    var entry = {
-      time: new Date().toISOString(),
-      message: msg,
-      source: e.filename ? e.filename.split('/').pop() : '',
-      lineno: e.lineno || 0,
-      colno: e.colno || 0
-    };
-    _errors.unshift(entry);
-    if (_errors.length > MAX_ERRORS) _errors.pop();
-    
-    console.error('[ErrorMonitor]', entry.message, '@', entry.source + ':' + entry.lineno);
-    
-    // 在页面底部显示错误计数器（开发调试用）
-    var badge = document.getElementById('errorBadge');
-    if (!badge) {
-      badge = document.createElement('div');
-      badge.id = 'errorBadge';
-      badge.style.cssText = 'position:fixed;bottom:10px;right:10px;background:rgba(220,38,38,0.9);color:#fff;padding:4px 10px;border-radius:12px;font-size:12px;z-index:99999;cursor:pointer;';
-      badge.title = '点击查看错误日志';
-      badge.onclick = function() {
-        var log = '=== Error Log (last ' + MAX_ERRORS + ') ===\n' + _errors.map(function(e, i) {
-          return (i+1) + '. ' + e.time + ' | ' + e.message + ' @ ' + e.source + ':' + e.lineno;
-        }).join('\n');
-        alert(log);
-      };
-      document.body.appendChild(badge);
-    }
-    badge.textContent = _errors.length + ' err';
-    badge.style.display = 'block';
-  }, true);
-  
-  // 捕获未处理的 Promise rejection
-  window.addEventListener('unhandledrejection', function(e) {
-    var msg = (e.reason && e.reason.message) || String(e.reason);
-    if (msg.indexOf('cloudflareinsights') !== -1) return;
-    console.error('[ErrorMonitor:Promise]', msg);
-  });
-})();
 
 // ==================== 组件系统：MatchCard 点击 → 打开比赛详情 ====================
 window.onMatchCardClick = function (matchId, cardEl) {
@@ -75,8 +39,8 @@ window.onMatchCardClick = function (matchId, cardEl) {
  * 后续替换 openCompetitionDetail 弹窗
  */
 async function openMatchDetailView(matchId) {
-  // 埋点：打开比赛详情（非阻塞）
-  try { if (window.Tracker) Tracker.trackMatchOpen(matchId); } catch(e) {}
+  // 埋点：打开比赛详情
+  if (window.Tracker) Tracker.trackMatchOpen(matchId);
   try {
     const data = await api('/api/matches/' + matchId);
     const match = data.match || data.data || data;
@@ -266,19 +230,8 @@ function initChatSocket() {
       chatSocketConnected = true;
       if (authToken) {
         chatSocket.emit('authenticate', authToken);
-        // 重连后重新加入聊天房间（恢复状态）
-        if (chatCurrentType && chatCurrentTarget) {
-          setTimeout(function() {
-            chatSocket.emit('join_room', { type: chatCurrentType, team_id: chatCurrentTarget?.team_id, club_id: chatCurrentTarget?.club_id });
-          }, 500);
-        }
       }
       updateChatIconStatus();
-      // 重连后刷新页面数据（非阻塞）
-      try {
-        if (typeof loadMatches === 'function') loadMatches();
-        if (typeof fetchNotifications === 'function') fetchNotifications();
-      } catch(e) {}
     });
   } catch (e) {
     console.error('[Chat] Socket.IO 初始化失败:', e);
@@ -400,138 +353,46 @@ async function fetchUserInfo() {
 }
 function openAuthModal(mode) {
   authMode = mode;
-  var m = document.getElementById('authModal');
-  if (!m) return;
-  m.style.display = 'flex';
-  var t = document.getElementById('authModalTitle');
-  if (t) t.textContent = mode === 'login' ? '登录' : '注册';
-  var r = document.getElementById('registerFields');
-  if (r) r.style.display = mode === 'register' ? 'block' : 'none';
-  var f = document.getElementById('authForm');
-  if (f) f.reset();
+  const overlay = document.getElementById('authModal');
+  if (!overlay) return console.error('[auth] authModal 元素未找到');
+  overlay.style.display = 'flex';
+  const title = document.getElementById('authModalTitle');
+  if (title) title.textContent = mode === 'login' ? '登录' : '注册';
+  const regFields = document.getElementById('registerFields');
+  if (regFields) regFields.style.display = mode === 'register' ? 'block' : 'none';
+  const form = document.getElementById('authForm');
+  if (form) form.reset();
 }
 function closeAuthModal() {
-  var m = document.getElementById('authModal');
-  if (m) m.style.display = 'none';
-}
-
-// ==================== 每日签到 ====================
-var _checkinChecked = false; // 今日是否已签到（缓存）
-var _checkinChecking = false; // 避免并发请求
-
-async function updateCheckinButtonState() {
-  if (!currentUser) return;
-  var btn = document.getElementById('btnCheckin');
-  if (!btn) return;
-  
-  // 先查 localStorage 缓存
-  var today = new Date().toISOString().split('T')[0];
-  var cached = localStorage.getItem('qm_checkin_date');
-  if (cached === today) {
-    _checkinChecked = true;
-    btn.textContent = '已签到';
-    btn.style.color = '#6b7280';
-    btn.style.borderColor = 'rgba(107,114,128,0.2)';
-    btn.style.background = 'rgba(107,114,128,0.08)';
-    btn.style.cursor = 'default';
-    return;
-  }
-  
-  // 异步查询服务端是否已签到
-  try {
-    var data = await api('/api/me/coins');
-    if (data && data.transactions) {
-      for (var i = 0; i < data.transactions.length; i++) {
-        var t = data.transactions[i];
-        if (t.type === 'checkin' && t.created_at && t.created_at.indexOf(today) === 0) {
-          _checkinChecked = true;
-          localStorage.setItem('qm_checkin_date', today);
-          btn.textContent = '已签到';
-          btn.style.color = '#6b7280';
-          btn.style.borderColor = 'rgba(107,114,128,0.2)';
-          btn.style.background = 'rgba(107,114,128,0.08)';
-          btn.style.cursor = 'default';
-          return;
-        }
-      }
-    }
-  } catch(e) { /* 查询失败不阻塞 */ }
-  
-  _checkinChecked = false;
-  btn.textContent = '签到领币';
-  btn.style.color = '#10b981';
-  btn.style.borderColor = 'rgba(16,185,129,0.3)';
-  btn.style.background = 'linear-gradient(135deg,rgba(16,185,129,0.15),rgba(16,185,129,0.05))';
-  btn.style.cursor = 'pointer';
-}
-
-async function doDailyCheckin() {
-  if (_checkinChecked) { showToast('今日已签到，明天再来吧', 'info'); return; }
-  if (_checkinChecking) return;
-  if (!currentUser) { showToast('请先登录', 'info'); return; }
-  
-  _checkinChecking = true;
-  var btn = document.getElementById('btnCheckin');
-  if (btn) { btn.textContent = '签到中...'; btn.style.cursor = 'wait'; }
-  
-  try {
-    var data = await api('/api/me/daily-checkin', { method: 'POST' });
-    if (data && data.success !== false) {
-      _checkinChecked = true;
-      var today = new Date().toISOString().split('T')[0];
-      localStorage.setItem('qm_checkin_date', today);
-      
-      // 更新梦币显示
-      if (data.newBalance !== undefined && currentUser) {
-        currentUser.dream_coins = data.newBalance;
-        var coinEl = document.getElementById('displayDreamCoins');
-        if (coinEl) coinEl.textContent = '🪙 ' + data.newBalance.toLocaleString();
-      }
-      
-      if (btn) {
-        btn.textContent = '已签到';
-        btn.style.color = '#6b7280';
-        btn.style.borderColor = 'rgba(107,114,128,0.2)';
-        btn.style.background = 'rgba(107,114,128,0.08)';
-        btn.style.cursor = 'default';
-      }
-      showToast('签到成功！获得 ' + ((data && data.awarded) || 100) + ' 梦币 🪙', 'success');
-    } else {
-      showToast((data && data.message) || '签到失败', 'error');
-      if (btn) { btn.textContent = '签到领币'; btn.style.cursor = 'pointer'; }
-    }
-  } catch(e) {
-    showToast('签到失败：' + (e.message || '网络错误'), 'error');
-    if (btn) { btn.textContent = '签到领币'; btn.style.cursor = 'pointer'; }
-  } finally {
-    _checkinChecking = false;
-  }
+  const overlay = document.getElementById('authModal');
+  if (overlay) overlay.style.display = 'none';
 }
 function switchAuthMode() { openAuthModal(authMode === 'login' ? 'register' : 'login'); }
 async function handleAuth(e) {
   e.preventDefault();
-  var uEl = document.getElementById('authUsername');
-  var pEl = document.getElementById('authPassword');
-  if (!uEl || !pEl) return;
-  var username = uEl.value.trim();
-  var password = pEl.value.trim();
+  const userEl = document.getElementById('authUsername');
+  const passEl = document.getElementById('authPassword');
+  if (!userEl || !passEl) { showToast('登录表单加载异常，请刷新页面','error'); return; }
+  const username = userEl.value.trim();
+  const password = passEl.value.trim();
   if (!username || !password) { showToast('请填写用户名和密码','error'); return; }
   if (authMode === 'register') {
-    var cEl = document.getElementById('regCoachName');
-    var wEl = document.getElementById('regWechat');
-    var lEl = document.getElementById('regLevel');
-    var coach = cEl ? cEl.value.trim() : '';
-    var wechat = wEl ? wEl.value.trim() : '';
-    var level = lEl ? lEl.value : '大众';
+    const coachEl = document.getElementById('regCoachName');
+    const wechatEl = document.getElementById('regWechat');
+    const levelEl = document.getElementById('regLevel');
+    if (!coachEl || !wechatEl || !levelEl) { showToast('注册表单加载异常','error'); return; }
+    const coach = coachEl.value.trim();
+    const wechat = wechatEl.value.trim();
+    const level = levelEl.value;
     if (!coach || !wechat) { showToast('请填写完整注册信息','error'); return; }
     try {
-      var data = await api('/api/auth/register', { method:'POST', body: JSON.stringify({ username: username, password: password, teamName: coach, coachName: coach, wechat: wechat, level: level }) });
+      const data = await api('/api/auth/register', { method:'POST', body: JSON.stringify({ username, password, teamName: coach, coachName: coach, wechat, level }) });
       if (data && data.token) { authToken = data.token; localStorage.setItem('local_current_user', authToken); currentUser = data.user; closeAuthModal(); updateUI(); switchTab('competition'); showToast('注册成功！','success'); }
     } catch (e) { showToast(e.message,'error'); }
   } else {
     try {
-      var data2 = await api('/api/auth/login', { method:'POST', body: JSON.stringify({ username: username, password: password }) });
-      if (data2 && data2.token) { authToken = data2.token; localStorage.setItem('local_current_user', authToken); currentUser = data2.user; closeAuthModal(); updateUI(); switchTab('competition'); showToast('登录成功！','success'); }
+      const data = await api('/api/auth/login', { method:'POST', body: JSON.stringify({ username, password }) });
+      if (data && data.token) { authToken = data.token; localStorage.setItem('local_current_user', authToken); currentUser = data.user; closeAuthModal(); updateUI(); switchTab('competition'); showToast('登录成功！','success'); }
     } catch (e) { showToast(e.message,'error'); }
   }
 }
@@ -542,55 +403,55 @@ function logout() {
 
 // ---------- UI 更新 ----------
 function updateUI() {
-  const ui = id => document.getElementById(id);
+  const ui = (id) => document.getElementById(id);
+  const safeStyle = (id, prop, val) => { const el = ui(id); if (el) el.style[prop] = val; };
+  const safeText = (id, val) => { const el = ui(id); if (el) el.textContent = val; };
   if (currentUser) {
-    ui('userInfoDisplay').style.display = 'block';
-    ui('btnLoginTop').style.display = 'none';
-    ui('btnLogoutTop').style.display = 'inline-block';
-    ui('displayName').textContent = currentUser.coachName;
-    ui('displayTeam').textContent = currentUser.teamName;
+    safeStyle('userInfoDisplay', 'display', 'block');
+    safeStyle('btnLoginTop', 'display', 'none');
+    safeStyle('btnLogoutTop', 'display', 'inline-block');
+    safeText('displayName', currentUser.coachName);
+    safeText('displayTeam', currentUser.teamName);
     // 显示梦币余额
     const dreamCoins = currentUser.dream_coins || 0;
     let coinDisplay = document.getElementById('displayDreamCoins');
     if (!coinDisplay) {
-      // 首次创建梦币显示元素
-      const sep = document.createElement('span');
-      sep.className = 'user-sep';
-      sep.style.color = 'var(--text-muted)';
-      sep.style.margin = '0 8px';
-      sep.textContent = '|';
-      ui('displayTeam').parentNode.insertBefore(sep, ui('displayTeam').nextSibling);
-      
-      coinDisplay = document.createElement('span');
-      coinDisplay.id = 'displayDreamCoins';
-      coinDisplay.style.cssText = 'color:var(--gradient-gold-stop3, #FFD700);font-weight:700;margin-left:8px;cursor:pointer;';
-      coinDisplay.title = '点击查看账户明细';
-      coinDisplay.onclick = () => { switchTab('profile'); setTimeout(() => { if (typeof switchProfileTab === 'function') switchProfileTab('account'); }, 200); };
-      sep.parentNode.insertBefore(coinDisplay, sep.nextSibling);
+      const teamEl = ui('displayTeam');
+      if (teamEl && teamEl.parentNode) {
+        const sep = document.createElement('span');
+        sep.className = 'user-sep';
+        sep.style.color = 'var(--text-muted)';
+        sep.style.margin = '0 8px';
+        sep.textContent = '|';
+        teamEl.parentNode.insertBefore(sep, teamEl.nextSibling);
+        
+        coinDisplay = document.createElement('span');
+        coinDisplay.id = 'displayDreamCoins';
+        coinDisplay.style.cssText = 'color:var(--gradient-gold-stop3, #FFD700);font-weight:700;margin-left:8px;cursor:pointer;';
+        coinDisplay.title = '点击查看账户明细';
+        coinDisplay.onclick = () => { switchTab('profile'); setTimeout(() => { if (typeof switchProfileTab === 'function') switchProfileTab('account'); }, 200); };
+        sep.parentNode.insertBefore(coinDisplay, sep.nextSibling);
+      }
     }
-    coinDisplay.textContent = '🪙 ' + dreamCoins.toLocaleString();
+    if (coinDisplay) coinDisplay.textContent = '🪙 ' + dreamCoins.toLocaleString();
     document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="market"], #tabNav .tab-btn[data-tab="club"], #tabNav .tab-btn[data-tab="chat"]').forEach(b => b.style.display = '');
-    ui('notificationBell').style.display = 'flex';
-    ui('btnOnboard').style.display = '';
-    // 签到按钮：检查今日是否已签到
-    var ciBtn = ui('btnCheckin');
-    if (ciBtn) ciBtn.style.display = '';
-    updateCheckinButtonState();
-    if (currentUser.id === 'mp4hmya7ad15v6') { ui('tabAdmin').style.display = ''; }
-    ui('tabCompetition').style.display = '';
+    safeStyle('notificationBell', 'display', 'flex');
+    safeStyle('btnOnboard', 'display', '');
+    if (currentUser.id === 'mp4hmya7ad15v6') { safeStyle('tabAdmin', 'display', ''); }
+    safeStyle('tabCompetition', 'display', '');
     // 电竞世界观文案统一
     const _ptab = document.querySelector('[data-tab="profile"]');
     if (_ptab) _ptab.textContent = '电竞生涯';
     const _ctab = document.querySelector('[data-tab="club"]');
     if (_ctab) _ctab.textContent = '战队基地';
   } else {
-    ui('userInfoDisplay').style.display = 'none';
-    ui('btnLoginTop').style.display = 'inline-block';
-    ui('btnLogoutTop').style.display = 'none';
+    safeStyle('userInfoDisplay', 'display', 'none');
+    safeStyle('btnLoginTop', 'display', 'inline-block');
+    safeStyle('btnLogoutTop', 'display', 'none');
     document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="admin"], #tabNav .tab-btn[data-tab="market"], #tabNav .tab-btn[data-tab="club"]').forEach(b => b.style.display = 'none');
-    ui('tabCompetition').style.display = '';
-    ui('notificationBell').style.display = 'none';
-    ui('btnOnboard').style.display = 'none';
+    safeStyle('tabCompetition', 'display', '');
+    safeStyle('notificationBell', 'display', 'none');
+    safeStyle('btnOnboard', 'display', 'none');
   }
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === currentTab));
 }
@@ -1581,12 +1442,19 @@ async function renderAccountPanel(targetEl) {
 }
 
 let currentCoinSubTab = 'history';
+let currentCoinFilter = 'all'; // 收支明细类型筛选
 
 function switchCoinTab(tab) {
   currentCoinSubTab = tab;
+  currentCoinFilter = 'all'; // 切换 tab 时重置筛选
   document.querySelectorAll('#coinTabHistory,#coinTabAward,#coinTabLog').forEach(t => t.classList.remove('active'));
   const btn = document.getElementById('coinTab' + tab.charAt(0).toUpperCase() + tab.slice(1));
   if (btn) btn.classList.add('active');
+  loadCoinSubTab();
+}
+
+function setCoinFilter(key) {
+  currentCoinFilter = key;
   loadCoinSubTab();
 }
 
@@ -1618,23 +1486,43 @@ async function loadCoinSubTab() {
     if (currentCoinSubTab === 'history') {
       const data = await api('/api/me/coins');
       document.getElementById('coinBalance').textContent = data.balance + ' 梦币';
-      const txs = data.transactions || [];
+      let txs = data.transactions || [];
+      // 类型筛选
+      const filterLabels = [
+        { key: 'all', label: '全部' },
+        { key: 'checkin', label: '签到' },
+        { key: 'reward', label: '奖励' },
+        { key: 'deduct', label: '支出' },
+        { key: 'refund', label: '退款' }
+      ];
+      if (currentCoinFilter !== 'all') {
+        const filterMap = { reward: ['award','reward','cert_reward'] };
+        const matchTypes = filterMap[currentCoinFilter] || [currentCoinFilter];
+        txs = txs.filter(t => matchTypes.includes(t.type));
+      }
+      const filterHtml = '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">' +
+        filterLabels.map(f => {
+          const active = currentCoinFilter === f.key;
+          return `<button class="btn btn-sm ${active ? 'btn-primary' : 'btn-ghost'}" style="padding:4px 12px;font-size:0.78rem;border-radius:20px;" onclick="setCoinFilter('${f.key}')">${f.label}</button>`;
+        }).join('') + '</div>';
       if (!txs.length) {
-        container.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:30px 0;">暂无收支记录</p>';
+        container.innerHTML = filterHtml + '<p style="text-align:center;color:var(--text-muted);padding:30px 0;">暂无' + (currentCoinFilter !== 'all' ? '该类别的' : '') + '收支记录</p>';
         return;
       }
-      container.innerHTML = txs.map(t => `
+      container.innerHTML = filterHtml + txs.map(t => {
+        const typeLabels = { checkin: '每日签到', award: '奖励发放', reward: '赛事奖励', cert_reward: '认证奖励', deduct: '支出', refund: '退款' };
+        return `
         <div class="coin-transaction-item">
           <div class="coin-info">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-              <span class="coin-type-badge coin-type-${t.type === 'award' ? 'award' : t.type === 'deduct' ? 'deduct' : 'other'}">${t.type === 'award' ? '奖励发放' : t.type === 'deduct' ? '扣除' : '其他'}</span>
+              <span class="coin-type-badge coin-type-${['checkin','award','reward','cert_reward'].includes(t.type) ? 'award' : t.type === 'deduct' ? 'deduct' : 'other'}">${typeLabels[t.type] || t.type}</span>
             </div>
             <div class="coin-note">${t.note || '无备注'}</div>
             <div class="coin-time">${new Date(t.created_at).toLocaleString('zh-CN')}</div>
           </div>
           <div class="coin-amount ${t.amount >= 0 ? 'positive' : 'negative'}">${t.amount >= 0 ? '+' : ''}${t.amount}</div>
-        </div>
-      `).join('');
+        </div>`;
+      }).join('');
     } else if (currentCoinSubTab === 'award') {
       container.innerHTML = `
         <form onsubmit="handleAwardCoins(event)" style="max-width:480px;">
@@ -3922,8 +3810,8 @@ async function switchTab(tab) {
     window._leaderboardTimer = null;
   }
   currentTab = tab;
-  // 埋点：Tab 切换（非阻塞）
-  try { if (window.Tracker) Tracker.trackTabSwitch(tab); } catch(e) {}
+  // 埋点：Tab 切换
+  if (window.Tracker) Tracker.trackTabSwitch(tab);
   // 首页Hero + 比赛列表显示控制
   const hero = document.getElementById("homeHero");
   if (hero) hero.style.display = (tab === "competition" || tab === "square") ? "" : "none";
@@ -3932,6 +3820,7 @@ async function switchTab(tab) {
   updateUI();
     if (tab === 'team') cacheStore.delete('/api/teams/mine');
   const content = document.getElementById('tabContent');
+  if (!content) return;
   content.innerHTML = '<div class="loading-spinner"><div class="load-text">加载中… 0%</div><div class="load-bar"><div class="load-fill"></div></div></div>';
   try {
     if (tab === 'profile') await renderProfileCenter();
@@ -3948,9 +3837,11 @@ async function switchTab(tab) {
 }
 
 document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => {
-  const tab = b.dataset.tab;
-  if (['publish','profile','admin','chat'].includes(tab) && !currentUser) { showToast('请先登录','info'); openAuthModal('login'); return; }
-  switchTab(tab);
+  try {
+    const tab = b.dataset.tab;
+    if (['publish','profile','admin','chat'].includes(tab) && !currentUser) { showToast('请先登录','info'); openAuthModal('login'); return; }
+    switchTab(tab);
+  } catch (e) { console.error('[tab] 切换标签页失败:', e); }
 }));
 
 // ==================== 个人中心 ====================
