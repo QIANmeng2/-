@@ -203,6 +203,12 @@ async function loadMatches() {
         '</div>';
       }).join('') || '<div style="color:var(--text-muted);text-align:center;padding:40px;">暂无赛事</div>';
     }
+    // 清除 tabContent 中的 loading spinner（switchTab 遗留的）
+    var tabContent = document.getElementById('tabContent');
+    if (tabContent) {
+      var spinner = tabContent.querySelector('.loading-spinner');
+      if (spinner) spinner.remove();
+    }
   } catch (err) {
     if (_tabVersion !== _v) return;
     container.innerHTML = '<div style="color:var(--danger);text-align:center;padding:20px;">加载失败：' + escapeHtml(err.message) + '</div>';
