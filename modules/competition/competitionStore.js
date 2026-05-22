@@ -26,11 +26,11 @@
   };
 
   // ===== 状态变更（唯一出口）=====
-  function setState(partial) {
+  function setState(next) {
     var key = null;
-    for (key in partital) {
+    for (key in next) {
       if (Object.prototype.hasOwnProperty.call(state, key)) {
-        state[key] = partital[key];
+        state[key] = next[key];
       }
     }
     // 触发渲染（由 View 层注册回调）
