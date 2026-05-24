@@ -1,0 +1,11 @@
+# 日志文件（运行时生成）
+logs/
+
+# 环境变量
+.env
+
+# Railway 等平台
+.node binary
+
+# 依赖目录
+node_modules/

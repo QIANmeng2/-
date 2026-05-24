@@ -1,0 +1,85 @@
+# ==========================================
+# GitHub Pages 全站缓存优化配置
+# 适用域名: neondream.cn / qianmeng2.github.io/-
+# ==========================================
+
+# ----- HTML: 不缓存，确保更新即时生效 -----
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+
+# ----- 静态资源：长期缓存（GitHub Pages 自动基于内容hash） -----
+/*.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.css
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.png
+  Cache-Control: public, max-age=2592000
+  Content-Type: image/png
+
+/*.jpg
+  Cache-Control: public, max-age=2592000
+  Content-Type: image/jpeg
+
+/*.jpeg
+  Cache-Control: public, max-age=2592000
+  Content-Type: image/jpeg
+
+/*.gif
+  Cache-Control: public, max-age=2592000
+  Content-Type: image/gif
+
+/*.svg
+  Cache-Control: public, max-age=2592000
+  Content-Type: image/svg+xml
+
+/*.webp
+  Cache-Control: public, max-age=2592000
+  Content-Type: image/webp
+
+/*.woff
+  Cache-Control: public, max-age=31536000, immutable
+  Content-Type: font/woff
+
+/*.woff2
+  Cache-Control: public, max-age=31536000, immutable
+  Content-Type: font/woff2
+
+/*.ttf
+  Cache-Control: public, max-age=2592000
+  Content-Type: font/ttf
+
+/*.ico
+  Cache-Control: public, max-age=604800
+
+# ----- JSON/数据文件 -----
+/*.json
+  Cache-Control: no-cache
+
+# ----- 安全响应头（全部页面） -----
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  X-XSS-Protection: 1; mode=block
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+# ----- CDN 跨域资源共享 -----
+/*.js
+  Access-Control-Allow-Origin: *
+  Cross-Origin-Resource-Policy: cross-origin
+
+/*.css
+  Access-Control-Allow-Origin: *
+  Cross-Origin-Resource-Policy: cross-origin
+
+# ==========================================
+# 备注：
+# 1. index.html 使用 no-cache 确保每次获取最新版本
+# 2. .js/.css 使用 immutable + 1年缓存（GitHub Pages 自动在文件名中追加内容hash，版本更新时hash改变，浏览器自动拉取新文件）
+# 3. 图片/字体缓存30天，字体可升级为1年
+# 4. 安全头防止点击劫持和XSS
+# ==========================================

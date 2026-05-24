@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>聊天室 · 梦工厂</title>
+  <link rel="stylesheet" href="styles.css?v=20260523c">
+  <style>
+    /* ===== 聊天独立页专用 ===== */
+    :root {
+      --bg: #1A1A2E;
+      --bg-card: rgba(255,255,255,.03);
+      --border: rgba(255,255,255,.06);
+      --gold: #c9a84c;
+      --gold-light: #fbbf24;
+      --text: #e0e0f0;
+      --text-muted: #7a7a90;
+      --danger: #ef4444;
+      --success: #10b981;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* 顶栏 */
+    .ch-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 20px;
+      background: rgba(26,26,46,.96);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      z-index: 100;
+    }
+    .ch-header__left { display: flex; align-items: center; gap: 12px; }
+    .ch-header__logo { font-size: 1.1rem; font-weight: 700; color: var(--gold); text-decoration: none; }
+    .ch-header__back {
+      color: var(--text-muted); text-decoration: none;
+      font-size: .82rem; padding: 5px 10px;
+      border: 1px solid var(--border); border-radius: 8px; transition: all .2s;
+    }
+    .ch-header__back:hover { border-color: var(--gold); color: var(--gold); }
+    .ch-header__room { font-size: .85rem; color: var(--text-muted); }
+    .ch-header__status {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #6b7280; display: inline-block; margin-left: 8px;
+    }
+
+    /* 主体：频道列表 + 消息区 */
+    .ch-body {
+      flex: 1; display: flex;
+      overflow: hidden;
+    }
+
+    /* 频道侧边栏 */
+    .ch-sidebar {
+      width: 220px; flex-shrink: 0;
+      background: rgba(255,255,255,.02);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow-y: auto;
+    }
+    .ch-sidebar__title {
+      font-size: .72rem; font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .08em;
+      padding: 16px 16px 8px;
+    }
+    .ch-room-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 16px; cursor: pointer;
+      font-size: .85rem; color: var(--text-muted);
+      border-left: 3px solid transparent;
+      transition: all .15s;
+    }
+    .ch-room-item:hover { background: rgba(255,255,255,.04); color: var(--text); }
+    .ch-room-item.active {
+      color: var(--gold); border-left-color: var(--gold);
+      background: rgba(201,168,76,.06);
+    }
+    .ch-room-item__icon { font-size: 1rem; flex-shrink: 0; }
+    .ch-room-item__badge {
+      margin-left: auto; background: var(--danger);
+      color: #fff; font-size: .65rem; font-weight: 700;
+      padding: 1px 6px; border-radius: 10px; min-width: 18px; text-align: center;
+    }
+
+    /* 消息区 */
+    .ch-main {
+      flex: 1; display: flex; flex-direction: column;
+      overflow: hidden; min-width: 0;
+    }
+    .ch-messages {
+      flex: 1; overflow-y: auto; padding: 20px;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .ch-empty {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 100%; color: var(--text-muted); font-size: .9rem;
+    }
+    .ch-empty__icon { font-size: 3rem; margin-bottom: 12px; opacity: .3; }
+
+    /* 消息气泡 */
+    .ch-msg { display: flex; gap: 10px; padding: 6px 0; max-width: 80%; }
+    .ch-msg--self { margin-left: auto; flex-direction: row-reverse; }
+    .ch-msg__avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: rgba(201,168,76,.15); color: var(--gold);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .75rem; font-weight: 700; flex-shrink: 0;
+    }
+    .ch-msg__body { min-width: 0; }
+    .ch-msg__header { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+    .ch-msg__name { font-size: .82rem; font-weight: 600; color: var(--text); }
+    .ch-msg__time { font-size: .7rem; color: var(--text-muted); }
+    .ch-msg__text { font-size: .88rem; line-height: 1.5; word-break: break-word; }
+    .ch-msg__recalled {
+      font-size: .8rem; color: var(--text-muted); font-style: italic;
+      padding: 4px 0;
+    }
+
+    /* 输入区 */
+    .ch-input-area {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 20px;
+      background: rgba(255,255,255,.02);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .ch-input {
+      flex: 1; background: rgba(255,255,255,.05);
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 14px; color: var(--text); font-size: .9rem;
+      outline: none; transition: border-color .2s;
+    }
+    .ch-input:focus { border-color: var(--gold); }
+    .ch-input::placeholder { color: var(--text-muted); }
+    .ch-send-btn {
+      background: linear-gradient(135deg, #c9a84c, #a88b3c);
+      color: #1A1A2E; border: none; border-radius: 10px;
+      padding: 10px 20px; font-size: .85rem; font-weight: 700;
+      cursor: pointer; transition: all .2s;
+    }
+    .ch-send-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(201,168,76,.25); }
+    .ch-send-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    /* Toast */
+    .ch-toast {
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+      background: rgba(239,68,68,.9); color: #fff;
+      padding: 8px 20px; border-radius: 8px;
+      font-size: .85rem; z-index: 9999;
+      animation: chFadeIn .3s ease;
+      pointer-events: none;
+    }
+    @keyframes chFadeIn { from { opacity: 0; transform: translateX(-50%) translateY(-10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+    /* 加载状态 */
+    .ch-loading { display: flex; align-items: center; justify-content: center; height: 100%; }
+    .ch-loading__spinner {
+      width: 28px; height: 28px;
+      border: 3px solid var(--border); border-top-color: var(--gold);
+      border-radius: 50%; animation: chSpin .8s linear infinite;
+    }
+    @keyframes chSpin { to { transform: rotate(360deg); } }
+
+    /* 响应式 */
+    @media (max-width: 640px) {
+      .ch-sidebar { width: 60px; }
+      .ch-room-item__name { display: none; }
+      .ch-room-item { justify-content: center; padding: 10px; }
+      .ch-room-item__badge { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 顶栏 -->
+  <header class="ch-header">
+    <div class="ch-header__left">
+      <a href="./" class="ch-header__logo">💬 聊天室</a>
+      <span class="ch-header__room" id="chRoomName">未连接</span>
+      <span class="ch-header__status" id="chStatusIcon" title="离线"></span>
+    </div>
+    <a href="./" class="ch-header__back">← 返回主页</a>
+  </header>
+
+  <!-- 主体 -->
+  <div class="ch-body">
+
+    <!-- 频道侧边栏（由 chatView.js 渲染）-->
+    <aside class="ch-sidebar" id="chSidebar">
+      <div class="ch-sidebar__title">频道</div>
+      <div id="chRoomList"></div>
+    </aside>
+
+    <!-- 消息区 -->
+    <main class="ch-main">
+      <div class="ch-messages" id="chMessages">
+        <div class="ch-loading">
+          <div class="ch-loading__spinner"></div>
+        </div>
+      </div>
+
+      <!-- 输入区 -->
+      <div class="ch-input-area">
+        <input
+          type="text" class="ch-input" id="chInput"
+          placeholder="输入消息…（按 Enter 发送）"
+          autocomplete="off"
+          disabled
+        >
+        <button class="ch-send-btn" id="chSendBtn" disabled>发送</button>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- ===== 依赖脚本（严格按顺序）===== -->
+  <!-- SocketManager 先加载（聊天依赖 socket）-->
+  <script src="modules/socket/socketManager.js?v=20260523c"></script>
+  <script src="modules/socket/socketChannels.js?v=20260523c"></script>
+  <script src="modules/socket/socketReconnect.js?v=20260523c"></script>
+  <script src="modules/socket/socketEvents.js?v=20260523c"></script>
+
+  <!-- Auth（获取 currentUser）-->
+  <script src="modules/auth/authStore.js?v=20260523c"></script>
+  <script src="modules/auth/authApi.js?v=20260523c"></script>
+
+  <!-- Chat 模块 -->
+  <script src="modules/chat/chatStore.js?v=20260523c"></script>
+  <script src="modules/chat/chatApi.js?v=20260523c"></script>
+  <script src="modules/chat/chatSocket.js?v=20260523c"></script>
+  <script src="modules/chat/chatView.js?v=20260523c"></script>
+  <script src="modules/chat/chatRoomManager.js?v=20260523c"></script>
+
+  <!-- 页面入口（最后）-->
+  <script src="modules/chat/chatPage.js?v=20260523c"></script>
+
+</body>
+</html>

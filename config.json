@@ -1,0 +1,16 @@
+{
+  "db": {
+    "url": "postgres://postgres:OHgfbDBtBUxgcBbwSUTVglzoyEimCAgD@yamabiko.proxy.rlwy.net:35510/railway"
+  },
+  "meeting": {
+    "durationHours": 2,
+    "joinType": 1
+  },
+  "poll": {
+    "intervalSeconds": 30
+  },
+  "log": {
+    "level": "info",
+    "maxFiles": 7
+  }
+}

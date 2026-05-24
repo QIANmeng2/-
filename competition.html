@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>赛事中心 · 梦工厂</title>
+  <link rel="stylesheet" href="styles.css?v=20260523b">
+  <style>
+    /* ===== 赛事独立页专用（覆盖/补充 styles.css）===== */
+    :root {
+      --bg: #1A1A2E;
+      --bg-card: rgba(255,255,255,.03);
+      --border: rgba(255,255,255,.06);
+      --gold: #c9a84c;
+      --gold-light: #fbbf24;
+      --text: #e0e0f0;
+      --text-muted: #7a7a90;
+      --danger: #ef4444;
+      --success: #10b981;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+    /* 顶栏 */
+    .c-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 24px;
+      background: rgba(26,26,46,.95);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+      backdrop-filter: blur(12px);
+    }
+    .c-header__left { display: flex; align-items: center; gap: 12px; }
+    .c-header__logo { font-size: 1.2rem; font-weight: 700; color: var(--gold); text-decoration: none; }
+    .c-header__back {
+      color: var(--text-muted); text-decoration: none;
+      font-size: .85rem; padding: 6px 12px;
+      border: 1px solid var(--border); border-radius: 8px; transition: all .2s;
+    }
+    .c-header__back:hover { border-color: var(--gold); color: var(--gold); }
+
+    /* 主内容 */
+    .c-main { max-width: 960px; margin: 0 auto; padding: 24px; }
+    .c-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 4px; }
+    .c-subtitle { font-size: .85rem; color: var(--text-muted); margin-bottom: 24px; }
+
+    /* 过滤栏 */
+    .c-filter-row {
+      display: flex; gap: 8px; flex-wrap: wrap;
+      margin-bottom: 16px; align-items: center;
+    }
+    .c-filter-select {
+      background: rgba(255,255,255,.05); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 6px 10px; font-size: .85rem;
+    }
+    .c-filter-select:focus { border-color: var(--gold); outline: none; }
+    .c-filter-input {
+      background: rgba(255,255,255,.05); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: 6px 12px; font-size: .85rem; width: 180px;
+    }
+    .c-filter-input::placeholder { color: var(--text-muted); }
+    .c-filter-input:focus { border-color: var(--gold); outline: none; }
+
+    /* 状态标签 */
+    .c-status-badge {
+      display: inline-block; padding: 2px 10px;
+      border-radius: 6px; font-size: .72rem; font-weight: 600; letter-spacing: .03em;
+    }
+    .c-status--live      { background: rgba(239,68,68,.15); color: var(--danger); }
+    .c-status--registering { background: rgba(16,185,129,.15); color: var(--success); }
+    .c-status--ready     { background: rgba(59,130,246,.15); color: #60a5fa; }
+    .c-status--finished   { background: rgba(255,255,255,.06); color: var(--text-muted); }
+    .c-status--created    { background: rgba(201,168,76,.1);  color: var(--gold); }
+    .c-status--archived   { background: rgba(255,255,255,.03); color: #555; }
+
+    /* 赛事卡片 */
+    .c-list { display: flex; flex-direction: column; gap: 10px; }
+    .c-card {
+      display: flex; align-items: center; gap: 16px;
+      padding: 20px 24px;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 12px; cursor: pointer;
+      transition: all .2s; text-decoration: none; color: inherit;
+    }
+    .c-card:hover {
+      background: rgba(255,255,255,.05);
+      border-color: rgba(201,168,76,.2);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 20px rgba(0,0,0,.3);
+    }
+    .c-card__icon {
+      width: 48px; height: 48px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; font-size: 1.3rem;
+    }
+    .c-card__icon--training { background: rgba(59,130,246,.12); color: #60a5fa; }
+    .c-card__icon--regular  { background: rgba(201,168,76,.12);  color: var(--gold); }
+    .c-card__icon--arena    { background: rgba(16,185,129,.12); color: var(--success); }
+    .c-card__body { flex: 1; min-width: 0; }
+    .c-card__title { font-size: 1rem; font-weight: 600; margin-bottom: 4px; }
+    .c-card__meta { display: flex; gap: 12px; font-size: .78rem; color: var(--text-muted); flex-wrap: wrap; }
+    .c-card__right { text-align: right; flex-shrink: 0; }
+
+    /* 空状态 / 错误 / 加载 */
+    .c-empty, .c-error, .c-loading { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .c-empty__icon { font-size: 3rem; margin-bottom: 12px; opacity: .3; }
+    .c-error__text { color: var(--danger); margin-bottom: 16px; }
+    .c-loading__spinner {
+      width: 32px; height: 32px; margin: 0 auto 12px;
+      border: 3px solid var(--border); border-top-color: var(--gold);
+      border-radius: 50%; animation: cSpin .8s linear infinite;
+    }
+    @keyframes cSpin { to { transform: rotate(360deg); } }
+
+    /* 按钮 */
+    .c-btn {
+      display: inline-block; padding: 10px 24px;
+      border-radius: 10px; border: none;
+      font-size: .9rem; font-weight: 600;
+      cursor: pointer; transition: all .2s;
+    }
+    .c-btn--primary {
+      background: linear-gradient(135deg, #c9a84c, #a88b3c); color: #1A1A2E;
+    }
+    .c-btn--primary:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(201,168,76,.25); }
+
+    /* 卡片 active 高亮（点击反馈）*/
+    .c-card.active { border-color: rgba(201,168,76,.5); }
+  </style>
+</head>
+<body>
+
+  <!-- 顶栏 -->
+  <header class="c-header">
+    <div class="c-header__left">
+      <a href="./" class="c-header__logo">🏆 赛事中心</a>
+    </div>
+    <a href="./" class="c-header__back">← 返回主页</a>
+  </header>
+
+  <!-- 主内容 -->
+  <main class="c-main">
+    <h1 class="c-title">全部赛事</h1>
+    <p class="c-subtitle" id="cSubtitle">加载中…</p>
+
+    <!-- 过滤栏（由 competitionView.js 渲染）-->
+    <div id="cFilterBar" class="c-filter-row"></div>
+
+    <!-- 赛事列表容器 -->
+    <div id="cList" class="c-list">
+      <div class="c-loading">
+        <div class="c-loading__spinner"></div>
+        <div>正在加载赛事列表…</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===== 模块脚本（严格按顺序加载）===== -->
+  <script src="modules/competition/competitionStore.js?v=20260523a"></script>
+  <script src="modules/competition/competitionApi.js?v=20260523a"></script>
+  <script src="modules/competition/competitionView.js?v=20260523a"></script>
+  <script src="modules/competition/competitionPage.js?v=20260523a"></script>
+
+</body>
+</html>

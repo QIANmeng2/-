@@ -1,0 +1,925 @@
+/* ============================================================
+   全局电竞设计系统  v20260522d — HUD化（去噪音版）
+   ============================================================
+
+   设计原则：
+   - 像游戏内 HUD，不是海报
+   - 减少无意义发光，保留关键高亮
+   - 信息层级：S级最大 / A级清晰 / B级标签化 / C级弱化
+   - 移动端优先（`@media (max-width: 640px)` 断点）
+   ============================================================ */
+
+/* ─── 设计令牌（Design Tokens）────────────────────────────── */
+:root {
+  /* 核心色板 */
+  --bg-primary:     #0a0a12;
+  --bg-secondary:   #10101c;
+  --bg-card:        #12122a;
+  --bg-card-hover:  #1a1a3a;
+  --bg-elevated:    #161632;
+
+  --text-primary:   #eeeef0;
+  --text-secondary: #a0a0b8;
+  --text-muted:     #58586e;
+
+  /* 战队色（HUD 风格，低饱和） */
+  --team-red:       #e03e3e;
+  --team-red-soft:  rgba(224,62,62,0.12);
+  --team-blue:      #3b8cff;
+  --team-blue-soft: rgba(59,140,255,0.12);
+  --team-neutral:   #6b6b8a;
+
+  /* 功能色 */
+  --primary:        #c9a84c;
+  --primary-soft:   rgba(201,168,76,0.1);
+  --success:        #10b981;
+  --warning:        #f59e0b;
+  --danger:         #ef4444;
+  --info:           #3b82f6;
+  --purple:         #a855f7;
+
+  /* 状态色（HUD 风格，低饱和背景 + 高对比文字） */
+  --status-created:   #6b7280;
+  --status-register:  #f59e0b;
+  --status-ready:     #3b82f6;
+  --status-live:      #ef4444;
+  --status-finished:   #10b981;
+  --status-archived:  #374151;
+
+  /* 边框（HUD 风格：subtle） */
+  --border-color:    rgba(255,255,255,0.06);
+  --border-active:    rgba(201,168,76,0.2);
+
+  /* 圆角 */
+  --radius-sm:   4px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-full:  9999px;
+
+  /* 阴影（HUD 风格：极简，不用 glow） */
+  --shadow-card:   0 2px 8px rgba(0,0,0,0.25);
+  --shadow-hover:  0 4px 16px rgba(0,0,0,0.35);
+
+  /* 动画缓动 */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring:  cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* 字体 */
+  --font-display: 'Inter', 'Noto Sans SC', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* ─── 全局动画关键帧（仅保留关键动画）────────────────────── */
+@keyframes dotPulse {
+  0%, 100% { transform: scale(1);   opacity: 1;   }
+  50%       { transform: scale(1.6); opacity: 0.35; }
+}
+/* LIVE 状态：Ping 扩散（仅保留这一个关键动画） */
+@keyframes livePing {
+  0%   { transform: scale(1);   opacity: 0.7; }
+  100% { transform: scale(2.8); opacity: 0;   }
+}
+/* 卡片入场 */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* 比分出现 */
+@keyframes scoreReveal {
+  0%   { transform: scale(0.7); opacity: 0; }
+  60%  { transform: scale(1.1); }
+  100% { transform: scale(1);   opacity: 1; }
+}
+/* MVP 卡浮动（仅 MVP 面板使用） */
+@keyframes trophyFloat {
+  0%, 100% { transform: translateY(0);    }
+  50%       { transform: translateY(-3px); }
+}
+
+/* ============================================================
+   组件样式
+   ============================================================ */
+
+/* ─── MatchStatusBadge ──────────────────────────────────────── */
+.match-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  vertical-align: middle;
+  border: 1px solid transparent;
+  transition: all 0.2s var(--ease-out);
+  line-height: 1.6;
+}
+.match-status-badge.xs { font-size: 0.6rem; padding: 1px 7px; gap: 4px; }
+.match-status-badge.sm { font-size: 0.68rem; padding: 2px 9px; }
+.match-status-badge.md { font-size: 0.75rem; padding: 4px 12px; }
+.match-status-badge.lg { font-size: 0.82rem; padding: 5px 14px; }
+
+.status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  position: relative;
+}
+/* LIVE 呼吸灯（唯一保留的 glow 动画） */
+.match-status-badge.status-live .status-dot {
+  animation: dotPulse 1.4s ease-in-out infinite;
+}
+.match-status-badge.status-live .status-dot::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: var(--danger);
+  opacity: 0.25;
+  animation: livePing 1.8s ease-out infinite;
+}
+
+.status-label { line-height: 1; font-family: var(--font-display); }
+
+/* 状态色（低饱和背景，高对比文字） */
+.status-created      { background: rgba(107,114,128,0.1); color: #9ca3af; border-color: rgba(107,114,128,0.2); }
+.status-registering { background: rgba(245,158,11,0.1);  color: #fbbf24; border-color: rgba(245,158,11,0.25); }
+.status-ready        { background: rgba(59,130,246,0.1);  color: #60a5fa; border-color: rgba(59,130,246,0.25); }
+.status-live         { background: rgba(239,68,68,0.1);   color: #f87171; border-color: rgba(239,68,68,0.3);  }
+.status-finished     { background: rgba(16,185,129,0.1);  color: #34d399; border-color: rgba(16,185,129,0.25); }
+.status-archived     { background: rgba(55,65,81,0.08);    color: #6b7280; border-color: rgba(55,65,81,0.2); }
+
+.status-created      .status-dot { background: #6b7280; }
+.status-registering .status-dot { background: #f59e0b; }
+.status-ready        .status-dot { background: #3b82f6; }
+.status-live         .status-dot { background: #ef4444; }
+.status-finished     .status-dot { background: #10b981; }
+.status-archived     .status-dot { background: #374151; }
+
+
+/* ─── MatchCard（HUD化：去噪音，强信息层级）───────────────── */
+.match-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  position: relative;
+  overflow: hidden;
+  animation: slideUp 0.3s var(--ease-out) both;
+}
+.match-card:hover {
+  background: var(--bg-card-hover);
+  border-color: rgba(255,255,255,0.1);
+  transform: translateY(-1px);
+}
+.match-card:active {
+  transform: translateY(0) scale(0.995);
+}
+
+/* 内部布局 */
+.match-card__inner {
+  padding: 12px 14px;
+}
+
+/* ── 顶栏：B级信息（状态 / BO / 联赛 / 时间）─── */
+.match-card__topbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+/* B级：小号 pill 标签 */
+.match-card__bo-pill,
+.match-card__mode-pill,
+.match-card__time-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.6rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-muted);
+  border: 1px solid rgba(255,255,255,0.06);
+  line-height: 1.8;
+  white-space: nowrap;
+}
+.match-card__bo-pill {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-color: rgba(201,168,76,0.15);
+}
+
+/* ── 主体：A级战队名 + S级比分 ───────────────── */
+.match-card__body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.match-card__team {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+.match-card__team--red { justify-content: flex-end; text-align: right; }
+.match-card__team--blue { justify-content: flex-start; text-align: left; }
+
+.match-card__team-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.match-card__team-dot--red  { background: var(--team-red);  }
+.match-card__team-dot--blue { background: var(--team-blue); }
+
+/* A级：战队名（清晰可读，不抢比分风头） */
+.match-card__team-name {
+  font-weight: 600;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+}
+
+/* S级：比分（绝对视觉重心） */
+.match-card__score {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 900;
+  flex-shrink: 0;
+  min-width: 60px;
+  justify-content: center;
+  letter-spacing: 1px;
+  line-height: 1;
+}
+.match-card__score-num {
+  transition: color 0.25s ease;
+  position: relative;
+}
+/* 获胜方：金色（关键高亮，唯一保留的 text-shadow） */
+.match-card__score-num.winner {
+  color: var(--primary);
+}
+.match-card__score-sep {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 1rem;
+  opacity: 0.5;
+}
+.match-card__score--vs {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+/* LIVE 状态：比分出现动画 */
+.match-card--live .match-card__score-num {
+  animation: scoreReveal 0.45s var(--ease-spring) both;
+}
+
+/* ── C级：底部辅助信息（弱化） ─────────────────── */
+.match-card__prize {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  line-height: 1.4;
+}
+
+/* 空状态 */
+.match-card__empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+
+/* ─── ScoreBoard（HUD化）────────────────────────────────── */
+.scoreboard {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  margin-bottom: 16px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+.scoreboard--live  { border-color: rgba(239,68,68,0.2); }
+.scoreboard--finished { border-color: rgba(16,185,129,0.15); }
+.scoreboard--ready { border-color: rgba(59,130,246,0.15); }
+
+/* 状态横幅 */
+.scoreboard__status-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  margin-bottom: 16px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.scoreboard__status-banner--live {
+  background: rgba(239,68,68,0.08);
+  color: #f87171;
+  border: 1px solid rgba(239,68,68,0.2);
+}
+.scoreboard__status-banner--finished {
+  background: rgba(16,185,129,0.08);
+  color: #34d399;
+  border: 1px solid rgba(16,185,129,0.2);
+}
+.scoreboard__status-banner--ready {
+  background: rgba(59,130,246,0.08);
+  color: #60a5fa;
+  border: 1px solid rgba(59,130,246,0.2);
+}
+.scoreboard__live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--danger);
+  animation: dotPulse 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+  position: relative;
+}
+.scoreboard__live-dot::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: var(--danger);
+  opacity: 0.2;
+  animation: livePing 1.5s ease-out infinite;
+}
+.scoreboard__timer {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  opacity: 0.7;
+  margin-left: 2px;
+}
+
+/* 主体 */
+.scoreboard__body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.scoreboard__team {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.scoreboard__team--red  { text-align: right; }
+.scoreboard__team--blue { text-align: left;  }
+.scoreboard__team--winner .scoreboard__team-name {
+  color: var(--primary);
+}
+.scoreboard__team-name {
+  font-weight: 800;
+  font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  letter-spacing: 0.2px;
+}
+.scoreboard__map {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* S级：巨型比分（绝对视觉中心） */
+.scoreboard__score-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  position: relative;
+}
+.scoreboard__score-num {
+  font-family: var(--font-display);
+  font-size: 3.2rem;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--text-primary);
+  transition: color 0.3s ease;
+}
+.scoreboard__score-num.winner {
+  color: var(--primary);
+}
+.scoreboard--live .scoreboard__score-num {
+  animation: scoreReveal 0.5s var(--ease-spring) both;
+}
+.scoreboard__score-sep {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  color: var(--text-muted);
+  font-weight: 300;
+  opacity: 0.4;
+}
+
+/* BO 进度点 */
+.scoreboard__bo-progress {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.scoreboard__bo-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.05);
+  border: 1.5px solid rgba(255,255,255,0.1);
+  transition: all 0.25s ease;
+}
+.scoreboard__bo-dot--red {
+  background: var(--team-red-soft);
+  border-color: rgba(224,62,62,0.5);
+}
+.scoreboard__bo-dot--blue {
+  background: var(--team-blue-soft);
+  border-color: rgba(59,140,255,0.5);
+}
+
+/* KDA 行 */
+.scoreboard__kda-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.scoreboard__kda {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+/* 尺寸变体 */
+.scoreboard--sm { padding: 12px 16px; }
+.scoreboard--sm .scoreboard__team-name { font-size: 0.88rem; }
+.scoreboard--sm .scoreboard__score-num { font-size: 2.2rem; }
+.scoreboard--lg { padding: 28px 36px; }
+.scoreboard--lg .scoreboard__team-name { font-size: 1.15rem; }
+.scoreboard--lg .scoreboard__score-num { font-size: 4rem; }
+
+
+/* ─── Timeline（节奏化：高光/普通/MVP 三级）────────────── */
+.timeline {
+  position: relative;
+  padding-left: 28px;
+  margin: 0;
+}
+.timeline::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 1px;
+}
+
+.timeline--compact { padding-left: 22px; }
+.timeline--compact::before { left: 6px; }
+
+/* 单条事件 */
+.timeline__item {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  padding: 8px 0;
+  animation: slideUp 0.25s var(--ease-out) both;
+}
+
+/* 事件类型：左边框 + dot 颜色 */
+.timeline__dot-col {
+  position: absolute;
+  left: -28px;
+  width: 20px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 3px;
+}
+.timeline--compact .timeline__dot-col {
+  left: -22px;
+  width: 16px;
+}
+.timeline__dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  border: 1.5px solid rgba(255,255,255,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.55rem;
+  flex-shrink: 0;
+  z-index: 1;
+  transition: all 0.2s ease;
+}
+.timeline--compact .timeline__dot {
+  width: 14px;
+  height: 14px;
+  font-size: 0.45rem;
+}
+
+/* ── 高光事件（MVP / 胜利）：更大更亮 ────────── */
+.timeline__item--mvp .timeline__dot-col .timeline__dot {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+  width: 22px;
+  height: 22px;
+  font-size: 0.65rem;
+}
+.timeline__item--mvp .timeline__content-col {
+  border-left: 3px solid var(--primary);
+  background: rgba(201,168,76,0.04);
+  padding-left: 10px;
+}
+.timeline__item--win .timeline__dot-col .timeline__dot {
+  border-color: var(--team-blue);
+  background: var(--team-blue-soft);
+}
+
+/* ── 普通事件：正常显示 ──────────────────────── */
+.timeline__item--kill .timeline__dot-col .timeline__dot {
+  border-color: rgba(224,62,62,0.5);
+  background: var(--team-red-soft);
+}
+.timeline__item--assist .timeline__dot-col .timeline__dot {
+  border-color: rgba(168,85,247,0.5);
+  background: rgba(168,85,247,0.1);
+}
+
+/* ── 系统事件：灰化弱化 ─────────────────────── */
+.timeline__item--status .timeline__dot-col .timeline__dot,
+.timeline__item--custom .timeline__dot-col .timeline__dot {
+  border-color: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+  opacity: 0.55;
+}
+.timeline__item--status .timeline__content-col,
+.timeline__item--custom .timeline__content-col {
+  opacity: 0.55;
+}
+
+/* 内容区 */
+.timeline__content-col {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255,255,255,0.02);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  transition: background 0.15s ease;
+}
+.timeline__item:hover .timeline__content-col {
+  background: rgba(255,255,255,0.04);
+}
+
+/* 头部行 */
+.timeline__header-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 2px;
+}
+.timeline__side-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.timeline__side-dot--red  { background: var(--team-red); }
+.timeline__side-dot--blue { background: var(--team-blue); }
+
+.timeline__player {
+  font-weight: 700;
+  font-size: 0.78rem;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+}
+.timeline__type-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--primary);
+  background: var(--primary-soft);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+.timeline__time {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  margin-left: auto;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+}
+
+.timeline__text {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.timeline__data {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  font-family: var(--font-mono);
+}
+
+/* 空状态 */
+.timeline--empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+  color: var(--text-muted);
+  text-align: center;
+  opacity: 0.5;
+}
+.timeline__empty-icon { font-size: 2rem; margin-bottom: 8px; opacity: 0.4; }
+.timeline__empty-text {
+  font-size: 0.88rem;
+  font-weight: 700;
+  margin-bottom: 3px;
+  color: var(--text-secondary);
+}
+.timeline__empty-hint { font-size: 0.72rem; }
+
+
+/* ─── MVPPanel ─────────────────────────────────────────────── */
+.mvp-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+.mvp-panel--active {
+  border-color: rgba(201,168,76,0.2);
+}
+.mvp-panel--animated .mvp-panel__badge {
+  animation: trophyFloat 3s ease-in-out infinite;
+}
+
+.mvp-panel__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #fbbf24;
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.2);
+  padding: 4px 14px;
+  border-radius: var(--radius-full);
+  margin-bottom: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.mvp-panel__body-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+}
+
+.mvp-panel__avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid rgba(245,158,11,0.3);
+  flex-shrink: 0;
+  background: var(--bg-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s ease;
+}
+.mvp-panel__avatar:hover {
+  border-color: rgba(245,158,11,0.6);
+}
+.mvp-panel__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mvp-panel__info { min-width: 0; }
+.mvp-panel__name {
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+  font-family: var(--font-display);
+}
+.mvp-panel__game-id {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+  font-family: var(--font-mono);
+}
+.mvp-panel__level {
+  font-size: 0.68rem;
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.mvp-panel__stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 10px;
+}
+.mvp-panel--horizontal .mvp-panel__stats { justify-content: flex-start; }
+
+.mvp-panel__stat {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  background: rgba(255,255,255,0.03);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255,255,255,0.05);
+  font-family: var(--font-mono);
+}
+.mvp-panel__stat--bonus {
+  color: var(--success);
+  background: rgba(16,185,129,0.06);
+  border-color: rgba(16,185,129,0.15);
+  font-weight: 700;
+}
+
+/* 空状态 */
+.mvp-panel--empty { opacity: 0.45; }
+.mvp-panel__empty-icon { font-size: 2rem; margin-bottom: 8px; opacity: 0.35; }
+.mvp-panel__empty-text { font-size: 0.82rem; color: var(--text-muted); }
+
+/* 尺寸 */
+.mvp-panel--sm { padding: 12px 14px; }
+.mvp-panel--sm .mvp-panel__avatar { width: 40px; height: 40px; }
+.mvp-panel--sm .mvp-panel__name { font-size: 0.82rem; }
+.mvp-panel--lg { padding: 24px 32px; }
+.mvp-panel--lg .mvp-panel__avatar { width: 68px; height: 68px; }
+.mvp-panel--lg .mvp-panel__name { font-size: 1.1rem; }
+
+
+/* ============================================================
+   移动端优先适配（≤640px）
+   ============================================================ */
+@media (max-width: 640px) {
+  /* MatchCard：纵向布局 */
+  .match-card__inner {
+    padding: 10px 12px;
+  }
+  .match-card__topbar {
+    gap: 4px;
+    margin-bottom: 6px;
+  }
+  .match-card__body {
+    flex-direction: column;
+    gap: 4px;
+    text-align: center;
+  }
+  .match-card__team {
+    justify-content: center !important;
+    text-align: center !important;
+  }
+  .match-card__team--red { order: 1; }
+  .match-card__score    { order: 2; }
+  .match-card__team--blue { order: 3; }
+  .match-card__score {
+    font-size: 2.4rem;
+    min-width: auto;
+  }
+  .match-card__team-name {
+    font-size: 0.78rem;
+  }
+  .match-card__prize {
+    font-size: 0.62rem;
+    justify-content: center;
+  }
+
+  /* ScoreBoard：比分保持最大视觉中心 */
+  .scoreboard {
+    padding: 14px 16px;
+  }
+  .scoreboard__body {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .scoreboard__score-num {
+    font-size: 3.5rem !important;
+  }
+  .scoreboard__team-name {
+    font-size: 0.88rem;
+    max-width: 120px;
+  }
+
+  /* Timeline：垂直事件流 */
+  .timeline {
+    padding-left: 22px;
+  }
+  .timeline::before {
+    left: 6px;
+  }
+  .timeline__dot-col {
+    left: -22px;
+    width: 16px;
+  }
+  .timeline__content-col {
+    padding: 5px 8px;
+  }
+  .timeline__text {
+    font-size: 0.72rem;
+  }
+
+  /* MVPPanel */
+  .mvp-panel__body-row {
+    flex-direction: column;
+    text-align: center;
+    gap: 8px;
+  }
+  .mvp-panel__avatar {
+    width: 48px;
+    height: 48px;
+  }
+}
+
+
+/* ─── 全局：滚动条（HUD 风格）────────────────────────── */
+::-webkit-scrollbar {
+  width: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+/* ─── 全局：选中色 ─────────────────────────────────────── */
+::selection {
+  background: rgba(201,168,76,0.25);
+  color: #fff;
+}
