@@ -2570,45 +2570,67 @@ app.post('/api/competitions/:id/recognize-screenshot', authMiddleware, adminMidd
 // 预览结算结果（干跑，不写库）
 app.post('/api/competitions/:id/preview-result', authMiddleware, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM competition_results WHERE competition_id = $1 ORDER BY created_at DESC LIMIT 1', [req.params.id]);
-    if (result.rows.length === 0) return notFound(res, '未找到比赛结果');
-    const r = result.rows[0];
-    const playerData = (r.player_data || []);
-    const mvpId = r.mvp_player_id || null;
-    const winner = r.winner;
+    const { games } = req.body;
+    // 优先用前端传来的 games 数据，fallback 到 DB 已有结果
+    let playerData = [];
+    let winner = null, mvpId = null;
+    if (games && Array.isArray(games) && games.length > 0) {
+      // 前端传来 games 结构，转成 playerData 格式
+      playerData = games;
+      // 根据 _games 计算 winner（多数局胜方）
+      if (playerData[0] && playerData[0]._games) {
+        let redWins = 0, blueWins = 0;
+        for (const g of playerData[0]._games) {
+          if (g.winner === 'red') redWins++; else if (g.winner === 'blue') blueWins++;
+        }
+        winner = redWins > blueWins ? 'red' : (blueWins > redWins ? 'blue' : 'draw');
+        // MVP 取最后一局的 mvp_player_id
+        const lastGame = playerData[0]._games[playerData[0]._games.length - 1];
+        mvpId = lastGame ? lastGame.mvp_player_id : null;
+      }
+    } else {
+      // fallback：从 DB 读取已有结果
+      const result = await pool.query('SELECT * FROM competition_results WHERE competition_id = $1 ORDER BY created_at DESC LIMIT 1', [req.params.id]);
+      if (result.rows.length === 0) return notFound(res, '未找到比赛结果，请先提交结果');
+      const r = result.rows[0];
+      playerData = (r.player_data || []);
+      winner = r.winner;
+      mvpId = r.mvp_player_id || null;
+    }
     // 计算赢家ID集合
     let winnerIds = new Set();
     if (winner && winner !== 'draw') {
       const winners = playerData.filter(p => p.team === winner && p.win);
       winnerIds = new Set(winners.map(p => p.player_user_id));
     }
-    // 计算身价变化预览
-    const previews = [];
+    // 计算身价变化预览 — 返回前端期望的字段名
+    const results = [];
     for (const p of playerData) {
       if (!p.player_user_id) continue;
-      const pl = await pool.query('SELECT market_value FROM players WHERE user_id=$1', [p.player_user_id]);
+      const pl = await pool.query('SELECT market_value, game_id FROM players WHERE user_id=$1', [p.player_user_id]);
       if (pl.rows.length === 0) continue;
       let oldValue = parseInt(pl.rows[0].market_value, 10) || 0;
-      if (oldValue <= 0 || isNaN(oldValue)) continue;
+      if (oldValue <= 0 || isNaN(oldValue)) {
+        results.push({ player_user_id: p.player_user_id, player_name: pl.rows[0].game_id || p.player_user_id, skipped: true });
+        continue;
+      }
       const isWin = p.win === true || p.win === 'true' || (winnerIds.size > 0 && winnerIds.has(p.player_user_id));
       const isMvp = mvpId && String(p.player_user_id) === String(mvpId);
       let newValue = isWin ? Math.floor(oldValue * 1.02) : Math.floor(oldValue * 0.98);
       if (isMvp) newValue = Math.floor(newValue * 1.02);
       newValue = Math.max(1, newValue);
-      const changePct = oldValue > 0 ? parseFloat((((newValue - oldValue) / oldValue) * 100).toFixed(2)) : 0;
-      previews.push({
+      const percents = oldValue > 0 ? parseFloat((((newValue - oldValue) / oldValue) * 100).toFixed(2)) : 0;
+      results.push({
         player_user_id: p.player_user_id,
-        game_id: p.game_id || '',
-        team: p.team,
+        player_name: pl.rows[0].game_id || p.player_user_id,
         old_value: oldValue,
         new_value: newValue,
-        change: newValue - oldValue,
-        change_pct: changePct,
-        is_win: isWin,
-        is_mvp: isMvp
+        percent_change: percents,   // 前端用 s.percent_change
+        win: isWin,
+        mvp_count: isMvp ? 1 : 0
       });
     }
-    ok(res, { winner, mvp_player_id: mvpId, previews });
+    ok(res, { results });
   } catch(e) { console.error('[preview-result ERROR]', e.message, e.stack); serverError(res, '预览结算失败: ' + e.message); }
 });
 
