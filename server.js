@@ -2623,8 +2623,14 @@ app.post('/api/competitions/:id/preview-result', authMiddleware, async (req, res
       }
       const isWin = winnerIds.has(uid);
       const isMvp = mvpId && String(uid) === String(mvpId);
-      let newValue = isWin ? Math.floor(oldValue * 1.02) : Math.floor(oldValue * 0.98);
-      if (isMvp) newValue = Math.floor(newValue * 1.02);
+      // 公式：(胜局-负局)*2% + MVP*2%，最低±1（Math.ceil 保证）
+      const winDiff = isWin ? 1 : -1; // 简化：胜+1局，负-1局
+      const mvpBonus = isMvp ? 1 : 0;
+      const totalPercent = (winDiff + mvpBonus) * 2; // 总百分比
+      let newValue = Math.ceil(oldValue * (1 + totalPercent / 100));
+      // 保底：至少变化1（但身价为1时不再减）
+      if (isWin && newValue <= oldValue) newValue = oldValue + 1;
+      if (!isWin && newValue >= oldValue && oldValue > 1) newValue = oldValue - 1;
       newValue = Math.max(1, newValue);
       const percents = parseFloat((((newValue - oldValue) / oldValue) * 100).toFixed(2));
       results.push({
@@ -2710,11 +2716,14 @@ app.post('/api/admin/competitions/:id/confirm-result', authMiddleware, adminMidd
       if (oldValue <= 0 || isNaN(oldValue)) continue; // 身价为0或不合法不处理
       const isWin = p.win === true || p.win === 'true' || (winnerIds.size > 0 && winnerIds.has(p.player_user_id));
       const isMvp = mvpId && String(p.player_user_id) === String(mvpId);
-      // 胜+2%, 负-2%
-      let newValue = isWin ? Math.floor(oldValue * 1.02) : Math.floor(oldValue * 0.98);
-      // MVP额外+2%
-      if (isMvp) newValue = Math.floor(newValue * 1.02);
-      // 身价不低于1
+      // 公式：(胜局-负局)*2% + MVP*2%，最低±1（Math.ceil 保证）
+      const winDiff = isWin ? 1 : -1;
+      const mvpBonus = isMvp ? 1 : 0;
+      const totalPercent = (winDiff + mvpBonus) * 2;
+      let newValue = Math.ceil(oldValue * (1 + totalPercent / 100));
+      // 保底：至少变化1（但身价为1时不再减）
+      if (isWin && newValue <= oldValue) newValue = oldValue + 1;
+      if (!isWin && newValue >= oldValue && oldValue > 1) newValue = oldValue - 1;
       newValue = Math.max(1, newValue);
       if (isNaN(newValue)) { console.warn('[confirm-result] NaN newValue for', p.player_user_id, 'oldValue=', oldValue); continue; }
       const changePct = oldValue > 0 ? parseFloat((((newValue - oldValue) / oldValue) * 100).toFixed(2)) : 0;
