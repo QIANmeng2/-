@@ -2571,61 +2571,68 @@ app.post('/api/competitions/:id/recognize-screenshot', authMiddleware, adminMidd
 app.post('/api/competitions/:id/preview-result', authMiddleware, async (req, res) => {
   try {
     const { games } = req.body;
-    // 优先用前端传来的 games 数据，fallback 到 DB 已有结果
-    let playerData = [];
-    let winner = null, mvpId = null;
+    // 始终从 DB 读取报名选手（player_user_id 在这里）
+    const regs = await pool.query(
+      'SELECT player_user_id, side AS team FROM competition_registrations WHERE competition_id = $1 AND status != $2',
+      [req.params.id, 'cancelled']
+    );
+    if (regs.rows.length === 0) return notFound(res, '该比赛暂无报名选手');
+
+    // 根据 games 计算每局的胜负统计
+    let redWins = 0, blueWins = 0, mvpId = null;
     if (games && Array.isArray(games) && games.length > 0) {
-      // 前端传来 games 结构，转成 playerData 格式
-      playerData = games;
-      // 根据 _games 计算 winner（多数局胜方）
-      if (playerData[0] && playerData[0]._games) {
-        let redWins = 0, blueWins = 0;
-        for (const g of playerData[0]._games) {
-          if (g.winner === 'red') redWins++; else if (g.winner === 'blue') blueWins++;
-        }
-        winner = redWins > blueWins ? 'red' : (blueWins > redWins ? 'blue' : 'draw');
-        // MVP 取最后一局的 mvp_player_id
-        const lastGame = playerData[0]._games[playerData[0]._games.length - 1];
-        mvpId = lastGame ? lastGame.mvp_player_id : null;
+      for (const g of games) {
+        if (g.winner === 'red') redWins++;
+        else if (g.winner === 'blue') blueWins++;
+        if (g.mvp_player_id) mvpId = g.mvp_player_id;
       }
     } else {
-      // fallback：从 DB 读取已有结果
+      // 无 games 时从 competition_results 读取
       const result = await pool.query('SELECT * FROM competition_results WHERE competition_id = $1 ORDER BY created_at DESC LIMIT 1', [req.params.id]);
       if (result.rows.length === 0) return notFound(res, '未找到比赛结果，请先提交结果');
+      // 用 player_data 还原胜负
       const r = result.rows[0];
-      playerData = (r.player_data || []);
-      winner = r.winner;
+      const pd = r.player_data || [];
+      for (const p of pd) {
+        if (p.win) {
+          if (p.team === 'red') redWins++;
+          else if (p.team === 'blue') blueWins++;
+        }
+      }
       mvpId = r.mvp_player_id || null;
     }
-    // 计算赢家ID集合
-    let winnerIds = new Set();
-    if (winner && winner !== 'draw') {
-      const winners = playerData.filter(p => p.team === winner && p.win);
-      winnerIds = new Set(winners.map(p => p.player_user_id));
-    }
-    // 计算身价变化预览 — 返回前端期望的字段名
+
+    const winner = redWins > blueWins ? 'red' : (blueWins > redWins ? 'blue' : 'draw');
+    const winnerIds = new Set(
+      winner !== 'draw'
+        ? regs.rows.filter(r => r.team === winner).map(r => r.player_user_id)
+        : []
+    );
+
+    // 计算每个选手的身价变化
     const results = [];
-    for (const p of playerData) {
-      if (!p.player_user_id) continue;
-      const pl = await pool.query('SELECT market_value, game_id FROM players WHERE user_id=$1', [p.player_user_id]);
-      if (pl.rows.length === 0) continue;
-      let oldValue = parseInt(pl.rows[0].market_value, 10) || 0;
-      if (oldValue <= 0 || isNaN(oldValue)) {
-        results.push({ player_user_id: p.player_user_id, player_name: pl.rows[0].game_id || p.player_user_id, skipped: true });
+    for (const reg of regs.rows) {
+      const uid = reg.player_user_id;
+      if (!uid) continue;
+      const pl = await pool.query('SELECT market_value, game_id FROM players WHERE user_id=$1', [uid]);
+      if (pl.rows.length === 0) { results.push({ player_user_id: uid, player_name: uid, skipped: true, reason: '玩家不存在' }); continue; }
+      const oldValue = parseInt(pl.rows[0].market_value, 10);
+      if (!oldValue || oldValue <= 0 || isNaN(oldValue)) {
+        results.push({ player_user_id: uid, player_name: pl.rows[0].game_id || uid, skipped: true, reason: '身价为0或无效' });
         continue;
       }
-      const isWin = p.win === true || p.win === 'true' || (winnerIds.size > 0 && winnerIds.has(p.player_user_id));
-      const isMvp = mvpId && String(p.player_user_id) === String(mvpId);
+      const isWin = winnerIds.has(uid);
+      const isMvp = mvpId && String(uid) === String(mvpId);
       let newValue = isWin ? Math.floor(oldValue * 1.02) : Math.floor(oldValue * 0.98);
       if (isMvp) newValue = Math.floor(newValue * 1.02);
       newValue = Math.max(1, newValue);
-      const percents = oldValue > 0 ? parseFloat((((newValue - oldValue) / oldValue) * 100).toFixed(2)) : 0;
+      const percents = parseFloat((((newValue - oldValue) / oldValue) * 100).toFixed(2));
       results.push({
-        player_user_id: p.player_user_id,
-        player_name: pl.rows[0].game_id || p.player_user_id,
+        player_user_id: uid,
+        player_name: pl.rows[0].game_id || uid,
         old_value: oldValue,
         new_value: newValue,
-        percent_change: percents,   // 前端用 s.percent_change
+        percent_change: percents,
         win: isWin,
         mvp_count: isMvp ? 1 : 0
       });
