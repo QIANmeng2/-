@@ -497,6 +497,8 @@ function updateUI() {
   const ui = (id) => document.getElementById(id);
   const safeStyle = (id, prop, val) => { const el = ui(id); if (el) el.style[prop] = val; };
   const safeText = (id, val) => { const el = ui(id); if (el) el.textContent = val; };
+  // 主页按钮始终可见
+  safeStyle('tabSquare', 'display', '');
   if (currentUser) {
     safeStyle('userInfoDisplay', 'display', 'block');
     safeStyle('btnLoginTop', 'display', 'none');
