@@ -2344,6 +2344,19 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
       await client.query('ROLLBACK');
       return badRequest(res, '以下选手已报名本赛事：' + dupNames);
     }
+    // 自动补全 players 记录（无记录时默认身价=35）
+    for (const p of players) {
+      const hasPlayer = await client.query('SELECT user_id FROM players WHERE user_id=$1', [p.user_id]);
+      if (hasPlayer.rows.length === 0) {
+        const u = await client.query('SELECT gameid, coachname, username FROM users WHERE id=$1', [p.user_id]);
+        const gid = (u.rows.length > 0) ? (u.rows[0].gameid || u.rows[0].coachname || u.rows[0].username || 'unknown') : 'unknown';
+        await client.query(
+          'INSERT INTO players (user_id, game_id, market_value, status, positions) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (user_id) DO NOTHING',
+          [p.user_id, gid, 35, 'available', '']
+        );
+        console.log('[自动补全 players] user_id=' + p.user_id + ' game_id=' + gid + ' market_value=35');
+      }
+    }
     // 创建5人报名
     for (const p of players) {
       await client.query(
@@ -2567,49 +2580,86 @@ app.post('/api/competitions/:id/recognize-screenshot', authMiddleware, adminMidd
   }
 });
 
-// 预览结算结果（干跑，不写库）
+// ==================== 唯一结算源 ====================
+
+/**
+ * 解析小局数据，计算胜负统计
+ * @param {Array} games - [{game, winner, mvp_player_id}, ...]
+ * @returns {{redWins, blueWins, winner, sideWinDiff, mvpCounts}}
+ */
+function parseGames(games) {
+  let redWins = 0, blueWins = 0;
+  const mvpCounts = {};
+  if (games && Array.isArray(games)) {
+    for (const g of games) {
+      if (g.winner === 'red') redWins++;
+      else if (g.winner === 'blue') blueWins++;
+      if (g.mvp_player_id) {
+        mvpCounts[g.mvp_player_id] = (mvpCounts[g.mvp_player_id] || 0) + 1;
+      }
+    }
+  }
+  const winner = redWins > blueWins ? 'red' : (blueWins > redWins ? 'blue' : 'draw');
+  const sideWinDiff = Math.abs(redWins - blueWins); // 胜局差（正数）
+  return { redWins, blueWins, winner, sideWinDiff, mvpCounts };
+}
+
+/**
+ * 计算单个选手的身价变化（唯一算法源）
+ * 公式：(胜局差) × 2% + MVP次数 × 2%，保底 ±1
+ * @param {number} oldValue - 当前身价
+ * @param {boolean} isWinnerSide - 是否胜方选手
+ * @param {number} mvpCount - 该选手 MVP 次数
+ * @param {number} sideWinDiff - 队伍胜局差（BO3 2:0=2, 2:1=1; BO5 3:0=3, 3:1=2, 3:2=1）
+ * @returns {{newValue: number, percentChange: number}}
+ */
+function calcPlayerValue(oldValue, isWinnerSide, mvpCount, sideWinDiff) {
+  if (sideWinDiff <= 0) sideWinDiff = 1; // 无比赛数据时降级为 ±1
+  const baseDiff = isWinnerSide ? sideWinDiff : -sideWinDiff;
+  const totalPercent = baseDiff * 2 + mvpCount * 2;
+  let newValue = Math.ceil(oldValue * (1 + totalPercent / 100));
+  // 保底：至少变化1（身价=1时不再减）
+  if (isWinnerSide && newValue <= oldValue) newValue = oldValue + 1;
+  if (!isWinnerSide && newValue >= oldValue && oldValue > 1) newValue = oldValue - 1;
+  newValue = Math.max(1, newValue);
+  const percentChange = parseFloat((((newValue - oldValue) / oldValue) * 100).toFixed(2));
+  return { newValue, percentChange };
+}
+
+// 预览结算结果（干跑，不写库）—— 使用唯一结算源
 app.post('/api/competitions/:id/preview-result', authMiddleware, async (req, res) => {
   try {
     const { games } = req.body;
-    // 始终从 DB 读取报名选手（player_user_id 在这里）
+    const stats = parseGames(games);
+    if (!games || games.length === 0) {
+      // 无 games 时从 competition_results 读取
+      const result = await pool.query('SELECT * FROM competition_results WHERE competition_id = $1 ORDER BY created_at DESC LIMIT 1', [req.params.id]);
+      if (result.rows.length === 0) return notFound(res, '未找到比赛结果，请先提交结果');
+      const r = result.rows[0];
+      const pd = r.player_data || [];
+      // 优先用 _games
+      if (pd.length > 0 && pd[0]._games && Array.isArray(pd[0]._games)) {
+        Object.assign(stats, parseGames(pd[0]._games));
+      } else {
+        // 降级：从 player_data 还原胜负
+        for (const p of pd) {
+          if (p._games) continue; // 跳过元数据元素
+          if (p.win && p.team === 'red') stats.redWins++;
+          else if (p.win && p.team === 'blue') stats.blueWins++;
+        }
+        stats.sideWinDiff = Math.abs(stats.redWins - stats.blueWins) || 1;
+        stats.winner = stats.redWins > stats.blueWins ? 'red' : (stats.blueWins > stats.redWins ? 'blue' : 'draw');
+      }
+    }
+
+    // 读取报名选手
     const regs = await pool.query(
       'SELECT player_user_id, side AS team FROM competition_registrations WHERE competition_id = $1 AND status != $2',
       [req.params.id, 'cancelled']
     );
     if (regs.rows.length === 0) return notFound(res, '该比赛暂无报名选手');
 
-    // 根据 games 计算每局的胜负统计
-    let redWins = 0, blueWins = 0, mvpId = null;
-    if (games && Array.isArray(games) && games.length > 0) {
-      for (const g of games) {
-        if (g.winner === 'red') redWins++;
-        else if (g.winner === 'blue') blueWins++;
-        if (g.mvp_player_id) mvpId = g.mvp_player_id;
-      }
-    } else {
-      // 无 games 时从 competition_results 读取
-      const result = await pool.query('SELECT * FROM competition_results WHERE competition_id = $1 ORDER BY created_at DESC LIMIT 1', [req.params.id]);
-      if (result.rows.length === 0) return notFound(res, '未找到比赛结果，请先提交结果');
-      // 用 player_data 还原胜负
-      const r = result.rows[0];
-      const pd = r.player_data || [];
-      for (const p of pd) {
-        if (p.win) {
-          if (p.team === 'red') redWins++;
-          else if (p.team === 'blue') blueWins++;
-        }
-      }
-      mvpId = r.mvp_player_id || null;
-    }
-
-    const winner = redWins > blueWins ? 'red' : (blueWins > redWins ? 'blue' : 'draw');
-    const winnerIds = new Set(
-      winner !== 'draw'
-        ? regs.rows.filter(r => r.team === winner).map(r => r.player_user_id)
-        : []
-    );
-
-    // 计算每个选手的身价变化
+    // 计算每个选手身价
     const results = [];
     for (const reg of regs.rows) {
       const uid = reg.player_user_id;
@@ -2621,26 +2671,17 @@ app.post('/api/competitions/:id/preview-result', authMiddleware, async (req, res
         results.push({ player_user_id: uid, player_name: pl.rows[0].game_id || uid, skipped: true, reason: '身价为0或无效' });
         continue;
       }
-      const isWin = winnerIds.has(uid);
-      const isMvp = mvpId && String(uid) === String(mvpId);
-      // 公式：(胜局-负局)*2% + MVP*2%，最低±1（Math.ceil 保证）
-      const winDiff = isWin ? 1 : -1; // 简化：胜+1局，负-1局
-      const mvpBonus = isMvp ? 1 : 0;
-      const totalPercent = (winDiff + mvpBonus) * 2; // 总百分比
-      let newValue = Math.ceil(oldValue * (1 + totalPercent / 100));
-      // 保底：至少变化1（但身价为1时不再减）
-      if (isWin && newValue <= oldValue) newValue = oldValue + 1;
-      if (!isWin && newValue >= oldValue && oldValue > 1) newValue = oldValue - 1;
-      newValue = Math.max(1, newValue);
-      const percents = parseFloat((((newValue - oldValue) / oldValue) * 100).toFixed(2));
+      const isWinnerSide = reg.team === stats.winner;
+      const mvpCount = stats.mvpCounts[uid] || 0;
+      const { newValue, percentChange } = calcPlayerValue(oldValue, isWinnerSide, mvpCount, stats.sideWinDiff);
       results.push({
         player_user_id: uid,
         player_name: pl.rows[0].game_id || uid,
         old_value: oldValue,
         new_value: newValue,
-        percent_change: percents,
-        win: isWin,
-        mvp_count: isMvp ? 1 : 0
+        percent_change: percentChange,
+        win: isWinnerSide,
+        mvp_count: mvpCount
       });
     }
     ok(res, { results });
@@ -2702,39 +2743,47 @@ app.post('/api/admin/competitions/:id/confirm-result', authMiddleware, adminMidd
         [req.params.id, p.player_user_id, p.team, p.lane, p.kda || '', p.win || false]
       );
     }
-    // === 比赛结算 → 身价波动 + MVP加成 ===
-    const mvpId = r.mvp_player_id || null;
+    // === 比赛结算 → 身价波动 + MVP加成（唯一结算源） ===
     const compResultId = r.id;
-    const scoreUpdateIds = []; // 收集需要更新排行榜的 user_id，COMMIT 后统一处理
+    // 从 player_data 提取 _games 元数据
+    const gamesMeta = (playerData.length > 0 && playerData[0]._games && Array.isArray(playerData[0]._games))
+      ? playerData[0]._games
+      : [];
+    const stats = parseGames(gamesMeta);
+    // 降级：无 _games 时用 r.winner + playerData 还原（兼容旧数据）
+    if (gamesMeta.length === 0) {
+      stats.winner = r.winner;
+      // 用 playerData 里的 win 字段还原胜方队伍
+      for (const p of playerData) {
+        if (p._games) continue; // 跳过元数据
+        if (p.win && p.team === 'red') stats.redWins++;
+        else if (p.win && p.team === 'blue') stats.blueWins++;
+      }
+      stats.sideWinDiff = Math.max(Math.abs(stats.redWins - stats.blueWins), 1);
+      // 降级模式：MVP 只从单字段取
+      if (r.mvp_player_id) stats.mvpCounts[r.mvp_player_id] = (stats.mvpCounts[r.mvp_player_id] || 0) + 1;
+    }
+    const scoreUpdateIds = [];
     for (const p of playerData) {
-      if (!p.player_user_id) continue;
-      const pl = await client.query('SELECT market_value, last_match_id FROM players WHERE user_id=$1', [p.player_user_id]);
-      if (pl.rows.length === 0) continue;
-      // 防重复：同一比赛结果不重复更新身价
-      if (pl.rows[0].last_match_id === compResultId) continue;
-      let oldValue = parseInt(pl.rows[0].market_value, 10) || 0;
-      if (oldValue <= 0 || isNaN(oldValue)) continue; // 身价为0或不合法不处理
-      const isWin = p.win === true || p.win === 'true' || (winnerIds.size > 0 && winnerIds.has(p.player_user_id));
-      const isMvp = mvpId && String(p.player_user_id) === String(mvpId);
-      // 公式：(胜局-负局)*2% + MVP*2%，最低±1（Math.ceil 保证）
-      const winDiff = isWin ? 1 : -1;
-      const mvpBonus = isMvp ? 1 : 0;
-      const totalPercent = (winDiff + mvpBonus) * 2;
-      let newValue = Math.ceil(oldValue * (1 + totalPercent / 100));
-      // 保底：至少变化1（但身价为1时不再减）
-      if (isWin && newValue <= oldValue) newValue = oldValue + 1;
-      if (!isWin && newValue >= oldValue && oldValue > 1) newValue = oldValue - 1;
-      newValue = Math.max(1, newValue);
-      if (isNaN(newValue)) { console.warn('[confirm-result] NaN newValue for', p.player_user_id, 'oldValue=', oldValue); continue; }
-      const changePct = oldValue > 0 ? parseFloat((((newValue - oldValue) / oldValue) * 100).toFixed(2)) : 0;
+      if (!p.player_user_id || p._games) continue; // 跳过元数据和无效行
+      const uid = p.player_user_id;
+      const pl = await client.query('SELECT market_value, last_match_id FROM players WHERE user_id=$1', [uid]);
+      if (pl.rows.length === 0) { console.warn('[confirm-result] no players record for', uid); continue; }
+      if (pl.rows[0].last_match_id === compResultId) continue; // 防重复
+      const oldValue = parseInt(pl.rows[0].market_value, 10) || 0;
+      if (oldValue <= 0 || isNaN(oldValue)) continue;
+      const isWinnerSide = p.team === stats.winner;
+      const mvpCount = stats.mvpCounts[uid] || 0;
+      const { newValue, percentChange } = calcPlayerValue(oldValue, isWinnerSide, mvpCount, stats.sideWinDiff);
+      if (isNaN(newValue)) { console.warn('[confirm-result] NaN newValue for', uid, 'oldValue=', oldValue); continue; }
       const safeCompResultId = parseInt(compResultId, 10);
       if (isNaN(safeCompResultId)) { console.warn('[confirm-result] NaN compResultId', compResultId); continue; }
       await client.query(
         `UPDATE players SET market_value=$1, grade=$2, last_match_result=$3, last_match_mvp=$4,
          last_change_percentage=$5, last_match_id=$6 WHERE user_id=$7`,
-        [newValue, calcGrade(newValue), isWin ? 'win' : 'lose', isMvp || false, changePct, safeCompResultId, p.player_user_id]
+        [newValue, calcGrade(newValue), isWinnerSide ? 'win' : 'lose', mvpCount > 0, percentChange, safeCompResultId, uid]
       );
-      scoreUpdateIds.push(p.player_user_id);
+      scoreUpdateIds.push(uid);
     }
     // 更新状态
     await client.query('UPDATE competition_results SET confirmed_by = $1, confirmed_at = NOW() WHERE id = $2', [req.userId, r.id]);
