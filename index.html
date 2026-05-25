@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
@@ -8,43 +8,43 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
-  <!-- DNS预解析：后端API域 -->
+  <!-- DNS棰勮В鏋愶細鍚庣API鍩?-->
   <link rel="dns-prefetch" href="//perpetual-enchantment-production-b163.up.railway.app">
-  <!-- 预连接：消除TCP握手延迟 -->
+  <!-- 棰勮繛鎺ワ細娑堥櫎TCP鎻℃墜寤惰繜 -->
   <link rel="preconnect" href="https://perpetual-enchantment-production-b163.up.railway.app" crossorigin>
-  <!-- 移动端性能优化 -->
+  <!-- 绉诲姩绔€ц兘浼樺寲 -->
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#0a0a12">
   <meta name="msapplication-navbutton-color" content="#0a0a12">
-  <!-- 禁用电话/邮箱自动识别，防止移动端误触 -->
+  <!-- 绂佺敤鐢佃瘽/閭鑷姩璇嗗埆锛岄槻姝㈢Щ鍔ㄧ璇Е -->
   <meta name="format-detection" content="telephone=no,email=no,address=no">
-  <title>梦工厂·MGC</title>
+  <title>姊﹀伐鍘偮稭GC</title>
   <link rel="icon" href="/favicon.ico" type="image/x-icon">
   <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
-  <link rel="stylesheet" href="styles/variables.css?v=20260525v4">
-  <link rel="preload" href="styles.css?v=20260525v4" as="style">
-  <link rel="stylesheet" href="styles.css?v=20260525v4">
-  <!-- 组件系统：先加载组件，再加载 components.js 做统一委托 -->
-  <script src="components/MatchStatusBadge.js?v=20260525v4"></script>
-  <script src="components/MatchCard.js?v=20260525v4"></script>
-  <script src="components/ScoreBoard.js?v=20260525v4"></script>
-  <script src="components/Timeline.js?v=20260525v4"></script>
-  <script src="components/MVPPanel.js?v=20260525v4"></script>
-  <script src="components/PlayerList.js?v=20260525v4"></script>
-  <script src="components/RegistrationPanel.js?v=20260525v4"></script>
-  <script src="components/components.js?v=20260525v4"></script>
-  <script src="components/Tracker.js?v=20260525v4" defer></script>
-  <script src="components/OnboardingModal.js?v=20260525v4"></script>
-  <script src="components/NewbieTasks.js?v=20260525v4"></script>
-  <!-- 每日卜卦模块 -->
-  <script src="modules/fortune/fortuneAnim.js?v=20260525v4"></script>
-  <script src="modules/fortune/fortuneApi.js?v=20260525v4"></script>
-  <script src="modules/fortune/fortuneStore.js?v=20260525v4"></script>
-  <script src="modules/fortune/fortuneView.js?v=20260525v4"></script>
-  <!-- app.js 必须在组件之后，因为 app.js 会调用 Components.* -->
-  <script src="app.js?v=20260525v4" defer></script>
+  <link rel="stylesheet" href="styles/variables.css?v=20260526a">
+  <link rel="preload" href="styles.css?v=20260526a" as="style">
+  <link rel="stylesheet" href="styles.css?v=20260526a">
+  <!-- 缁勪欢绯荤粺锛氬厛鍔犺浇缁勪欢锛屽啀鍔犺浇 components.js 鍋氱粺涓€濮旀墭 -->
+  <script src="components/MatchStatusBadge.js?v=20260526a"></script>
+  <script src="components/MatchCard.js?v=20260526a"></script>
+  <script src="components/ScoreBoard.js?v=20260526a"></script>
+  <script src="components/Timeline.js?v=20260526a"></script>
+  <script src="components/MVPPanel.js?v=20260526a"></script>
+  <script src="components/PlayerList.js?v=20260526a"></script>
+  <script src="components/RegistrationPanel.js?v=20260526a"></script>
+  <script src="components/components.js?v=20260526a"></script>
+  <script src="components/Tracker.js?v=20260526a" defer></script>
+  <script src="components/OnboardingModal.js?v=20260526a"></script>
+  <script src="components/NewbieTasks.js?v=20260526a"></script>
+  <!-- 姣忔棩鍗滃崷妯″潡 -->
+  <script src="modules/fortune/fortuneAnim.js?v=20260526a"></script>
+  <script src="modules/fortune/fortuneApi.js?v=20260526a"></script>
+  <script src="modules/fortune/fortuneStore.js?v=20260526a"></script>
+  <script src="modules/fortune/fortuneView.js?v=20260526a"></script>
+  <!-- app.js 蹇呴』鍦ㄧ粍浠朵箣鍚庯紝鍥犱负 app.js 浼氳皟鐢?Components.* -->
+  <script src="app.js?v=20260526a" defer></script>
 <body>
-<!-- 背景网格装饰 -->
+<!-- 鑳屾櫙缃戞牸瑁呴グ -->
 <div style="position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:-2;background:radial-gradient(ellipse 100% 60% at 20% -10%,rgba(79,70,229,0.08) 0%,transparent 50%),radial-gradient(ellipse 80% 50% at 80% 10%,rgba(124,58,237,0.06) 0%,transparent 50%);"></div>
 
 <div class="header">
@@ -61,18 +61,18 @@
           </defs>
         </svg>
       </div>
-      <span>梦工厂<span style="color:var(--secondary);">·</span>MGC</span>
+      <span>姊﹀伐鍘?span style="color:var(--secondary);">路</span>MGC</span>
     </div>
     <div class="user-area">
-      <!-- 新手引导按钮（登录后显示） -->
-      <button class="btn btn-sm" id="btnOnboard" onclick="OnboardingModal.open()" style="display:none;background:linear-gradient(135deg,rgba(201,168,76,0.15),rgba(201,168,76,0.05));color:#c9a84c;border:1px solid rgba(201,168,76,0.25);font-weight:600;" title="新手引导">
-        新手引导
+      <!-- 鏂版墜寮曞鎸夐挳锛堢櫥褰曞悗鏄剧ず锛?-->
+      <button class="btn btn-sm" id="btnOnboard" onclick="OnboardingModal.open()" style="display:none;background:linear-gradient(135deg,rgba(201,168,76,0.15),rgba(201,168,76,0.05));color:#c9a84c;border:1px solid rgba(201,168,76,0.25);font-weight:600;" title="鏂版墜寮曞">
+        鏂版墜寮曞
       </button>
-      <!-- 每日签到按钮 -->
-      <button class="btn btn-sm" id="btnCheckin" onclick="doDailyCheckin()" style="display:none;background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(16,185,129,0.05));color:#10b981;border:1px solid rgba(16,185,129,0.3);font-weight:600;" title="每日签到领梦币">
-        签到领币
+      <!-- 姣忔棩绛惧埌鎸夐挳 -->
+      <button class="btn btn-sm" id="btnCheckin" onclick="doDailyCheckin()" style="display:none;background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(16,185,129,0.05));color:#10b981;border:1px solid rgba(16,185,129,0.3);font-weight:600;" title="姣忔棩绛惧埌棰嗘ⅵ甯?>
+        绛惧埌棰嗗竵
       </button>
-      <button class="btn btn-outline btn-sm" id="btnLoginTop" onclick="openAuthModal('login')">登录</button>
+      <button class="btn btn-outline btn-sm" id="btnLoginTop" onclick="openAuthModal('login')">鐧诲綍</button>
       <div class="notification-bell" id="notificationBell" onclick="openNotifications()" style="display:none;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
         <span class="notification-badge" id="notifBadge" style="display:none;">0</span>
@@ -82,40 +82,40 @@
         <span class="user-sep" style="color: var(--text-muted); margin: 0 8px;">|</span>
         <span id="displayTeam" style="color: var(--text-secondary);"></span>
       </div>
-      <button class="btn btn-ghost btn-sm" id="btnLogoutTop" onclick="logout()" style="display:none;">退出</button>
+      <button class="btn btn-ghost btn-sm" id="btnLogoutTop" onclick="logout()" style="display:none;">閫€鍑?/button>
     </div>
   </div>
 </div>
 
 <div class="main-container">
   <div class="tab-nav" id="tabNav">
-    <button class="tab-btn" data-tab="square" id="tabSquare">主页</button>
-    <button class="tab-btn" data-tab="competition" id="tabCompetition" style="display:none;" onclick="window.location.href='/competition.html'">赛事中心</button>
-    <button class="tab-btn" data-tab="market" id="tabMarket" style="display:none;">转会市场</button>
-    <button class="tab-btn" data-tab="team" id="tabTeam" style="display:none;">我的队伍</button>
-    <button class="tab-btn" data-tab="club" id="tabClub" style="display:none;">战队基地</button>
-    <button class="tab-btn" data-tab="chat" id="tabChat" style="display:none;">聊天</button>
-    <button class="tab-btn" data-tab="profile" id="tabProfile" style="display:none;">电竞生涯</button>
-    <button class="tab-btn" data-tab="leaderboard" id="tabLeaderboard">榜单</button>
-    <button class="tab-btn" data-tab="admin" id="tabAdmin" style="display:none;">管理</button>
+    <button class="tab-btn" data-tab="square" id="tabSquare">涓婚〉</button>
+    <button class="tab-btn" data-tab="competition" id="tabCompetition" style="display:none;" onclick="window.location.href='/competition.html'">璧涗簨涓績</button>
+    <button class="tab-btn" data-tab="market" id="tabMarket" style="display:none;">杞細甯傚満</button>
+    <button class="tab-btn" data-tab="team" id="tabTeam" style="display:none;">鎴戠殑闃熶紞</button>
+    <button class="tab-btn" data-tab="club" id="tabClub" style="display:none;">鎴橀槦鍩哄湴</button>
+    <button class="tab-btn" data-tab="chat" id="tabChat" style="display:none;">鑱婂ぉ</button>
+    <button class="tab-btn" data-tab="profile" id="tabProfile" style="display:none;">鐢电珵鐢熸动</button>
+    <button class="tab-btn" data-tab="leaderboard" id="tabLeaderboard">姒滃崟</button>
+    <button class="tab-btn" data-tab="admin" id="tabAdmin" style="display:none;">绠＄悊</button>
   </div>
-  <!-- 首页 Hero（独立于 tabContent，避免 switchTab innerHTML='' 摧毁） -->
+  <!-- 棣栭〉 Hero锛堢嫭绔嬩簬 tabContent锛岄伩鍏?switchTab innerHTML='' 鎽ф瘉锛?-->
   <div id="homeHero" style="display:none;padding:32px 16px;text-align:center;">
-    <h1 style="font-size:1.6rem;font-weight:800;margin:0 0 8px;background:linear-gradient(135deg,#c9a84c,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">梦工厂·MGC</h1>
-    <p style="color:var(--text-secondary);font-size:0.88rem;margin:0 0 24px;">电竞训练赛生态平台</p>
+    <h1 style="font-size:1.6rem;font-weight:800;margin:0 0 8px;background:linear-gradient(135deg,#c9a84c,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">姊﹀伐鍘偮稭GC</h1>
+    <p style="color:var(--text-secondary);font-size:0.88rem;margin:0 0 24px;">鐢电珵璁粌璧涚敓鎬佸钩鍙?/p>
     <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
-      <button class="btn btn-primary" onclick="window.location.href='/competition.html'" style="font-weight:700;">打比赛</button>
-      <button class="btn btn-secondary" onclick="switchTab('club')" style="font-weight:700;">加入战队</button>
-      <button class="btn btn-outline" onclick="switchTab('market')" style="font-weight:700;">转会市场</button>
-      <button class="btn btn-ghost" onclick="OnboardingModal.open()" style="font-weight:700;border:1px solid rgba(201,168,76,0.3);color:#c9a84c;">新手引导</button>
+      <button class="btn btn-primary" onclick="window.location.href='/competition.html'" style="font-weight:700;">鎵撴瘮璧?/button>
+      <button class="btn btn-secondary" onclick="switchTab('club')" style="font-weight:700;">鍔犲叆鎴橀槦</button>
+      <button class="btn btn-outline" onclick="switchTab('market')" style="font-weight:700;">杞細甯傚満</button>
+      <button class="btn btn-ghost" onclick="OnboardingModal.open()" style="font-weight:700;border:1px solid rgba(201,168,76,0.3);color:#c9a84c;">鏂版墜寮曞</button>
     </div>
     <div id="newbieTasksMount" style="margin-top:28px;"></div>
     <div id="fortuneMount" style="margin-top:20px;"></div>
   </div>
   <div id="tabContent">
-  <!-- 比赛列表：由 Components.renderMatchList() 填充 -->
+  <!-- 姣旇禌鍒楄〃锛氱敱 Components.renderMatchList() 濉厖 -->
   <div id="competitionList" style="display:none;"></div>
-  <!-- 比赛详情：包含所有组件挂载点 -->
+  <!-- 姣旇禌璇︽儏锛氬寘鍚墍鏈夌粍浠舵寕杞界偣 -->
   <div id="matchDetailView" style="display:none;">
     <div id="scoreboardMount"></div>
     <div id="predictionMount"></div>
@@ -127,26 +127,26 @@
 </div>
 </div>
 
-<!-- 登录/注册弹窗 -->
+<!-- 鐧诲綍/娉ㄥ唽寮圭獥 -->
 <div id="authModal" style="display:none;" class="modal-overlay">
   <div class="modal modal-sm">
-    <h3 id="authModalTitle">登录</h3>
+    <h3 id="authModalTitle">鐧诲綍</h3>
     <form id="authForm" onsubmit="handleAuth(event)">
-      <div class="form-group"><label>用户名</label><input class="form-input" type="text" id="authUsername" required placeholder="请输入用户名"></div>
-      <div class="form-group"><label>密码</label><input class="form-input" type="password" id="authPassword" required placeholder="请输入密码"></div>
+      <div class="form-group"><label>鐢ㄦ埛鍚?/label><input class="form-input" type="text" id="authUsername" required placeholder="璇疯緭鍏ョ敤鎴峰悕"></div>
+      <div class="form-group"><label>瀵嗙爜</label><input class="form-input" type="password" id="authPassword" required placeholder="璇疯緭鍏ュ瘑鐮?></div>
       <div id="registerFields" style="display:none;">
-        <div class="form-group"><label>名称/游戏ID</label><input class="form-input" type="text" id="regCoachName" placeholder="请输入"></div>
-        <div class="form-group"><label>微信号</label><input class="form-input" type="text" id="regWechat" placeholder="用于联系"></div>
-        <div class="form-group"><label>个人等级</label><select class="form-select" id="regLevel"><option value="大众">大众</option><option value="KPL">KPL</option><option value="K甲">K甲</option><option value="KPL青训">KPL青训</option><option value="K甲青训">K甲青训</option><option value="全国大赛">全国大赛</option><option value="主播">主播</option></select></div>
+        <div class="form-group"><label>鍚嶇О/娓告垙ID</label><input class="form-input" type="text" id="regCoachName" placeholder="璇疯緭鍏?></div>
+        <div class="form-group"><label>寰俊鍙?/label><input class="form-input" type="text" id="regWechat" placeholder="鐢ㄤ簬鑱旂郴"></div>
+        <div class="form-group"><label>涓汉绛夌骇</label><select class="form-select" id="regLevel"><option value="澶т紬">澶т紬</option><option value="KPL">KPL</option><option value="K鐢?>K鐢?/option><option value="KPL闈掕">KPL闈掕</option><option value="K鐢查潚璁?>K鐢查潚璁?/option><option value="鍏ㄥ浗澶ц禌">鍏ㄥ浗澶ц禌</option><option value="涓绘挱">涓绘挱</option></select></div>
       </div>
-      <button class="btn btn-primary" type="submit" style="width:100%; margin-top:8px;">登录</button>
+      <button class="btn btn-primary" type="submit" style="width:100%; margin-top:8px;">鐧诲綍</button>
     </form>
-    <div style="text-align:center; margin-top:16px; cursor:pointer; color: var(--text-muted);" onclick="switchAuthMode()">还没有账号？点击注册</div>
-    <button class="btn btn-ghost" style="width:100%; margin-top:12px;" onclick="closeAuthModal()">取消</button>
+    <div style="text-align:center; margin-top:16px; cursor:pointer; color: var(--text-muted);" onclick="switchAuthMode()">杩樻病鏈夎处鍙凤紵鐐瑰嚮娉ㄥ唽</div>
+    <button class="btn btn-ghost" style="width:100%; margin-top:12px;" onclick="closeAuthModal()">鍙栨秷</button>
   </div>
 </div>
 
-<!-- 欢迎引导弹窗（保留兼容） -->
+<!-- 娆㈣繋寮曞寮圭獥锛堜繚鐣欏吋瀹癸級 -->
 <div id="welcomeModal" class="welcome-overlay" style="display:none;">
   <div class="welcome-panel">
     <div class="welcome-glow"></div>
@@ -156,8 +156,8 @@
           <path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6-4.8-6 4.8 2.4-7.2-6-4.8h7.6z"/>
         </svg>
       </div>
-      <div class="welcome-title">欢迎来到梦工厂</div>
-      <div class="welcome-subtitle">DREAM FACTORY · MGC</div>
+      <div class="welcome-title">娆㈣繋鏉ュ埌姊﹀伐鍘?/div>
+      <div class="welcome-subtitle">DREAM FACTORY 路 MGC</div>
       <div class="welcome-divider"></div>
     </div>
     <div class="welcome-features">
@@ -166,8 +166,8 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
         </div>
         <div>
-          <div class="welcome-feat-label">常规赛事</div>
-          <div class="welcome-feat-desc">代表队伍报名，选择入场费参赛，赢方瓜分奖池</div>
+          <div class="welcome-feat-label">甯歌璧涗簨</div>
+          <div class="welcome-feat-desc">浠ｈ〃闃熶紞鎶ュ悕锛岄€夋嫨鍏ュ満璐瑰弬璧涳紝璧㈡柟鐡滃垎濂栨睜</div>
         </div>
       </div>
       <div class="welcome-feature">
@@ -175,8 +175,8 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
         </div>
         <div>
-          <div class="welcome-feat-label">转会市场</div>
-          <div class="welcome-feat-desc">巅峰分 + 段位认证实力，自动估价等老板签约</div>
+          <div class="welcome-feat-label">杞細甯傚満</div>
+          <div class="welcome-feat-desc">宸呭嘲鍒?+ 娈典綅璁よ瘉瀹炲姏锛岃嚜鍔ㄤ及浠风瓑鑰佹澘绛剧害</div>
         </div>
       </div>
       <div class="welcome-feature">
@@ -184,8 +184,8 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         </div>
         <div>
-          <div class="welcome-feat-label">俱乐部</div>
-          <div class="welcome-feat-desc">创建专属战队，签约选手，管理电竞军团</div>
+          <div class="welcome-feat-label">淇变箰閮?/div>
+          <div class="welcome-feat-desc">鍒涘缓涓撳睘鎴橀槦锛岀绾﹂€夋墜锛岀鐞嗙數绔炲啗鍥?/div>
         </div>
       </div>
       <div class="welcome-feature">
@@ -193,8 +193,8 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/></svg>
         </div>
         <div>
-          <div class="welcome-feat-label">赛事系统</div>
-          <div class="welcome-feat-desc">参与奖金赛事赢取梦币，查看战绩与获奖公示</div>
+          <div class="welcome-feat-label">璧涗簨绯荤粺</div>
+          <div class="welcome-feat-desc">鍙備笌濂栭噾璧涗簨璧㈠彇姊﹀竵锛屾煡鐪嬫垬缁╀笌鑾峰鍏ず</div>
         </div>
       </div>
       <div class="welcome-feature">
@@ -202,77 +202,77 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><path d="M12 22V8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>
         </div>
         <div>
-          <div class="welcome-feat-label">经济系统</div>
-          <div class="welcome-feat-desc">赛事、转会资金全部梦币流转，可兑换实体奖励</div>
+          <div class="welcome-feat-label">缁忔祹绯荤粺</div>
+          <div class="welcome-feat-desc">璧涗簨銆佽浆浼氳祫閲戝叏閮ㄦⅵ甯佹祦杞紝鍙厬鎹㈠疄浣撳鍔?/div>
         </div>
       </div>
     </div>
     <div class="welcome-footer">
-      <button class="welcome-btn-login" onclick="closeWelcomeAndLogin()">立即登录，开启征程</button>
-      <button class="welcome-btn-skip" onclick="closeWelcome()">先逛逛，稍后再说</button>
+      <button class="welcome-btn-login" onclick="closeWelcomeAndLogin()">绔嬪嵆鐧诲綍锛屽紑鍚緛绋?/button>
+      <button class="welcome-btn-skip" onclick="closeWelcome()">鍏堥€涢€涳紝绋嶅悗鍐嶈</button>
     </div>
   </div>
 </div>
 
 <div id="toastContainer"></div>
 
-<!-- 使用说明弹窗（保留） -->
+<!-- 浣跨敤璇存槑寮圭獥锛堜繚鐣欙級 -->
 <div id="guideModal" style="display:none;" class="modal-overlay">
   <div class="modal" style="max-width:520px;max-height:80vh;overflow-y:auto;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-      <h2 style="margin:0;">梦工厂 - 使用说明</h2>
+      <h2 style="margin:0;">姊﹀伐鍘?- 浣跨敤璇存槑</h2>
       <button class="btn btn-ghost btn-sm" onclick="closeGuideModal()">&times;</button>
     </div>
     <div style="color:var(--text-secondary);font-size:0.82rem;line-height:1.7;">
-      <h3 style="color:var(--primary);">核心场景</h3>
+      <h3 style="color:var(--primary);">鏍稿績鍦烘櫙</h3>
       <div style="margin-bottom:16px;">
-        <div style="font-weight:700; margin-bottom:8px; color: var(--accent);">常规赛事（队伍参赛）</div>
+        <div style="font-weight:700; margin-bottom:8px; color: var(--accent);">甯歌璧涗簨锛堥槦浼嶅弬璧涳級</div>
         <ul style="margin:0; padding-left:20px;">
-          <li>适合：<strong>5人队伍代表俱乐部/自由名单参赛</strong></li>
-          <li>规则：队长报名 → 队员确认入场费 → 10人满员开赛 → 胜方瓜分奖池</li>
-          <li>入场费三档：500 / 1000 / 2000 梦币</li>
+          <li>閫傚悎锛?strong>5浜洪槦浼嶄唬琛ㄤ勘涔愰儴/鑷敱鍚嶅崟鍙傝禌</strong></li>
+          <li>瑙勫垯锛氶槦闀挎姤鍚?鈫?闃熷憳纭鍏ュ満璐?鈫?10浜烘弧鍛樺紑璧?鈫?鑳滄柟鐡滃垎濂栨睜</li>
+          <li>鍏ュ満璐逛笁妗ｏ細500 / 1000 / 2000 姊﹀竵</li>
         </ul>
       </div>
-      <h3 style="color:var(--primary);">参赛流程</h3>
+      <h3 style="color:var(--primary);">鍙傝禌娴佺▼</h3>
       <ol style="margin:0 0 16px; padding-left:24px;">
-        <li><strong>队长报名</strong>：进入常规赛事 → 选择代表队伍 → 报名，队伍5人收到通知</li>
-        <li><strong>队员确认</strong>：进入赛事详情 → 选入场费档位 → 确认入场，扣除梦币</li>
-        <li><strong>开赛</strong>：10人满员后自动锁定，到达开赛时间正式开始</li>
-        <li><strong>提交结果</strong>：开赛20分钟后可上传截图 + 胜方 + KDA数据</li>
-        <li><strong>管理员结算</strong>：审核无误后发放奖池，胜方按入场费占比瓜分</li>
+        <li><strong>闃熼暱鎶ュ悕</strong>锛氳繘鍏ュ父瑙勮禌浜?鈫?閫夋嫨浠ｈ〃闃熶紞 鈫?鎶ュ悕锛岄槦浼?浜烘敹鍒伴€氱煡</li>
+        <li><strong>闃熷憳纭</strong>锛氳繘鍏ヨ禌浜嬭鎯?鈫?閫夊叆鍦鸿垂妗ｄ綅 鈫?纭鍏ュ満锛屾墸闄ゆⅵ甯?/li>
+        <li><strong>寮€璧?/strong>锛?0浜烘弧鍛樺悗鑷姩閿佸畾锛屽埌杈惧紑璧涙椂闂存寮忓紑濮?/li>
+        <li><strong>鎻愪氦缁撴灉</strong>锛氬紑璧?0鍒嗛挓鍚庡彲涓婁紶鎴浘 + 鑳滄柟 + KDA鏁版嵁</li>
+        <li><strong>绠＄悊鍛樼粨绠?/strong>锛氬鏍告棤璇悗鍙戞斁濂栨睜锛岃儨鏂规寜鍏ュ満璐瑰崰姣旂摐鍒?/li>
       </ol>
-      <h3 style="color:var(--primary);">奖池规则</h3>
+      <h3 style="color:var(--primary);">濂栨睜瑙勫垯</h3>
       <div style="border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:12px;margin-bottom:16px;">
         <ul style="margin:0; padding-left:20px;">
-          <li>总奖池 = 10人入场费之和</li>
-          <li><span style="color:var(--success);">胜方5人</span>按个人入场费占比瓜分总奖池</li>
-          <li><span style="color:var(--danger);">败方5人</span>入场费全损，无返还</li>
-          <li>报名不足10人 → 自动取消 → 全额退费</li>
+          <li>鎬诲姹?= 10浜哄叆鍦鸿垂涔嬪拰</li>
+          <li><span style="color:var(--success);">鑳滄柟5浜?/span>鎸変釜浜哄叆鍦鸿垂鍗犳瘮鐡滃垎鎬诲姹?/li>
+          <li><span style="color:var(--danger);">璐ユ柟5浜?/span>鍏ュ満璐瑰叏鎹燂紝鏃犺繑杩?/li>
+          <li>鎶ュ悕涓嶈冻10浜?鈫?鑷姩鍙栨秷 鈫?鍏ㄩ閫€璐?/li>
         </ul>
       </div>
     </div>
   </div>
 </div>
 
-<!-- 新手指南弹窗（保留兼容） -->
+<!-- 鏂版墜鎸囧崡寮圭獥锛堜繚鐣欏吋瀹癸級 -->
 <div id="newbieGuideModal" style="display:none;" class="modal-overlay">
   <div class="modal" style="max-width:540px;max-height:80vh;overflow-y:auto;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-      <h2 style="margin:0;">新手指南</h2>
+      <h2 style="margin:0;">鏂版墜鎸囧崡</h2>
       <button class="btn btn-ghost btn-sm" onclick="closeNewbieGuide()">&times;</button>
     </div>
     <div style="color:var(--text-secondary);font-size:0.8rem;line-height:1.7;">
       <div style="display:flex;gap:8px;margin-bottom:16px;">
-        <button class="btn btn-sm btn-primary" onclick="switchNbTab('player')" id="nbTabPlayer">选手玩法</button>
-        <button class="btn btn-sm btn-ghost" onclick="switchNbTab('boss')" id="nbTabBoss">老板玩法</button>
+        <button class="btn btn-sm btn-primary" onclick="switchNbTab('player')" id="nbTabPlayer">閫夋墜鐜╂硶</button>
+        <button class="btn btn-sm btn-ghost" onclick="switchNbTab('boss')" id="nbTabBoss">鑰佹澘鐜╂硶</button>
       </div>
       <div id="nbContentPlayer">
-        <p>① 认证身价获得启动资金 → ② 寻找队友/联系俱乐部 → ③ 积极参与赛事 → ④ 比赛影响身价（胜+2%/败-2%，MVP+2%）→ ⑤ 查看榜单排名</p>
+        <p>鈶?璁よ瘉韬环鑾峰緱鍚姩璧勯噾 鈫?鈶?瀵绘壘闃熷弸/鑱旂郴淇变箰閮?鈫?鈶?绉瀬鍙備笌璧涗簨 鈫?鈶?姣旇禌褰卞搷韬环锛堣儨+2%/璐?2%锛孧VP+2%锛夆啋 鈶?鏌ョ湅姒滃崟鎺掑悕</p>
       </div>
       <div id="nbContentBoss" style="display:none;">
-        <p><b>两种运营模式：</b></p>
-        <p>💰 <b>高价冲榜流</b>：高价购入顶尖选手 → 组建豪华战队 → 比赛获胜涨身价 → 占据榜单前排</p>
-        <p>📈 <b>低成本培养流</b>：低价购入潜力选手 → 培养 → 身价上涨 → 卖给官方联梦（获得交易价80%提成）</p>
+        <p><b>涓ょ杩愯惀妯″紡锛?/b></p>
+        <p>馃挵 <b>楂樹环鍐叉娴?/b>锛氶珮浠疯喘鍏ラ《灏栭€夋墜 鈫?缁勫缓璞崕鎴橀槦 鈫?姣旇禌鑾疯儨娑ㄨ韩浠?鈫?鍗犳嵁姒滃崟鍓嶆帓</p>
+        <p>馃搱 <b>浣庢垚鏈煿鍏绘祦</b>锛氫綆浠疯喘鍏ユ綔鍔涢€夋墜 鈫?鍩瑰吇 鈫?韬环涓婃定 鈫?鍗栫粰瀹樻柟鑱旀ⅵ锛堣幏寰椾氦鏄撲环80%鎻愭垚锛?/p>
       </div>
     </div>
   </div>
