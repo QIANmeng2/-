@@ -39,8 +39,11 @@
   }
 
   // ===== 获取单场赛事详情 =====
+  // 支持 matches 新ID 和 competitions 旧ID（comp_ 前缀）
   function fetchMatch(id) {
-    return request('/api/matches/' + encodeURIComponent(id));
+    var isCompId = String(id).indexOf('comp_') === 0;
+    var path = isCompId ? '/api/competitions/' : '/api/matches/';
+    return request(path + encodeURIComponent(id));
   }
 
   // ===== 获取赛程（时间线）=====

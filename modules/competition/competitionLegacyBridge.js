@@ -742,8 +742,9 @@
               html += '<div style="padding:4px 0;font-size:.74rem;color:#5a5a70;">' + (s.player_name || s.player_user_id) + ' — 身价0，不调整</div>';
               continue;
             }
-            var color = s.percent_change >= 0 ? '#10b981' : '#ef4444';
-            var sign = s.percent_change >= 0 ? '+' : '';
+            var pct = s.delta_percent || s.percent_change || 0;
+            var color = pct >= 0 ? '#10b981' : '#ef4444';
+            var sign = pct >= 0 ? '+' : '';
             var mvpTag = s.mvp_count > 0 ? ' <span style="color:#c9a84c;font-size:.66rem;">MVP\u00d7' + s.mvp_count + '</span>' : '';
             html += '<div style="padding:4px 0;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,.04);">' +
               '<span style="font-size:.78rem;color:#ccc;">' + (s.player_name || s.player_user_id) + mvpTag + '</span>' +
@@ -751,7 +752,7 @@
                 '<span style="color:#7a7a90;">' + s.old_value + '</span>' +
                 '<span style="color:#666;margin:0 4px;">\u2192</span>' +
                 '<span style="color:' + color + ';font-weight:600;">' + s.new_value + '</span>' +
-                '<span style="color:' + color + ';font-size:.7rem;margin-left:3px;">(' + sign + s.percent_change + '%)</span>' +
+                '<span style="color:' + color + ';font-size:.7rem;margin-left:3px;">(' + sign + pct + '%)</span>' +
               '</span>' +
             '</div>';
           }
