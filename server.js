@@ -2210,6 +2210,54 @@ function fmtLocalISO(v) {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// ===== 获取单个 competition 详情（兼容 comp_ 前缀旧数据）=====
+app.get('/api/competitions/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const compResult = await pool.query(`
+      SELECT c.*, u.coachName AS created_by_name, u.username AS created_by_username
+      FROM competitions c
+      LEFT JOIN users u ON u.id = c.created_by
+      WHERE c.id = $1 AND c.status != 'deleted'
+    `, [id]);
+    if (compResult.rows.length === 0) return notFound(res, '赛事不存在');
+    const comp = compResult.rows[0];
+    comp.start_time = fmtLocalISO(comp.start_time);
+    comp.end_time = fmtLocalISO(comp.end_time);
+    // 附加报名统计
+    const regs = await pool.query(
+      `SELECT entry_fee, status FROM competition_registrations WHERE competition_id = $1 AND status != 'cancelled'`,
+      [id]
+    );
+    comp.reg_stats = { count: 0, fee500: 0, fee1000: 0, fee2000: 0, prizePool: 0 };
+    regs.rows.forEach(r => {
+      comp.reg_stats.count++;
+      if (r.entry_fee === 500) comp.reg_stats.fee500++;
+      else if (r.entry_fee === 1000) comp.reg_stats.fee1000++;
+      else if (r.entry_fee === 2000) comp.reg_stats.fee2000++;
+      comp.reg_stats.prizePool += r.entry_fee;
+    });
+    // 附加 participants（从 competition_registrations 表构建）
+    const participants = await pool.query(
+      `SELECT cr.player_user_id, u.username, u.coachName, u.avatar, cr.side, cr.lane, cr.club_id
+       FROM competition_registrations cr
+       LEFT JOIN users u ON u.id = cr.player_user_id
+       WHERE cr.competition_id = $1 AND cr.status != 'cancelled'`,
+      [id]
+    );
+    comp.participants = participants.rows.map(r => ({
+      user_id: r.player_user_id,
+      username: r.username,
+      coachName: r.coachName,
+      avatar: r.avatar,
+      side: r.side,
+      lane: r.lane,
+      club_id: r.club_id
+    }));
+    res.json({ success: true, competition: comp });
+  } catch(e) { console.error('[GET /api/competitions/:id]', e); serverError(res, '查询失败'); }
+});
+
 app.post('/api/admin/competitions', authMiddleware, adminMiddleware, async (req, res) => {
   const { name, qr_code_url, tier, start_time, end_time, bo, description } = req.body;
   if (!name) return badRequest(res, '请填写赛事名称');
