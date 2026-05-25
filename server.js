@@ -2611,19 +2611,20 @@ function parseGames(games) {
  * @param {boolean} isWinnerSide - 是否胜方选手
  * @param {number} mvpCount - 该选手 MVP 次数
  * @param {number} sideWinDiff - 队伍胜局差（BO3 2:0=2, 2:1=1; BO5 3:0=3, 3:1=2, 3:2=1）
- * @returns {{newValue: number, percentChange: number}}
+ * @returns {{newValue: number, deltaPercent: number}}
+ *   deltaPercent: 业务规则百分比（如 +4 / -4 / +8），用于 UI 显示
+ *   newValue: 计算后的最终身价（仅用于写库）
  */
 function calcPlayerValue(oldValue, isWinnerSide, mvpCount, sideWinDiff) {
   if (sideWinDiff <= 0) sideWinDiff = 1; // 无比赛数据时降级为 ±1
   const baseDiff = isWinnerSide ? sideWinDiff : -sideWinDiff;
-  const totalPercent = baseDiff * 2 + mvpCount * 2;
-  let newValue = Math.ceil(oldValue * (1 + totalPercent / 100));
+  const deltaPercent = baseDiff * 2 + mvpCount * 2; // 业务规则百分比
+  let newValue = Math.ceil(oldValue * (1 + deltaPercent / 100));
   // 保底：至少变化1（身价=1时不再减）
   if (isWinnerSide && newValue <= oldValue) newValue = oldValue + 1;
   if (!isWinnerSide && newValue >= oldValue && oldValue > 1) newValue = oldValue - 1;
   newValue = Math.max(1, newValue);
-  const percentChange = parseFloat((((newValue - oldValue) / oldValue) * 100).toFixed(2));
-  return { newValue, percentChange };
+  return { newValue, deltaPercent };
 }
 
 // 预览结算结果（干跑，不写库）—— 使用唯一结算源
@@ -2673,13 +2674,13 @@ app.post('/api/competitions/:id/preview-result', authMiddleware, async (req, res
       }
       const isWinnerSide = reg.team === stats.winner;
       const mvpCount = stats.mvpCounts[uid] || 0;
-      const { newValue, percentChange } = calcPlayerValue(oldValue, isWinnerSide, mvpCount, stats.sideWinDiff);
+      const { newValue, deltaPercent } = calcPlayerValue(oldValue, isWinnerSide, mvpCount, stats.sideWinDiff);
       results.push({
         player_user_id: uid,
         player_name: pl.rows[0].game_id || uid,
         old_value: oldValue,
         new_value: newValue,
-        percent_change: percentChange,
+        delta_percent: deltaPercent,
         win: isWinnerSide,
         mvp_count: mvpCount
       });
@@ -2774,14 +2775,14 @@ app.post('/api/admin/competitions/:id/confirm-result', authMiddleware, adminMidd
       if (oldValue <= 0 || isNaN(oldValue)) continue;
       const isWinnerSide = p.team === stats.winner;
       const mvpCount = stats.mvpCounts[uid] || 0;
-      const { newValue, percentChange } = calcPlayerValue(oldValue, isWinnerSide, mvpCount, stats.sideWinDiff);
+      const { newValue, deltaPercent } = calcPlayerValue(oldValue, isWinnerSide, mvpCount, stats.sideWinDiff);
       if (isNaN(newValue)) { console.warn('[confirm-result] NaN newValue for', uid, 'oldValue=', oldValue); continue; }
       const safeCompResultId = parseInt(compResultId, 10);
       if (isNaN(safeCompResultId)) { console.warn('[confirm-result] NaN compResultId', compResultId); continue; }
       await client.query(
         `UPDATE players SET market_value=$1, grade=$2, last_match_result=$3, last_match_mvp=$4,
          last_change_percentage=$5, last_match_id=$6 WHERE user_id=$7`,
-        [newValue, calcGrade(newValue), isWinnerSide ? 'win' : 'lose', mvpCount > 0, percentChange, safeCompResultId, uid]
+        [newValue, calcGrade(newValue), isWinnerSide ? 'win' : 'lose', mvpCount > 0, deltaPercent, safeCompResultId, uid]
       );
       scoreUpdateIds.push(uid);
     }
