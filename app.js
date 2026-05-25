@@ -231,6 +231,13 @@ let chatMessageCallbacks = [];
 let chatUnreadCounts = { public: 0, private: 0, team: 0, club: 0 };
 
 function initChatSocket() {
+  // 【Phase 1 代理化】优先使用新架构 SocketManager
+  if (window.SocketManager) {
+    console.log('[Chat][Proxy] initChatSocket → SocketManager.init()');
+    window.SocketManager.init();
+    return;
+  }
+  // 旧逻辑兜底（新架构未加载时）
   if (chatSocket) return;
   try {
     chatSocket = io(API_BASE, {
@@ -327,26 +334,61 @@ function initChatSocket() {
 
 function updateChatIconStatus() {
   const icon = document.getElementById('chatStatusIcon');
-  if (icon) {
-    icon.style.background = chatSocketConnected ? '#10b981' : '#6b7280';
-    icon.title = chatSocketConnected ? '在线' : '离线';
+  if (!icon) return;
+  // 【Phase 2 去全局化】优先使用新架构
+  if (window.SocketManager) {
+    const connected = window.SocketManager.isConnected();
+    icon.style.background = connected ? '#10b981' : '#6b7280';
+    icon.title = connected ? '在线' : '离线';
+    return;
   }
+  // 旧逻辑兜底
+  icon.style.background = chatSocketConnected ? '#10b981' : '#6b7280';
+  icon.title = chatSocketConnected ? '在线' : '离线';
 }
 
 function updateChatBadge() {
+  // 【Phase 2 去全局化】优先使用新架构
+  if (window.ChatStore) {
+    const state = window.ChatStore.getState();
+    // 总未读（聊天图标上的绿点）
+    const totalBadge = document.getElementById('chatUnreadBadge');
+    if (totalBadge) {
+      const total = Object.values(state.unreadCounts || {}).reduce((a, b) => a + b, 0);
+      totalBadge.style.display = total > 0 ? 'inline-flex' : 'none';
+      totalBadge.textContent = total > 99 ? '99+' : String(total);
+    }
+    // 私聊未读（私聊 tab 上的 badge）
+    const privateBadge = document.getElementById('chat-private-badge');
+    if (privateBadge) {
+      const count = (state.unreadCounts && state.unreadCounts.private) || 0;
+      privateBadge.style.display = count > 0 ? 'inline-flex' : 'none';
+      privateBadge.textContent = count > 99 ? '99+' : String(count);
+    }
+    return;
+  }
+  // 旧逻辑兜底（保留向后兼容）
   const badge = document.getElementById('chatUnreadBadge');
   if (badge) {
     const total = Object.values(chatUnreadCounts).reduce((a, b) => a + b, 0);
-    if (total > 0) {
-      badge.style.display = 'inline-flex';
-      badge.textContent = total > 99 ? '99+' : total;
-    } else {
-      badge.style.display = 'none';
-    }
+    badge.style.display = total > 0 ? 'inline-flex' : 'none';
+    badge.textContent = total > 99 ? '99+' : String(total);
+  }
+  const privateBadge = document.getElementById('chat-private-badge');
+  if (privateBadge) {
+    const count = chatUnreadCounts.private || 0;
+    privateBadge.style.display = count > 0 ? 'inline-flex' : 'none';
+    privateBadge.textContent = count > 99 ? '99+' : String(count);
   }
 }
-
 function joinChatRoom(type, targetId) {
+  // 【Phase 2 去全局化】优先使用新架构 ChatRoomManager
+  if (window.ChatRoomManager) {
+    console.log('[Chat][Proxy] joinChatRoom → ChatRoomManager.join()');
+    window.ChatRoomManager.join(type, targetId);
+    return;
+  }
+  // 旧逻辑兜底
   if (!chatSocket || !chatSocketConnected) return;
   chatSocket.emit('leave_room', { type: chatCurrentType, team_id: chatCurrentTarget?.team_id, club_id: chatCurrentTarget?.club_id });
   chatCurrentType = type;
@@ -355,6 +397,13 @@ function joinChatRoom(type, targetId) {
 }
 
 function onChatMessage(callback) {
+  // 【Phase 2 去全局化】优先使用新架构 ChatStore
+  if (window.ChatStore && typeof window.ChatStore.subscribe === 'function') {
+    console.log('[Chat][Proxy] onChatMessage → ChatStore.subscribe()');
+    const id = window.ChatStore.subscribe(callback);
+    return () => window.ChatStore.unsubscribe(id);
+  }
+  // 旧逻辑兜底
   chatMessageCallbacks.push(callback);
   return () => {
     chatMessageCallbacks = chatMessageCallbacks.filter(cb => cb !== callback);
@@ -436,10 +485,6 @@ async function fetchUserInfo() {
   try { const data = await api('/api/auth/me'); if (data && data.user) currentUser = data.user; } catch { logout(); }
   updateUI();
   checkNotifications();
-  // 用户信息获取完成后，如果当前在首页或赛事中心，初始化每日卜卦
-  if (currentUser && (currentTab === 'square' || currentTab === 'competition') && typeof FortuneView !== 'undefined') {
-    FortuneView.init();
-  }
   // socket.io 按需初始化，不在页面加载时抢占连接池
 }
 function openAuthModal(mode) {
@@ -478,12 +523,12 @@ async function handleAuth(e) {
     if (!coach || !wechat) { showToast('请填写完整注册信息','error'); return; }
     try {
       const data = await api('/api/auth/register', { method:'POST', body: JSON.stringify({ username, password, teamName: coach, coachName: coach, wechat, level }) });
-      if (data && data.token) { authToken = data.token; localStorage.setItem('local_current_user', authToken); currentUser = data.user; closeAuthModal(); updateUI(); window.location.href='/competition.html'; showToast('注册成功！','success'); }
+      if (data && data.token) { authToken = data.token; localStorage.setItem('local_current_user', authToken); currentUser = data.user; closeAuthModal(); updateUI(); switchTab('competition'); showToast('注册成功！','success'); }
     } catch (e) { showToast(e.message,'error'); }
   } else {
     try {
       const data = await api('/api/auth/login', { method:'POST', body: JSON.stringify({ username, password }) });
-      if (data && data.token) { authToken = data.token; localStorage.setItem('local_current_user', authToken); currentUser = data.user; closeAuthModal(); updateUI(); window.location.href='/competition.html'; showToast('登录成功！','success'); }
+      if (data && data.token) { authToken = data.token; localStorage.setItem('local_current_user', authToken); currentUser = data.user; closeAuthModal(); updateUI(); switchTab('competition'); showToast('登录成功！','success'); }
     } catch (e) { showToast(e.message,'error'); }
   }
 }
@@ -497,8 +542,6 @@ function updateUI() {
   const ui = (id) => document.getElementById(id);
   const safeStyle = (id, prop, val) => { const el = ui(id); if (el) el.style[prop] = val; };
   const safeText = (id, val) => { const el = ui(id); if (el) el.textContent = val; };
-  // 主页按钮始终可见
-  safeStyle('tabSquare', 'display', '');
   if (currentUser) {
     safeStyle('userInfoDisplay', 'display', 'block');
     safeStyle('btnLoginTop', 'display', 'none');
@@ -937,61 +980,14 @@ async function loadCompAdminActions(compId, c) {
     container.innerHTML = '';
     return;
   }
-  // 有参赛人员时显示管理操作按钮
+  // 有参赛人员时显示"提交结果"按钮
   const rs = c.reg_stats || {};
   if ((rs.count || 0) === 0) { container.innerHTML = ''; return; }
-
-  const actionsHtml = [];
-
-  // 未开赛 → 显示"确认开赛"按钮
-  if (s === 'upcoming' || s === 'open' || s === 'locked') {
-    actionsHtml.push('<button class="btn btn-sm btn-primary" onclick="adminStartCompetition(\''+compId+'\')">确认开赛</button>');
-  }
-
-  // 已开赛/审核中 → 显示"提交结果"按钮
-  if (s === 'live' || s === 'review') {
-    actionsHtml.push('<button class="btn btn-sm" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#ef4444;" onclick="openSubmitResultModal(\''+compId+'\')">比赛结束，提交结果</button>');
-  }
-
-  if (!actionsHtml.length) { container.innerHTML = ''; return; }
   container.innerHTML = '<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06);">'+
     '<div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:8px;">管理员操作</div>'+
     '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
-    actionsHtml.join('')+
+    '<button class="btn btn-sm" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#ef4444;" onclick="openSubmitResultModal(\''+compId+'\')">比赛结束，提交结果</button>'+
     '</div></div>';
-}
-
-// ========== 管理员手动开赛 ==========
-async function adminStartCompetition(compId) {
-  if (!await dialog({
-    title: '手动开赛',
-    body: '确定要立即开赛吗？此操作不可撤销。',
-    confirmText: '确认开赛',
-    cancelText: '取消'
-  })) return;
-  try {
-    const data = await api('/api/admin/competitions/' + compId + '/start', 'POST');
-    if (data.success) {
-      showToast('已开赛');
-      // 刷新缓存中的赛事信息
-      try {
-        const res = await api('/api/admin/competitions?limit=20&tier=all');
-        if (res.competitions) {
-          res.competitions.forEach(function(comp) {
-            window._compCache[comp.id] = comp;
-          });
-          await loadCompList();
-        }
-      } catch(e) { /* ignore */ }
-      // 关闭并重新打开详情
-      var overlay = document.querySelector('.comp-detail-overlay');
-      if (overlay) overlay.remove();
-      // 延迟打开新详情
-      setTimeout(function() { openCompetitionDetail(compId); }, 200);
-    }
-  } catch(e) {
-    showToast('开赛失败: ' + e.message, 'error');
-  }
 }
 
 // ========== 比赛结果提交弹窗 ==========
@@ -3280,10 +3276,6 @@ async function switchChatType(type) {
     const cm = document.getElementById('chatMessages');
     if (cm) cm.innerHTML = '<div class="chat-empty">请选择一个联系人开始私聊</div>';
   } else if (type === 'team') {
-    headerTitle.textContent = '队伍聊天';
-    headerSub.textContent = '选择队伍';
-    await renderTeamTargets(targetList);
-  } else if (type === 'team') {
     if (headerTitle) headerTitle.textContent = '队伍聊天';
     if (headerSub) headerSub.textContent = '选择队伍';
     if (targetList) await renderTeamTargets(targetList);
@@ -3551,14 +3543,12 @@ async function sendChatMessage() {
       body: JSON.stringify(body)
     });
 
-    // 注意：不在此处手动appendChatMessage
-    // socket new_message 回调会自动渲染（避免重复显示）
     if (data && data.message) {
       scrollChatToBottom();
     }
   } catch (e) {
     showToast('发送失败: ' + e.message, 'error');
-    input.value = content; // 恢复输入
+    input.value = content;
   }
 }
 
@@ -3569,15 +3559,6 @@ function handleChatKeydown(e) {
   }
 }
 
-function updateChatBadge() {
-  const type = chatPanelData.currentChatType;
-  const badge = document.getElementById('chat-private-badge');
-  if (badge) {
-    const count = chatUnreadCounts.private || 0;
-    badge.style.display = count > 0 ? 'inline-flex' : 'none';
-    badge.textContent = count > 99 ? '99+' : count;
-  }
-}
 
 // ====== 消息撤回 ======
 async function handleRecallMessage(msgId) {
@@ -3911,10 +3892,6 @@ async function switchTab(tab) {
   if (hero) hero.style.display = (tab === "competition" || tab === "square") ? "" : "none";
   const compList = document.getElementById("competitionList");
   if (compList) compList.style.display = (tab === "competition") ? "" : "none";
-  // 首页显示时，初始化每日卜卦
-  if ((tab === "competition" || tab === "square") && typeof FortuneView !== 'undefined') {
-    FortuneView.init();
-  }
   updateUI();
     if (tab === 'team') cacheStore.delete('/api/teams/mine');
   const content = document.getElementById('tabContent');
@@ -3929,7 +3906,6 @@ async function switchTab(tab) {
     else if (tab === 'club') await renderClubPanel();
     else if (tab === 'leaderboard') await renderLeaderboardPanel();
     else if (tab === 'chat') await renderChatPanel();
-    else if (tab === 'square') { content.innerHTML = ''; } // 首页：显示 Hero + 空内容区
   } catch (e) {
     content.innerHTML = '<div class="card"><p>加载失败</p><button class="btn btn-sm btn-primary" onclick="switchTab(\''+tab+'\')">重试</button></div>';
   }
@@ -4731,7 +4707,7 @@ async function loadAdminCompList() {
         </div>
         <div style="display:flex;gap:6px;">
           ${c.comp_status === 'review' ? '<button class="btn btn-xs btn-primary" onclick="adminReviewCompetition(\''+c.id+'\')">审核结算</button>' : ''}
-          <button class="btn btn-xs btn-danger" onclick="adminDeleteCompetition('${c.id}')">删除</button>
+          <button class="btn btn-xs btn-danger" onclick="adminDeleteCompetition(\''+c.id+'\')">删除</button>
         </div>
       </div>`;
     }).join('');
@@ -5820,13 +5796,7 @@ window.addEventListener('beforeunload', () => {
   try {
     window.APP_READY = true; // 标记应用已加载，解除兜底
     updateUI();
-    // 首页默认跳转到赛事中心（独立页面），但用户主动返回时不跳转
-    if (authToken && !sessionStorage.getItem('returnedFromCompetition')) {
-      window.location.href = '/competition.html';
-      return; // 跳转后不继续执行
-    }
-    sessionStorage.removeItem('returnedFromCompetition');
-    await switchTab('square'); // 未登录显示首页
+    await switchTab('competition');  // 等页面渲染完毕
     if (authToken) {
       fetchUserInfo();  // 内部会初始化 socket.io
     }
