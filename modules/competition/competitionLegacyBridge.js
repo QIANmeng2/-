@@ -95,6 +95,55 @@
   var BTN_PRIMARY = 'display:inline-flex;align-items:center;justify-content:center;padding:10px 20px;border-radius:8px;font-size:0.88rem;font-weight:600;cursor:pointer;border:none;background:linear-gradient(135deg,#f59e0b,#d97706);color:#0F172A;box-shadow:0 2px 8px rgba(245,158,11,0.25);transition:all 0.2s';
   var BTN_GHOST   = 'display:inline-flex;align-items:center;justify-content:center;padding:10px 20px;border-radius:8px;font-size:0.88rem;font-weight:600;cursor:pointer;border:1px solid rgba(245,158,11,0.4);background:transparent;color:#f59e0b;transition:all 0.2s';
 
+  // ===== 统一渲染工具 =====
+  function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function renderInto(container, html) {
+    if (typeof container === 'string') container = document.getElementById(container);
+    if (container) container.innerHTML = html;
+  }
+
+  function createModal(opts) {
+    opts = opts || {};
+    var title = opts.title || '';
+    var titleColor = opts.titleColor || '#c9a84c';
+    var bodyContent = opts.content || opts.bodyContent || '';
+    var footer = opts.footer || '';
+    var maxWidth = opts.maxWidth || '440px';
+    var borderColor = opts.borderColor || 'rgba(201,168,76,.3)';
+
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;animation:fadeIn .2s;';
+
+    var mod = document.createElement('div');
+    mod.style.cssText = 'background:#1E1E3A;border:1px solid ' + borderColor + ';border-radius:14px;padding:28px;width:90%;max-width:' + maxWidth + ';max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5);';
+
+    var inner = '';
+    if (title) inner += '<h3 style="margin:0 0 16px;color:' + titleColor + ';font-size:1.1rem;font-weight:700;">' + escapeHtml(title) + '</h3>';
+    if (bodyContent) inner += '<div style="color:#e0e0f0;font-size:.88rem;line-height:1.6;">' + bodyContent + '</div>';
+    if (footer) inner += '<div style="display:flex;gap:10px;margin-top:20px;">' + footer + '</div>';
+    mod.innerHTML = inner;
+
+    overlay.appendChild(mod);
+    return {
+      overlay: overlay,
+      modal: mod,
+      getEl: function(id) { return document.getElementById(id); },
+      close: function() { overlay.remove(); }
+    };
+  }
+
+  function renderModalBtnStyle(type, extra) {
+    if (type === 'primary') return 'flex:1;padding:10px;border-radius:8px;border:none;background:linear-gradient(135deg,#c9a84c,#a88b3c);color:#1A1A2E;font-size:.88rem;font-weight:600;cursor:pointer;' + (extra || '');
+    if (type === 'danger') return 'flex:1;padding:10px;border-radius:8px;border:none;background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;font-size:.88rem;font-weight:600;cursor:pointer;' + (extra || '');
+    if (type === 'success') return 'flex:1;padding:10px;border-radius:8px;border:none;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:.88rem;font-weight:600;cursor:pointer;' + (extra || '');
+    if (type === 'ghost') return 'flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#e0e0f0;font-size:.88rem;font-weight:600;cursor:pointer;' + (extra || '');
+    return 'flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#e0e0f0;font-size:.88rem;font-weight:600;cursor:pointer;' + (extra || '');
+  }
+
   // ===== 1. 报名状态 (带认证) =====
   function loadRegistrationState(compId) {
     return req('/api/competitions/' + encodeURIComponent(compId) + '/my-reg').then(function(r){
@@ -158,12 +207,52 @@
     return req('/api/competitions/' + encodeURIComponent(compId) + '/cancel', { method:'POST' });
   }
 
-  // ===== 登录失效友好提示 =====
-  function renderLoginExpired(el) {
-    el.innerHTML = '<div style="padding:12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;color:#f87171;font-size:0.82rem;">'
+  // ===== 纯渲染函数：报名状态各分支（只 return HTML，不操作 DOM）=====
+  function _renderRegLoading() {
+    return '<div style="color:#7a7a90;font-size:.82rem;padding:12px 0;display:flex;align-items:center;gap:8px;">'
+      + '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.1);border-top-color:#c9a84c;border-radius:50%;animation:cSpin .7s linear infinite;"></span>'
+      + '加载报名状态…</div>';
+  }
+
+  function _renderRegButtons(compId) {
+    return '<div style="display:flex;gap:10px;flex-wrap:wrap;">'
+      + '<button onclick="CompetitionLegacyBridge._teamReg(\'' + escapeHtml(compId) + '\')" style="flex:1;min-width:120px;' + BTN_PRIMARY + '">以队伍报名</button>'
+      + '<button onclick="CompetitionLegacyBridge._clubReg(\'' + escapeHtml(compId) + '\')" style="flex:1;min-width:120px;' + BTN_GHOST + '">以俱乐部报名</button>'
+      + '</div>';
+  }
+
+  function _renderRegReserved(compId) {
+    return '<div style="padding:12px;background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.2);border-radius:8px;">'
+      + '<span style="color:#f59e0b;font-weight:600;">待确认入场</span>'
+      + '<div style="margin-top:8px;"><button onclick="CompetitionLegacyBridge._confirmEntry(\'' + escapeHtml(compId) + '\',0)" style="' + BTN_PRIMARY + '">确认入场</button></div></div>';
+  }
+
+  function _renderRegConfirmed(fee) {
+    var feeHtml = (fee > 0) ? '<span style="color:#6B7280;margin-left:8px;font-size:0.78rem;">入场费:' + escapeHtml(String(fee)) + '梦币</span>' : '';
+    return '<div style="padding:12px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:8px;">'
+      + '<span style="color:#10b981;font-weight:600;">已确认入场</span>' + feeHtml + '</div>';
+  }
+
+  function _renderRegPending() {
+    return '<div style="padding:12px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:8px;">'
+      + '<span style="color:#60a5fa;font-weight:600;">已报名</span>'
+      + '<span style="color:#6B7280;margin-left:8px;font-size:0.78rem;">等待确认入场</span></div>';
+  }
+
+  function _renderRegError(msg) {
+    return '<div style="color:#f87171;font-size:.72rem;padding:6px 0 0;">⚠ 状态加载失败: ' + escapeHtml(msg || '未知') + '</div>';
+  }
+
+  function _renderRegLoginExpired() {
+    return '<div style="padding:12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;color:#f87171;font-size:0.82rem;">'
       + '<span>登录已失效，请重新登录</span>'
       + '<div style="margin-top:8px;"><a href="./index.html" style="color:#f59e0b;text-decoration:none;font-size:0.78rem;">返回首页登录</a></div>'
       + '</div>';
+  }
+
+  // ===== 登录失效友好提示 =====
+  function renderLoginExpired(el) {
+    renderInto(el, _renderRegLoginExpired());
   }
 
   // ===== 获取/创建报名 UI 专属子容器（隔离于其他 render 函数） =====
@@ -177,7 +266,7 @@
     return rc;
   }
 
-  // ===== 渲染报名 UI =====
+  // ===== 渲染报名 UI（纯 HTML 渲染函数 + renderInto 统一入口）=====
   function renderRegUI(compId, containerId) {
     console.log('[Bridge] renderRegUI ENTRY — compId=' + compId);
     var el = document.getElementById(containerId||'compRegActions');
@@ -191,56 +280,34 @@
       return;
     }
 
-    // 使用子容器隔离，避免 .innerHTML 覆盖其他 render 函数的 appendChild 结果
+    // 使用子容器隔离，避免覆盖其他 render 函数的 appendChild 结果
     var regContent = getRegContent(el);
 
-    // 显示加载中（异步 API 响应前有空白期）
-    regContent.innerHTML = '<div style="color:#7a7a90;font-size:.82rem;padding:12px 0;display:flex;align-items:center;gap:8px;">'
-      + '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.1);border-top-color:#c9a84c;border-radius:50%;animation:cSpin .7s linear infinite;"></span>'
-      + '加载报名状态…</div>';
+    // 显示加载中
+    renderInto(regContent, _renderRegLoading());
 
     loadRegistrationState(compId).then(function(me){
       console.log('[Bridge] renderRegUI resolved, me=', JSON.stringify(me));
       if (!me) {
-        // 未报名 → 显示报名按钮
         console.log('[Bridge] renderRegUI: 未报名，渲染按钮');
-        regContent.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;">'
-          + '<button onclick="CompetitionLegacyBridge._teamReg(\'' + compId + '\')" style="flex:1;min-width:120px;' + BTN_PRIMARY + '">以队伍报名</button>'
-          + '<button onclick="CompetitionLegacyBridge._clubReg(\'' + compId + '\')" style="flex:1;min-width:120px;' + BTN_GHOST + '">以俱乐部报名</button>'
-          + '</div>';
-      } else if (me.status==='reserved') {
-        regContent.innerHTML = '<div style="padding:12px;background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.2);border-radius:8px;">'
-          + '<span style="color:#f59e0b;font-weight:600;">待确认入场</span>'
-          + '<div style="margin-top:8px;"><button onclick="CompetitionLegacyBridge._confirmEntry(\'' + compId + '\',0)" style="' + BTN_PRIMARY + '">确认入场</button></div></div>';
-      } else if (me.status==='confirmed') {
-        var feeHtml = (me.entry_fee>0) ? '<span style="color:#6B7280;margin-left:8px;font-size:0.78rem;">入场费:'+me.entry_fee+'梦币</span>' : '';
-        regContent.innerHTML = '<div style="padding:12px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:8px;">'
-          + '<span style="color:#10b981;font-weight:600;">已确认入场</span>'+feeHtml+'</div>';
-      } else if (me.status==='pending' || me.status==='registered') {
-        // 已报名但未确认/其他中间状态
-        regContent.innerHTML = '<div style="padding:12px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:8px;">'
-          + '<span style="color:#60a5fa;font-weight:600;">已报名</span>'
-          + '<span style="color:#6B7280;margin-left:8px;font-size:0.78rem;">等待确认入场</span></div>';
+        renderInto(regContent, _renderRegButtons(compId));
+      } else if (me.status === 'reserved') {
+        renderInto(regContent, _renderRegReserved(compId));
+      } else if (me.status === 'confirmed') {
+        renderInto(regContent, _renderRegConfirmed(me.entry_fee));
+      } else if (me.status === 'pending' || me.status === 'registered') {
+        renderInto(regContent, _renderRegPending());
       } else {
-        // 意外状态 — 记录并兜底显示按钮
         console.warn('[Bridge] renderRegUI: 意外状态 me.status=' + me.status + '，兜底渲染按钮');
-        regContent.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;">'
-          + '<button onclick="CompetitionLegacyBridge._teamReg(\'' + compId + '\')" style="flex:1;min-width:120px;' + BTN_PRIMARY + '">以队伍报名</button>'
-          + '<button onclick="CompetitionLegacyBridge._clubReg(\'' + compId + '\')" style="flex:1;min-width:120px;' + BTN_GHOST + '">以俱乐部报名</button>'
-          + '</div>';
+        renderInto(regContent, _renderRegButtons(compId));
       }
     }).catch(function(e){
       console.error('[Bridge] renderRegUI error', e.message, e);
-      if (e.message==='TOKEN_EXPIRED') {
+      if (e.message === 'TOKEN_EXPIRED') {
         renderLoginExpired(el);
       } else {
-        // 非 TOKEN_EXPIRED 错误也兜底显示按钮（网络问题不应阻断操作）
-        var regContent = getRegContent(el);
-        regContent.innerHTML='<div style="display:flex;gap:10px;flex-wrap:wrap;">'
-          + '<button onclick="CompetitionLegacyBridge._teamReg(\'' + compId + '\')" style="flex:1;min-width:120px;' + BTN_PRIMARY + '">以队伍报名</button>'
-          + '<button onclick="CompetitionLegacyBridge._clubReg(\'' + compId + '\')" style="flex:1;min-width:120px;' + BTN_GHOST + '">以俱乐部报名</button>'
-          + '</div>'
-          + '<div style="color:#f87171;font-size:.72rem;padding:6px 0 0;">⚠ 状态加载失败: '+escapeHtml(e.message||'未知')+'</div>';
+        // 非 TOKEN_EXPIRED 错误也兜底显示按钮 + 错误信息
+        renderInto(regContent, _renderRegButtons(compId) + _renderRegError(e.message));
       }
     });
   }
@@ -285,42 +352,39 @@
     console.log('[Bridge] renderAdminStart: admin start button rendered');
   }
 
-  // ===== 管理员开赛请求 =====
+  // ===== 管理员开赛请求（使用 createModal 工厂）=====
   function _adminStartCompetition(compId) {
     console.log('[Bridge] _adminStartCompetition: POST /api/admin/competitions/' + compId + '/start');
     var old = document.getElementById('adminStartModal');
     if (old) old.remove();
 
-    var overlay = document.createElement('div');
-    overlay.id = 'adminStartModal';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;animation:fadeIn .2s;';
+    var bodyContent =
+      '<p style="margin:0 0 12px;">点击确认后：</p>' +
+      '<ul style="margin:0 0 20px;padding-left:20px;color:#a0a0c0;font-size:.82rem;">' +
+        '<li style="margin-bottom:6px;">赛事状态变更为「比赛进行中」</li>' +
+        '<li style="margin-bottom:6px;">参赛选手可提交比赛结果</li>' +
+        '<li>原自动开赛定时器不再影响此赛事</li>' +
+      '</ul>' +
+      '<p style="margin:0;color:#f59e0b;font-size:.8rem;">此操作向前不可逆</p>';
 
-    var mod = document.createElement('div');
-    mod.style.cssText = 'background:#1E1E3A;border:1px solid rgba(16,185,129,.3);border-radius:14px;padding:28px;width:90%;max-width:440px;box-shadow:0 8px 32px rgba(0,0,0,.5);';
+    var footer =
+      '<button id="asCancelBtn" style="' + renderModalBtnStyle('ghost') + '">取消</button>' +
+      '<button id="asConfirmBtn" style="' + renderModalBtnStyle('success', 'flex:2') + '">确认开赛</button>';
 
-    mod.innerHTML =
-      '<h3 style="margin:0 0 16px;color:#10b981;font-size:1.1rem;font-weight:700;">手动开赛确认</h3>' +
-      '<div style="color:#e0e0f0;font-size:.88rem;line-height:1.6;">' +
-        '<p style="margin:0 0 12px;">点击确认后：</p>' +
-        '<ul style="margin:0 0 20px;padding-left:20px;color:#a0a0c0;font-size:.82rem;">' +
-          '<li style="margin-bottom:6px;">赛事状态变更为「比赛进行中」</li>' +
-          '<li style="margin-bottom:6px;">参赛选手可提交比赛结果</li>' +
-          '<li>原自动开赛定时器不再影响此赛事</li>' +
-        '</ul>' +
-        '<p style="margin:0;color:#f59e0b;font-size:.8rem;">此操作向前不可逆</p>' +
-      '</div>' +
-      '<div style="display:flex;gap:10px;margin-top:20px;">' +
-        '<button id="asCancelBtn" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#e0e0f0;font-size:.88rem;font-weight:600;cursor:pointer;">取消</button>' +
-        '<button id="asConfirmBtn" style="flex:2;padding:10px;border-radius:8px;border:none;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:.88rem;font-weight:600;cursor:pointer;">确认开赛</button>' +
-      '</div>';
+    var modal = createModal({
+      title: '手动开赛确认',
+      titleColor: '#10b981',
+      content: bodyContent,
+      footer: footer,
+      borderColor: 'rgba(16,185,129,.3)'
+    });
+    modal.overlay.id = 'adminStartModal';
+    document.body.appendChild(modal.overlay);
 
-    overlay.appendChild(mod);
-    document.body.appendChild(overlay);
-
-    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
-    document.getElementById('asCancelBtn').onclick = function() { overlay.remove(); };
-    document.getElementById('asConfirmBtn').onclick = function() {
-      var confirmBtn = document.getElementById('asConfirmBtn');
+    modal.overlay.addEventListener('click', function(e) { if (e.target === modal.overlay) modal.close(); });
+    modal.getEl('asCancelBtn').onclick = function() { modal.close(); };
+    modal.getEl('asConfirmBtn').onclick = function() {
+      var confirmBtn = modal.getEl('asConfirmBtn');
       confirmBtn.disabled = true;
       confirmBtn.textContent = '开赛中...';
       console.log('[Bridge] _adminStartCompetition: sending...');
@@ -328,7 +392,7 @@
       req('/api/admin/competitions/' + encodeURIComponent(compId) + '/start', { method:'POST' })
         .then(function(res) {
           console.log('[Bridge] _adminStartCompetition: success, comp_status=' + (res.data ? res.data.comp_status : res.comp_status));
-          overlay.remove();
+          modal.close();
           showToast('已开赛 — 赛事状态变更为「比赛进行中」', 'success');
           setTimeout(function() {
             if (window.__DETAIL_PAGE && window.__DETAIL_PAGE.reload) {
@@ -429,42 +493,51 @@
     console.log('[Bridge] renderLiveState: LIVE banner + submit button rendered');
   }
 
-  // ===== 渲染参赛人员 =====
+  // ===== 纯渲染函数：参赛人员 =====
+  function _renderParticipantName(reg) {
+    return escapeHtml(reg.gameid || reg.gameId || reg.game_id || reg.coachname || reg.username || reg.player_user_id || reg.user_id || '');
+  }
+
+  function _renderParticipantList(red, blue, total) {
+    var h = '<div style="margin-top:16px;"><div style="font-size:0.78rem;color:#6B7280;margin-bottom:8px;">参赛队伍（' + total + '人）</div>';
+    if (red.length) {
+      h += '<div style="margin-bottom:8px;"><span style="color:#ef4444;font-size:0.75rem;">红方</span>';
+      for (var j = 0; j < red.length; j++) h += '<div style="padding:6px 8px;font-size:0.82rem;color:#E5E7EB;">' + _renderParticipantName(red[j]) + '</div>';
+      h += '</div>';
+    }
+    if (blue.length) {
+      h += '<div style="margin-bottom:8px;"><span style="color:#3b82f6;font-size:0.75rem;">蓝方</span>';
+      for (var j = 0; j < blue.length; j++) h += '<div style="padding:6px 8px;font-size:0.82rem;color:#E5E7EB;">' + _renderParticipantName(blue[j]) + '</div>';
+    } else if (red.length) {
+      h += '<div style="margin-bottom:8px;opacity:.55;"><span style="color:#3b82f6;font-size:0.75rem;">蓝方</span>';
+      h += '<div style="padding:6px 8px;font-size:0.78rem;color:#6B7280;">等待对手报名...</div>';
+      h += '</div>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  function _renderParticipantsEmpty() {
+    return '<div style="color:#6B7280;font-size:0.82rem;padding:12px 0;">暂无报名</div>';
+  }
+
+  function _renderParticipantsError() {
+    return '<div style="color:#f87171;font-size:0.82rem;">加载失败</div>';
+  }
+
+  // ===== 渲染参赛人员（使用纯渲染函数 + renderInto）=====
   function renderParticipants(compId, containerId) {
     var el = document.getElementById(containerId||'dParticipants');
     if (!el) return;
     loadRegistrations(compId).then(function(regs){
-      if (!regs||!regs.length) { el.innerHTML='<div style="color:#6B7280;font-size:0.82rem;padding:12px 0;">暂无报名</div>'; return; }
-      var red=[], blue=[];
-      for (var i=0;i<regs.length;i++) { if(regs[i].side==='red') red.push(regs[i]); else if(regs[i].side==='blue') blue.push(regs[i]); }
-      var h='<div style="margin-top:16px;"><div style="font-size:0.78rem;color:#6B7280;margin-bottom:8px;">参赛队伍（'+regs.length+'人）</div>';
-      if (red.length) {
-        h+='<div style="margin-bottom:8px;"><span style="color:#ef4444;font-size:0.75rem;">红方</span>';
-        for (var j=0;j<red.length;j++) h+='<div style="padding:6px 8px;font-size:0.82rem;color:#E5E7EB;">'+escapeHtml(red[j].gameid||red[j].gameId||red[j].game_id||red[j].coachname||red[j].username||red[j].player_user_id||red[j].user_id||'')+'</div>';
-        h+='</div>';
-      } else if (!red.length) {
-        // 完全无人报名
-      }
-      if (blue.length) {
-        h+='<div style="margin-bottom:8px;"><span style="color:#3b82f6;font-size:0.75rem;">蓝方</span>';
-        for (var j=0;j<blue.length;j++) h+='<div style="padding:6px 8px;font-size:0.82rem;color:#E5E7EB;">'+escapeHtml(blue[j].gameid||blue[j].gameId||blue[j].game_id||blue[j].coachname||blue[j].username||blue[j].player_user_id||blue[j].user_id||'')+'</div>';
-      } else if (red.length) {
-        h+='<div style="margin-bottom:8px;opacity:.55;"><span style="color:#3b82f6;font-size:0.75rem;">蓝方</span>';
-        h+='<div style="padding:6px 8px;font-size:0.78rem;color:#6B7280;">等待对手报名...</div>';
-        h+='</div>';
-      }
-      h+='</div>';
-      el.innerHTML=h;
+      if (!regs || !regs.length) { renderInto(el, _renderParticipantsEmpty()); return; }
+      var red = [], blue = [];
+      for (var i = 0; i < regs.length; i++) { if (regs[i].side === 'red') red.push(regs[i]); else if (regs[i].side === 'blue') blue.push(regs[i]); }
+      renderInto(el, _renderParticipantList(red, blue, regs.length));
     }).catch(function(e){
       console.error('[Bridge] renderParticipants error', e);
-      el.innerHTML='<div style="color:#f87171;font-size:0.82rem;">加载失败</div>';
+      renderInto(el, _renderParticipantsError());
     });
-  }
-
-  // ===== 工具 =====
-  function escapeHtml(s) {
-    if (!s) return '';
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   // ===== 内部：队伍报名 =====
@@ -544,6 +617,97 @@
     console.log('[Bridge] renderResultSubmit: button rendered');
   }
 
+  // ===== 纯渲染函数：结果提交弹窗各模块 =====
+  function _renderResultModalHeader(bo) {
+    return '<h3 style="margin:0 0 4px;color:#c9a84c;font-size:1.1rem;font-weight:700;">提交比赛结果 — BO' + bo + '</h3>'
+      + '<p style="margin:0 0 16px;font-size:.75rem;color:#7a7a90;">填写各小局结果，胜方/MVP 变化后自动刷新身价预览</p>';
+  }
+
+  function _renderGameRow(gIdx) {
+    return '<div class="rsGameRow" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:10px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid rgba(255,255,255,.05);">'
+      + '<span style="font-size:.82rem;color:#c9a84c;font-weight:700;min-width:24px;text-align:center;">G' + (gIdx + 1) + '</span>'
+      + '<select id="rsGameWinner' + gIdx + '" data-game="' + gIdx + '" style="flex:1;padding:8px;background:#2A2A4A;border:1px solid rgba(255,255,255,.1);border-radius:6px;color:#e0e0f0;font-size:.82rem;">'
+        + '<option value="">选择胜方</option><option value="red">红方</option><option value="blue">蓝方</option>'
+      + '</select>'
+      + '<select id="rsGameMvp' + gIdx + '" data-game="' + gIdx + '" style="flex:2;padding:8px;background:#2A2A4A;border:1px solid rgba(255,255,255,.1);border-radius:6px;color:#e0e0f0;font-size:.82rem;">'
+        + '<option value="">MVP（胜方选手）</option>'
+      + '</select>'
+    + '</div>';
+  }
+
+  function _renderGamesContainer(bo) {
+    var html = '<div id="rsGamesContainer" style="margin-bottom:12px;">';
+    for (var g = 0; g < bo; g++) { html += _renderGameRow(g); }
+    html += '</div>';
+    return html;
+  }
+
+  function _renderResultScoreSummary() {
+    return '<div id="rsScoreSummary" style="margin-bottom:12px;padding:8px 12px;background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.15);border-radius:8px;font-size:.84rem;color:#c9a84c;text-align:center;font-weight:600;display:none;"></div>';
+  }
+
+  function _renderResultPreview() {
+    return '<div id="rsPreview" style="margin-bottom:12px;display:none;">'
+      + '<div style="font-size:.8rem;color:#c9a84c;font-weight:600;margin-bottom:6px;">身价变化预览</div>'
+      + '<div id="rsPreviewList" style="max-height:220px;overflow-y:auto;"></div>'
+      + '<div id="rsPreviewLoading" style="text-align:center;color:#7a7a90;font-size:.76rem;display:none;">计算中...</div>'
+    + '</div>';
+  }
+
+  function _renderResultScreenshot() {
+    return '<div style="margin-bottom:12px;">'
+      + '<label style="display:block;font-size:.8rem;color:#7a7a90;margin-bottom:6px;">赛后截图（可选）</label>'
+      + '<input type="file" id="rsScreenshot" accept="image/*" multiple style="display:none;">'
+      + '<label for="rsScreenshot" id="rsScreenshotLabel" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;background:#2A2A4A;border:2px dashed rgba(255,255,255,.15);border-radius:8px;color:#7a7a90;font-size:.85rem;cursor:pointer;transition:all .2s;text-align:center;flex-direction:column;">'
+        + '<span style="font-size:1.5rem;">📁</span><span>点击上传截图</span><span style="font-size:.72rem;opacity:.6;">支持 JPG/PNG，可多选</span>'
+      + '</label>'
+      + '<div id="rsScreenshotPreview" style="display:none;gap:6px;flex-wrap:wrap;margin-top:8px;"></div>'
+    + '</div>';
+  }
+
+  function _renderResultFooter() {
+    return '<div style="display:flex;gap:10px;">'
+      + '<button id="rsCancelBtn" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#e0e0f0;font-size:.88rem;font-weight:600;cursor:pointer;">取消</button>'
+      + '<button id="rsSubmitBtn" style="flex:2;padding:10px;border-radius:8px;border:none;background:linear-gradient(135deg,#c9a84c,#a88b3c);color:#1A1A2E;font-size:.88rem;font-weight:600;cursor:pointer;">确认提交</button>'
+    + '</div>';
+  }
+
+  function _renderResultModalBody(bo) {
+    return _renderResultModalHeader(bo)
+      + _renderGamesContainer(bo)
+      + _renderResultScoreSummary()
+      + _renderResultPreview()
+      + _renderResultScreenshot()
+      + _renderResultFooter();
+  }
+
+  function _renderPreviewRow(s) {
+    if (s.skipped) {
+      return '<div style="padding:4px 0;font-size:.74rem;color:#5a5a70;">' + escapeHtml(s.player_name || s.player_user_id) + ' — 身价0，不调整</div>';
+    }
+    var color = s.percent_change >= 0 ? '#10b981' : '#ef4444';
+    var sign = s.percent_change >= 0 ? '+' : '';
+    var mvpTag = s.mvp_count > 0 ? ' <span style="color:#c9a84c;font-size:.66rem;">MVP\u00d7' + s.mvp_count + '</span>' : '';
+    return '<div style="padding:4px 0;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,.04);">'
+      + '<span style="font-size:.78rem;color:#ccc;">' + escapeHtml(s.player_name || s.player_user_id) + mvpTag + '</span>'
+      + '<span style="font-size:.8rem;white-space:nowrap;">'
+        + '<span style="color:#7a7a90;">' + s.old_value + '</span>'
+        + '<span style="color:#666;margin:0 4px;">\u2192</span>'
+        + '<span style="color:' + color + ';font-weight:600;">' + s.new_value + '</span>'
+        + '<span style="color:' + color + ';font-size:.7rem;margin-left:3px;">(' + sign + s.percent_change + '%)</span>'
+      + '</span>'
+    + '</div>';
+  }
+
+  function _renderMvpOptionsHtml(players, curVal) {
+    var html = '<option value="">选择 MVP（胜方选手）</option>';
+    for (var j = 0; j < players.length; j++) {
+      var sel = (players[j].id === curVal) ? ' selected' : '';
+      html += '<option value="' + escapeHtml(players[j].id) + '"' + sel + '>' + escapeHtml(players[j].name) + '</option>';
+    }
+    return html;
+  }
+
   // ===== 结果提交弹窗（BO1/BO3/BO5 + 结算预览）=====
   function openResultModal(compId, match) {
     var bo = (match && match.bo) ? parseInt(match.bo) : 1;
@@ -562,72 +726,25 @@
         var uid = r.player_user_id || r.user_id;
         var name = (r.username || r.gameid || uid) + '';
         var side = r.side || 'unknown';
-        if (side === 'red') redPlayers.push({ id: uid, name: name, team: side });
-        else bluePlayers.push({ id: uid, name: name, team: side });
+        if (side === 'red') redPlayers.push({ id: uid, name: escapeHtml(name), team: side });
+        else bluePlayers.push({ id: uid, name: escapeHtml(name), team: side });
       }
 
-      var overlay = document.createElement('div');
-      overlay.id = 'resultSubmitModal';
-      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;animation:fadeIn .2s;';
-
-      var mod = document.createElement('div');
-      mod.style.cssText = 'background:#1E1E3A;border:1px solid rgba(201,168,76,.3);border-radius:14px;padding:24px;width:90%;max-width:560px;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5);';
-
-      // 标题
-      var html = '<h3 style="margin:0 0 4px;color:#c9a84c;font-size:1.1rem;font-weight:700;">提交比赛结果 — BO' + bo + '</h3>' +
-        '<p style="margin:0 0 16px;font-size:.75rem;color:#7a7a90;">填写各小局结果，胜方/MVP 变化后自动刷新身价预览</p>';
-
-      // 小局选择器
-      html += '<div id="rsGamesContainer" style="margin-bottom:12px;">';
-      for (var g = 0; g < bo; g++) {
-        html += '<div class="rsGameRow" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:10px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid rgba(255,255,255,.05);">' +
-          '<span style="font-size:.82rem;color:#c9a84c;font-weight:700;min-width:24px;text-align:center;">G' + (g+1) + '</span>' +
-          '<select id="rsGameWinner' + g + '" data-game="' + g + '" style="flex:1;padding:8px;background:#2A2A4A;border:1px solid rgba(255,255,255,.1);border-radius:6px;color:#e0e0f0;font-size:.82rem;">' +
-            '<option value="">选择胜方</option><option value="red">红方</option><option value="blue">蓝方</option>' +
-          '</select>' +
-          '<select id="rsGameMvp' + g + '" data-game="' + g + '" style="flex:2;padding:8px;background:#2A2A4A;border:1px solid rgba(255,255,255,.1);border-radius:6px;color:#e0e0f0;font-size:.82rem;">' +
-            '<option value="">MVP（胜方选手）</option>' +
-          '</select>' +
-        '</div>';
-      }
-      html += '</div>';
-
-      // 比分摘要
-      html += '<div id="rsScoreSummary" style="margin-bottom:12px;padding:8px 12px;background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.15);border-radius:8px;font-size:.84rem;color:#c9a84c;text-align:center;font-weight:600;display:none;"></div>';
-
-      // 身价预览
-      html += '<div id="rsPreview" style="margin-bottom:12px;display:none;">' +
-        '<div style="font-size:.8rem;color:#c9a84c;font-weight:600;margin-bottom:6px;">身价变化预览</div>' +
-        '<div id="rsPreviewList" style="max-height:220px;overflow-y:auto;"></div>' +
-        '<div id="rsPreviewLoading" style="text-align:center;color:#7a7a90;font-size:.76rem;display:none;">计算中...</div>' +
-      '</div>';
-
-      // 截图
-      html += '<div style="margin-bottom:12px;">' +
-        '<label style="display:block;font-size:.8rem;color:#7a7a90;margin-bottom:6px;">赛后截图（可选）</label>' +
-        '<input type="file" id="rsScreenshot" accept="image/*" multiple style="display:none;">' +
-        '<label for="rsScreenshot" id="rsScreenshotLabel" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;background:#2A2A4A;border:2px dashed rgba(255,255,255,.15);border-radius:8px;color:#7a7a90;font-size:.85rem;cursor:pointer;transition:all .2s;text-align:center;flex-direction:column;">' +
-          '<span style="font-size:1.5rem;">📁</span><span>点击上传截图</span><span style="font-size:.72rem;opacity:.6;">支持 JPG/PNG，可多选</span>' +
-        '</label>' +
-        '<div id="rsScreenshotPreview" style="display:none;gap:6px;flex-wrap:wrap;margin-top:8px;"></div>' +
-      '</div>';
-
-      // 按钮
-      html += '<div style="display:flex;gap:10px;">' +
-        '<button id="rsCancelBtn" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#e0e0f0;font-size:.88rem;font-weight:600;cursor:pointer;">取消</button>' +
-        '<button id="rsSubmitBtn" style="flex:2;padding:10px;border-radius:8px;border:none;background:linear-gradient(135deg,#c9a84c,#a88b3c);color:#1A1A2E;font-size:.88rem;font-weight:600;cursor:pointer;">确认提交</button>' +
-      '</div>';
-
-      mod.innerHTML = html;
-      overlay.appendChild(mod);
-      document.body.appendChild(overlay);
+      // 使用 createModal 工厂 + 纯渲染函数构建弹窗
+      var modal = createModal({
+        content: _renderResultModalBody(bo),
+        footer: '',
+        maxWidth: '560px'
+      });
+      modal.overlay.id = 'resultSubmitModal';
+      document.body.appendChild(modal.overlay);
 
       // 存储 regs 到 overlay 供 _doSubmitResult 使用
-      overlay._rsRegs = regs;
+      modal.overlay._rsRegs = regs;
 
-      overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
-      document.getElementById('rsCancelBtn').onclick = function() { overlay.remove(); };
-      document.getElementById('rsSubmitBtn').onclick = function() { _doSubmitResult(compId, regs); };
+      modal.overlay.addEventListener('click', function(e) { if (e.target === modal.overlay) modal.close(); });
+      modal.getEl('rsCancelBtn').onclick = function() { modal.close(); };
+      modal.getEl('rsSubmitBtn').onclick = function() { _doSubmitResult(compId, regs); };
 
       // 文件预览
       document.getElementById('rsScreenshot').onchange = function() {
@@ -654,17 +771,13 @@
         }
       };
 
-      // === MVP 下拉动态更新 + 刷新预览 ===
+      // === MVP 下拉动态更新（使用纯渲染函数，消除 innerHTML +=） ===
       function _updateMvpOptions(gameIdx) {
         var winner = document.getElementById('rsGameWinner' + gameIdx).value;
         var mvpSel = document.getElementById('rsGameMvp' + gameIdx);
         var list = winner === 'red' ? redPlayers : (winner === 'blue' ? bluePlayers : []);
         var curVal = mvpSel.value;
-        mvpSel.innerHTML = '<option value="">选择 MVP（胜方选手）</option>';
-        for (var j = 0; j < list.length; j++) {
-          var sel = (list[j].id === curVal) ? ' selected' : '';
-          mvpSel.innerHTML += '<option value="' + list[j].id + '"' + sel + '>' + list[j].name + '</option>';
-        }
+        renderInto(mvpSel, _renderMvpOptionsHtml(list, curVal));
       }
 
       function _onGameChange(gameIdx) {
@@ -724,50 +837,24 @@
           method: 'POST', body: JSON.stringify({ games: games })
         }).then(function(res) {
           document.getElementById('rsPreviewLoading').style.display = 'none';
-          // 检查 API 是否成功
           if (!res.success && res.message) {
-            document.getElementById('rsPreviewList').innerHTML =
-              '<div style="color:#f59e0b;font-size:.76rem;padding:8px 0;">' +
-              _escHtml(res.message) + '</div>';
+            renderInto(document.getElementById('rsPreviewList'),
+              '<div style="color:#f59e0b;font-size:.76rem;padding:8px 0;">' + escapeHtml(res.message) + '</div>');
             return;
           }
-          // 后端 ok() 把 settlement 包在 data 字段里
           var data = res.data || res;
           var results = data.results || [];
-          var list = document.getElementById('rsPreviewList');
           var html = '';
           for (var i = 0; i < results.length; i++) {
-            var s = results[i];
-            if (s.skipped) {
-              html += '<div style="padding:4px 0;font-size:.74rem;color:#5a5a70;">' + (s.player_name || s.player_user_id) + ' — 身价0，不调整</div>';
-              continue;
-            }
-            var pct = s.delta_percent || s.percent_change || 0;
-            var color = pct >= 0 ? '#10b981' : '#ef4444';
-            var sign = pct >= 0 ? '+' : '';
-            var mvpTag = s.mvp_count > 0 ? ' <span style="color:#c9a84c;font-size:.66rem;">MVP\u00d7' + s.mvp_count + '</span>' : '';
-            html += '<div style="padding:4px 0;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(255,255,255,.04);">' +
-              '<span style="font-size:.78rem;color:#ccc;">' + (s.player_name || s.player_user_id) + mvpTag + '</span>' +
-              '<span style="font-size:.8rem;white-space:nowrap;">' +
-                '<span style="color:#7a7a90;">' + s.old_value + '</span>' +
-                '<span style="color:#666;margin:0 4px;">\u2192</span>' +
-                '<span style="color:' + color + ';font-weight:600;">' + s.new_value + '</span>' +
-                '<span style="color:' + color + ';font-size:.7rem;margin-left:3px;">(' + sign + pct + '%)</span>' +
-              '</span>' +
-            '</div>';
+            html += _renderPreviewRow(results[i]);
           }
-          list.innerHTML = html || '<div style="color:#7a7a90;font-size:.78rem;">无选手数据</div>';
+          renderInto(document.getElementById('rsPreviewList'), html || '<div style="color:#7a7a90;font-size:.78rem;">无选手数据</div>');
         }).catch(function(e) {
           document.getElementById('rsPreviewLoading').style.display = 'none';
-          var errMsg = (e && e.message) ? _escHtml(e.message) : '网络错误，请重试';
-          document.getElementById('rsPreviewList').innerHTML =
-            '<div style="color:#ef4444;font-size:.76rem;padding:8px 0;">' + errMsg + '</div>';
+          var errMsg = (e && e.message) ? escapeHtml(e.message) : '网络错误，请重试';
+          renderInto(document.getElementById('rsPreviewList'),
+            '<div style="color:#ef4444;font-size:.76rem;padding:8px 0;">' + errMsg + '</div>');
         });
-      }
-
-      // 简单 HTML 转义
-      function _escHtml(s) {
-        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
       }
 
       // 初始化 MVP 下拉
@@ -984,46 +1071,41 @@
     console.log('[Bridge] renderAdminReview: admin review button rendered');
   }
 
-  // ===== 管理员确认结算弹窗 =====
+  // ===== 管理员确认结算弹窗（使用 createModal 工厂）=====
   function _adminConfirmResult(compId, mvpPlayerId) {
     console.log('[Bridge] _adminConfirmResult for compId=' + compId + ' mvp=' + (mvpPlayerId || 'null'));
     var old = document.getElementById('adminConfirmModal');
     if (old) old.remove();
 
-    var overlay = document.createElement('div');
-    overlay.id = 'adminConfirmModal';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;animation:fadeIn .2s;';
-
-    var mod = document.createElement('div');
-    mod.style.cssText = 'background:#1E1E3A;border:1px solid rgba(201,168,76,.3);border-radius:14px;padding:28px;width:90%;max-width:440px;box-shadow:0 8px 32px rgba(0,0,0,.5);';
-
     var mvpTip = mvpPlayerId ? '<p style="margin:0 0 12px;color:#c9a84c;font-size:.82rem;">已选择 MVP，结算时将额外 +2% 身价加成</p>' : '';
 
-    mod.innerHTML =
-      '<h3 style="margin:0 0 16px;color:#c9a84c;font-size:1.1rem;font-weight:700;">确认结算</h3>' +
-      mvpTip +
-      '<div style="color:#e0e0f0;font-size:.88rem;line-height:1.6;">' +
-        '<p style="margin:0 0 12px;">确认后将执行以下操作：</p>' +
-        '<ul style="margin:0 0 20px;padding-left:20px;color:#a0a0c0;font-size:.82rem;">' +
-          '<li style="margin-bottom:6px;">结算梦币奖池（自动/手动奖励）</li>' +
-          '<li style="margin-bottom:6px;">更新选手身价（胜+2% / 负-2% / MVP额外+2%）</li>' +
-          '<li style="margin-bottom:6px;">写入 coin_transactions 记录</li>' +
-          '<li>赛事状态变更为「已结束」</li>' +
-        '</ul>' +
-        '<p style="margin:0;color:#f87171;font-size:.8rem;">此操作不可撤销</p>' +
-      '</div>' +
-      '<div style="display:flex;gap:10px;margin-top:20px;">' +
-        '<button id="acCancelBtn" style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#e0e0f0;font-size:.88rem;font-weight:600;cursor:pointer;">取消</button>' +
-        '<button id="acConfirmBtn" style="flex:2;padding:10px;border-radius:8px;border:none;background:linear-gradient(135deg,#c9a84c,#a88b3c);color:#1A1A2E;font-size:.88rem;font-weight:600;cursor:pointer;">确认结算</button>' +
-      '</div>';
+    var bodyContent = mvpTip +
+      '<p style="margin:0 0 12px;">确认后将执行以下操作：</p>' +
+      '<ul style="margin:0 0 20px;padding-left:20px;color:#a0a0c0;font-size:.82rem;">' +
+        '<li style="margin-bottom:6px;">结算梦币奖池（自动/手动奖励）</li>' +
+        '<li style="margin-bottom:6px;">更新选手身价（胜+2% / 负-2% / MVP额外+2%）</li>' +
+        '<li style="margin-bottom:6px;">写入 coin_transactions 记录</li>' +
+        '<li>赛事状态变更为「已结束」</li>' +
+      '</ul>' +
+      '<p style="margin:0;color:#f87171;font-size:.8rem;">此操作不可撤销</p>';
 
-    overlay.appendChild(mod);
-    document.body.appendChild(overlay);
+    var footer =
+      '<button id="acCancelBtn" style="' + renderModalBtnStyle('ghost') + '">取消</button>' +
+      '<button id="acConfirmBtn" style="' + renderModalBtnStyle('primary', 'flex:2') + '">确认结算</button>';
 
-    overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
-    document.getElementById('acCancelBtn').onclick = function() { overlay.remove(); };
-    document.getElementById('acConfirmBtn').onclick = function() {
-      var confirmBtn = document.getElementById('acConfirmBtn');
+    var modal = createModal({
+      title: '确认结算',
+      content: bodyContent,
+      footer: footer,
+      borderColor: 'rgba(201,168,76,.3)'
+    });
+    modal.overlay.id = 'adminConfirmModal';
+    document.body.appendChild(modal.overlay);
+
+    modal.overlay.addEventListener('click', function(e) { if (e.target === modal.overlay) modal.close(); });
+    modal.getEl('acCancelBtn').onclick = function() { modal.close(); };
+    modal.getEl('acConfirmBtn').onclick = function() {
+      var confirmBtn = modal.getEl('acConfirmBtn');
       confirmBtn.disabled = true;
       confirmBtn.textContent = '结算中...';
 
@@ -1041,7 +1123,7 @@
       setMvpPromise.then(function() {
         return req('/api/admin/competitions/' + encodeURIComponent(compId) + '/confirm-result', { method:'POST' });
       }).then(function(res) {
-        overlay.remove();
+        modal.close();
         showToast('结算成功 — 梦币已发放，身价已更新' + (mvpPlayerId ? '，MVP 额外 +2%' : ''), 'success');
         setTimeout(function() {
           if (window.__DETAIL_PAGE && window.__DETAIL_PAGE.reload) {
