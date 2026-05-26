@@ -23,15 +23,20 @@ module.exports = function(app, pool, authMiddleware, ok, badRequest, serverError
           ORDER BY p.player_score DESC, p.market_value DESC, u.dream_coins DESC
           LIMIT $1`;
         const { rows } = await pool.query(sql, [parseInt(limit)]);
-        const list = rows.map((row, idx) => ({
-          rank: idx + 1,
-          username: row.username,
-          game_id: row.gameid,
-          club_name: row.club_name,
-          player_value: row.player_value,
-          player_score: row.player_score,
-          dreamcoin_value: row.dream_coins || 0
-        }));
+        // dense rank: 同分同名，下一名不跳号
+        let rank = 0, prevScore = null;
+        const list = rows.map((row) => {
+          if (row.player_score !== prevScore) { rank++; prevScore = row.player_score; }
+          return {
+            rank,
+            username: row.username,
+            game_id: row.gameid,
+            club_name: row.club_name,
+            player_value: row.player_value,
+            player_score: row.player_score,
+            dreamcoin_value: row.dream_coins || 0
+          };
+        });
         return ok(res, { list });
       } else if (type === 'club') {
         const sql = `
@@ -46,13 +51,18 @@ module.exports = function(app, pool, authMiddleware, ok, badRequest, serverError
           ORDER BY c.club_score DESC
           LIMIT $1`;
         const { rows } = await pool.query(sql, [parseInt(limit)]);
-        const list = rows.map((row, idx) => ({
-          rank: idx + 1,
-          club_name: row.club_name,
-          boss_name: row.boss_name,
-          boss_game_id: row.boss_game_id,
-          club_score: row.club_score
-        }));
+        // dense rank: 同分同名，下一名不跳号
+        let clubRank = 0, prevClubScore = null;
+        const list = rows.map((row) => {
+          if (row.club_score !== prevClubScore) { clubRank++; prevClubScore = row.club_score; }
+          return {
+            rank: clubRank,
+            club_name: row.club_name,
+            boss_name: row.boss_name,
+            boss_game_id: row.boss_game_id,
+            club_score: row.club_score
+          };
+        });
         return ok(res, { list });
       } else {
         return badRequest(res, 'type 参数必须是 player 或 club');
