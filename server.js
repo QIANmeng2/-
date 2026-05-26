@@ -2273,7 +2273,7 @@ app.get('/api/competitions/:id', async (req, res) => {
       club_id: r.club_id
     }));
     res.json({ success: true, competition: comp });
-  } catch(e) { console.error('[GET /api/competitions/:id]', e); serverError(res, '查询失败'); }
+  } catch(e) { console.error('[GET /api/competitions/:id]', e.message, e.stack); serverError(res, '查询失败: ' + e.message); }
 });
 
 app.post('/api/admin/competitions', authMiddleware, adminMiddleware, async (req, res) => {
