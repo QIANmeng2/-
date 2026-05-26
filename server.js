@@ -2569,17 +2569,18 @@ app.post('/api/competitions/:id/submit-result', authMiddleware, async (req, res)
     var comp = await pool.query('SELECT * FROM competitions WHERE id = $1', [req.params.id]);
     if (comp.rows.length === 0) return notFound(res, '赛事不存在');
     var c = comp.rows[0];
-    if (c.comp_status !== 'open' && c.comp_status !== 'ongoing' && c.comp_status !== 'review') {
+    if (c.comp_status !== 'open' && c.comp_status !== 'ongoing' && c.comp_status !== 'live' && c.comp_status !== 'review') {
       return badRequest(res, '赛事当前状态不可提交结果（状态：' + c.comp_status + '）');
     }
     
-    // 校验：用户是否已报名此赛事
-    // 注意：competition_registrations 表只有 player_user_id，没有 user_id
-    var reg = await pool.query(
-      "SELECT * FROM competition_registrations WHERE competition_id = $1 AND (player_user_id = $2 OR team_id IN (SELECT id FROM teams WHERE captainid = $2) OR club_id IN (SELECT id FROM clubs WHERE owner_id = $2)) AND status != 'cancelled'",
-      [req.params.id, req.userId]
-    );
-    if (reg.rows.length === 0) return forbidden(res, '你未报名此赛事，无法提交结果');
+    // 校验：赛事创建者或有报名记录的用户均可提交
+    if (c.created_by !== req.userId) {
+      var reg = await pool.query(
+        "SELECT * FROM competition_registrations WHERE competition_id = $1 AND (player_user_id = $2 OR team_id IN (SELECT id FROM teams WHERE captainid = $2) OR club_id IN (SELECT id FROM clubs WHERE owner_id = $2)) AND status != 'cancelled'",
+        [req.params.id, req.userId]
+      );
+      if (reg.rows.length === 0) return forbidden(res, '你未报名此赛事，无法提交结果');
+    }
     
     // 校验：防止重复提交
     var existing = await pool.query(
@@ -2602,7 +2603,7 @@ app.post('/api/competitions/:id/submit-result', authMiddleware, async (req, res)
       await client.query('ROLLBACK');
       throw innerErr;
     } finally { client.release(); }
-  } catch(e) { console.error(e); serverError(res, '提交失败'); }
+  } catch(e) { console.error('[submit-result] ERROR:', e.message, e.stack); serverError(res, '提交失败：' + e.message); }
 });
 
 // ==================== 截图AI识别（王者荣耀结算截图）- 腾讯云混元视觉 ====================
