@@ -2410,6 +2410,7 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
       return badRequest(res, '以下选手已报名本赛事：' + dupNames);
     }
     // 自动补全 players 记录（无记录时默认身价=35）
+    const newPlayerIds = [];
     for (const p of players) {
       const hasPlayer = await client.query('SELECT user_id FROM players WHERE user_id=$1', [p.user_id]);
       if (hasPlayer.rows.length === 0) {
@@ -2419,6 +2420,7 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
           'INSERT INTO players (user_id, game_id, market_value, status, positions) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (user_id) DO NOTHING',
           [p.user_id, gid, 35, 'available', '']
         );
+        newPlayerIds.push(p.user_id);
         console.log('[自动补全 players] user_id=' + p.user_id + ' game_id=' + gid + ' market_value=35');
       }
     }
@@ -2433,6 +2435,10 @@ app.post('/api/competitions/:id/register', authMiddleware, async (req, res) => {
       await client.query("UPDATE competitions SET comp_status = 'open' WHERE id = $1", [req.params.id]);
     }
     await client.query('COMMIT');
+    // 为新补全的 players 初始化 player_score（事务提交后执行，确保记录可见）
+    for (const uid of newPlayerIds) {
+      try { await updatePlayerScore(uid); } catch (e) { console.error('[自动补全] updatePlayerScore failed for', uid, e); }
+    }
     // 通知被选中的5人（非阻塞，失败不影响报名结果）
     for (const p of players) {
       try {
