@@ -2588,12 +2588,20 @@ app.post('/api/competitions/:id/submit-result', authMiddleware, async (req, res)
     );
     if (existing.rows.length > 0) return badRequest(res, '该赛事已有结果提交，如需修改请联系管理员');
     
-    await pool.query(
-      'INSERT INTO competition_results (competition_id, winner, screenshot_urls, player_data, mvp_player_id, coin_rewards) VALUES ($1,$2,$3,$4,$5,$6)',
-      [req.params.id, winner, JSON.stringify(screenshots), JSON.stringify(players), mvp_player_id || null, JSON.stringify(coin_rewards || {})]
-    );
-    await pool.query("UPDATE competitions SET comp_status = 'review' WHERE id = $1", [req.params.id]);
-    ok(res, {message: '结果已提交，等待管理员审核' });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        'INSERT INTO competition_results (competition_id, winner, screenshot_urls, player_data, mvp_player_id, coin_rewards) VALUES ($1,$2,$3,$4,$5,$6)',
+        [req.params.id, winner, JSON.stringify(screenshots), JSON.stringify(players), mvp_player_id || null, JSON.stringify(coin_rewards || {})]
+      );
+      await client.query("UPDATE competitions SET comp_status = 'review' WHERE id = $1", [req.params.id]);
+      await client.query('COMMIT');
+      ok(res, {message: '结果已提交，等待管理员审核' });
+    } catch(innerErr) {
+      await client.query('ROLLBACK');
+      throw innerErr;
+    } finally { client.release(); }
   } catch(e) { console.error(e); serverError(res, '提交失败'); }
 });
 
@@ -2865,7 +2873,7 @@ app.post('/api/admin/competitions/:id/confirm-result', authMiddleware, adminMidd
 });
 
 // 管理员设置/修改比赛 MVP（审核阶段）
-app.put('/api/admin/competitions/:resultId/set-mvp', authMiddleware, adminMiddleware, async (req, res) => {
+app.put('/api/admin/competitions/:id/set-mvp', authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { mvp_player_id } = req.body;
     // UUID 格式校验：防止 game_id / 用户名污染 mvp_player_id
@@ -2874,7 +2882,7 @@ app.put('/api/admin/competitions/:resultId/set-mvp', authMiddleware, adminMiddle
         return badRequest(res, 'mvp_player_id 必须是用户 UUID，不能是游戏ID或用户名');
       }
     }
-    const result = await pool.query('SELECT * FROM competition_results WHERE id=$1', [req.params.resultId]);
+    const result = await pool.query('SELECT * FROM competition_results WHERE competition_id=$1 ORDER BY created_at DESC LIMIT 1', [req.params.id]);
     if (result.rows.length === 0) return notFound(res, '比赛结果不存在');
     if (result.rows[0].confirmed_by) return badRequest(res, '比赛已结算，无法修改 MVP');
     // 如果指定了 mvp_player_id，校验该选手确实在比赛 player_data 中
@@ -2883,7 +2891,7 @@ app.put('/api/admin/competitions/:resultId/set-mvp', authMiddleware, adminMiddle
       const found = pd.some(p => String(p.player_user_id) === String(mvp_player_id));
       if (!found) return badRequest(res, '所选选手不在本场比赛参赛名单中');
     }
-    await pool.query('UPDATE competition_results SET mvp_player_id=$1 WHERE id=$2', [mvp_player_id || null, req.params.resultId]);
+    await pool.query('UPDATE competition_results SET mvp_player_id=$1 WHERE id=$2', [mvp_player_id || null, result.rows[0].id]);
     ok(res, { message: mvp_player_id ? 'MVP 已设置' : 'MVP 已清除' });
   } catch(e) { console.error(e); serverError(res, '设置 MVP 失败', e); }
 });
