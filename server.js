@@ -657,6 +657,16 @@ async function transitionMatchStatus(matchId, fromStatus, toStatus, client = poo
 }
 // ===== 结束：Match 状态机 =====
 
+// ===== 部署验证端点：返回当前运行 commit =====
+app.get('/api/build', (req, res) => {
+  res.json({
+    success: true,
+    commit: process.env.RAILWAY_GIT_COMMIT_SHA || 'unknown',
+    deployTime: new Date().toISOString(),
+    nodeEnv: process.env.NODE_ENV || 'development'
+  });
+});
+
 // 获取交易比例配置
 app.get('/api/admin/transaction-ratios', authMiddleware, adminMiddleware, async (req, res) => {
   try {
