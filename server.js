@@ -2257,7 +2257,7 @@ app.get('/api/competitions/:id', async (req, res) => {
     });
     // 附加 participants（从 competition_registrations 表构建）
     const participants = await pool.query(
-      `SELECT cr.player_user_id, u.username, u.coachName, u.avatar, cr.side, cr.lane, cr.club_id
+      `SELECT cr.player_user_id, u.username, u.coachName, cr.side, cr.lane, cr.club_id
        FROM competition_registrations cr
        LEFT JOIN users u ON u.id = cr.player_user_id
        WHERE cr.competition_id = $1 AND cr.status != 'cancelled'`,
@@ -2267,13 +2267,12 @@ app.get('/api/competitions/:id', async (req, res) => {
       user_id: r.player_user_id,
       username: r.username,
       coachName: r.coachname,
-      avatar: r.avatar,
       side: r.side,
       lane: r.lane,
       club_id: r.club_id
     }));
     res.json({ success: true, competition: comp });
-  } catch(e) { console.error('[GET /api/competitions/:id]', e.message, e.stack); serverError(res, '查询失败: ' + e.message); }
+  } catch(e) { console.error('[GET /api/competitions/:id]', e.message, e.stack); serverError(res, '查询失败'); }
 });
 
 app.post('/api/admin/competitions', authMiddleware, adminMiddleware, async (req, res) => {
