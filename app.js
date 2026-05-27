@@ -537,6 +537,62 @@ function logout() {
   updateUI(); switchTab('square'); showToast('已退出','info');
 }
 
+// ---------- 每日签到 ----------
+async function doDailyCheckin() {
+  if (!currentUser) { showToast('请先登录', 'info'); openAuthModal('login'); return; }
+  const btn = document.getElementById('btnCheckin');
+  if (btn) { btn.disabled = true; btn.textContent = '签到中...'; }
+  try {
+    const res = await fetch('/api/me/daily-checkin', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      showToast(data.message || '签到失败', 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '签到领币'; }
+      return;
+    }
+    // 更新本地梦币余额
+    if (currentUser) currentUser.dream_coins = data.data.newBalance;
+    updateUI();
+    showToast('签到成功！获得 ' + data.data.awarded + ' 梦币 🪙', 'success');
+    if (btn) { btn.textContent = '已签到 ✓'; btn.style.opacity = '0.6'; btn.style.cursor = 'default'; btn.onclick = null; }
+  } catch (e) {
+    console.error('签到失败:', e);
+    showToast('网络错误，请稍后重试', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '签到领币'; }
+  }
+}
+
+// 检查今日是否已签到（在 updateUI 登录后调用）
+async function checkTodayCheckin() {
+  if (!currentUser || !authToken) return;
+  try {
+    const res = await fetch('/api/me/coins', {
+      headers: { 'Authorization': 'Bearer ' + authToken }
+    });
+    const data = await res.json();
+    if (!data.success) return;
+    const today = new Date().toISOString().split('T')[0];
+    const todayCheckin = (data.data.transactions || []).some(t => t.type === 'checkin' && (t.created_at || '').startsWith(today));
+    const btn = document.getElementById('btnCheckin');
+    if (btn) {
+      if (todayCheckin) {
+        btn.textContent = '已签到 ✓';
+        btn.style.opacity = '0.6';
+        btn.style.cursor = 'default';
+        btn.onclick = null;
+      } else {
+        btn.textContent = '签到领币';
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+        btn.onclick = doDailyCheckin;
+      }
+    }
+  } catch (e) { /* 静默失败，不影响主流程 */ }
+}
+
 // ---------- UI 更新 ----------
 function updateUI() {
   const ui = (id) => document.getElementById(id);
@@ -573,6 +629,8 @@ function updateUI() {
     document.querySelectorAll('#tabNav .tab-btn[data-tab="publish"], #tabNav .tab-btn[data-tab="team"], #tabNav .tab-btn[data-tab="profile"], #tabNav .tab-btn[data-tab="market"], #tabNav .tab-btn[data-tab="club"], #tabNav .tab-btn[data-tab="chat"]').forEach(b => b.style.display = '');
     safeStyle('notificationBell', 'display', 'flex');
     safeStyle('btnOnboard', 'display', '');
+    safeStyle('btnCheckin', 'display', 'inline-block');
+    checkTodayCheckin(); // 检查今日是否已签到（异步，非阻塞）
     if (currentUser.id === 'mp4hmya7ad15v6') { safeStyle('tabAdmin', 'display', ''); }
     safeStyle('tabCompetition', 'display', '');
     // 电竞世界观文案统一
@@ -588,6 +646,7 @@ function updateUI() {
     safeStyle('tabCompetition', 'display', '');
     safeStyle('notificationBell', 'display', 'none');
     safeStyle('btnOnboard', 'display', 'none');
+    safeStyle('btnCheckin', 'display', 'none');
   }
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === currentTab));
 }
@@ -5797,6 +5856,12 @@ window.addEventListener('beforeunload', () => {
     window.APP_READY = true; // 标记应用已加载，解除兜底
     updateUI();
     await switchTab('competition');  // 等页面渲染完毕
+    // 初始化每日卜卦模块
+    setTimeout(() => {
+      if (typeof FortuneView !== 'undefined' && FortuneView.init) {
+        try { FortuneView.init('fortuneMount'); } catch (e) { console.error('[Fortune] 初始化失败:', e); }
+      }
+    }, 500);
     if (authToken) {
       fetchUserInfo();  // 内部会初始化 socket.io
     }
