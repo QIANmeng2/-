@@ -147,10 +147,23 @@
       if (!window.FortuneStore) return;
 
       var state = window.FortuneStore.getState();
+
+      // 如果 Store 还在初始化（loading），等待它完成
+      if (state.status === 'loading') {
+        // 手动触发 init 确保状态同步
+        await window.FortuneStore.init();
+        state = window.FortuneStore.getState();
+      }
+
       if (state.status === 'claimed') {
         if (typeof showToast === 'function') {
           showToast('今日已卜卦 — ' + (state.fortuneType ? (FORTUNE_CONFIG[state.fortuneType] || {}).label || '' : '') + '，明日再来', 'info');
         }
+        return;
+      }
+
+      if (state.status !== 'unclaimed') {
+        if (typeof showToast === 'function') showToast('卜卦状态异常，请刷新页面重试', 'error');
         return;
       }
 
