@@ -537,60 +537,25 @@ function logout() {
   updateUI(); switchTab('square'); showToast('已退出','info');
 }
 
-// ---------- 每日签到 ----------
-async function doDailyCheckin() {
-  if (!currentUser) { showToast('请先登录', 'info'); openAuthModal('login'); return; }
-  const btn = document.getElementById('btnCheckin');
-  if (btn) { btn.disabled = true; btn.textContent = '签到中...'; }
-  try {
-    const res = await fetch('/api/me/daily-checkin', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' }
-    });
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      showToast(data.message || '签到失败', 'error');
-      if (btn) { btn.disabled = false; btn.textContent = '签到领币'; }
-      return;
-    }
-    // 更新本地梦币余额
-    if (currentUser) currentUser.dream_coins = data.data.newBalance;
-    updateUI();
-    showToast('签到成功！获得 ' + data.data.awarded + ' 梦币 🪙', 'success');
-    if (btn) { btn.textContent = '已签到 ✓'; btn.style.opacity = '0.6'; btn.style.cursor = 'default'; btn.onclick = null; }
-  } catch (e) {
-    console.error('签到失败:', e);
-    showToast('网络错误，请稍后重试', 'error');
-    if (btn) { btn.disabled = false; btn.textContent = '签到领币'; }
-  }
-}
+// ---------- 每日卜卦（统一入口，取代旧签到） ----------
+// 旧 doDailyCheckin() 已删除，顶部按钮由 FortuneView.drawFromTop() 驱动
+// 状态检查由 FortuneView.checkTodayState() 完成
 
-// 检查今日是否已签到（在 updateUI 登录后调用）
-async function checkTodayCheckin() {
+async function checkTodayFortune() {
   if (!currentUser || !authToken) return;
-  try {
-    const res = await fetch('/api/me/coins', {
-      headers: { 'Authorization': 'Bearer ' + authToken }
-    });
-    const data = await res.json();
-    if (!data.success) return;
-    const today = new Date().toISOString().split('T')[0];
-    const todayCheckin = (data.data.transactions || []).some(t => t.type === 'checkin' && (t.created_at || '').startsWith(today));
-    const btn = document.getElementById('btnCheckin');
-    if (btn) {
-      if (todayCheckin) {
-        btn.textContent = '已签到 ✓';
-        btn.style.opacity = '0.6';
-        btn.style.cursor = 'default';
-        btn.onclick = null;
-      } else {
-        btn.textContent = '签到领币';
-        btn.style.opacity = '1';
-        btn.style.cursor = 'pointer';
-        btn.onclick = doDailyCheckin;
-      }
-    }
-  } catch (e) { /* 静默失败，不影响主流程 */ }
+  // 优先用 FortuneView.checkTodayState()（基于 fortune API 精确判断）
+  if (typeof FortuneView !== 'undefined' && FortuneView.checkTodayState) {
+    try { FortuneView.checkTodayState(); } catch (e) { /* 静默 */ }
+    return;
+  }
+  // 降级：按钮默认指向卜卦
+  var btn = document.getElementById('btnCheckin');
+  if (btn) {
+    btn.textContent = '卜卦领币';
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+    btn.onclick = typeof FortuneView !== 'undefined' ? FortuneView.drawFromTop : function () { showToast('请先登录', 'info'); openAuthModal('login'); };
+  }
 }
 
 // ---------- UI 更新 ----------
@@ -630,7 +595,7 @@ function updateUI() {
     safeStyle('notificationBell', 'display', 'flex');
     safeStyle('btnOnboard', 'display', '');
     safeStyle('btnCheckin', 'display', 'inline-block');
-    checkTodayCheckin(); // 检查今日是否已签到（异步，非阻塞）
+    checkTodayFortune(); // 检查今日卜卦状态（异步，非阻塞）
     if (currentUser.id === 'mp4hmya7ad15v6') { safeStyle('tabAdmin', 'display', ''); }
     safeStyle('tabCompetition', 'display', '');
     // 电竞世界观文案统一

@@ -11,7 +11,7 @@
      */
     getStatus: async function () {
       try {
-        var token = localStorage.getItem('local_current_user') || localStorage.getItem('token') || '';
+        var token = (typeof authToken !== 'undefined' && authToken) ? authToken : (localStorage.getItem('token') || '');
         var res = await fetch('/api/me/daily-fortune', {
           headers: { 'Authorization': 'Bearer ' + token }
         });
@@ -29,7 +29,7 @@
      * @returns {Promise<{fortune_type: string, fortune_text: string, reward: number, newBalance: number}>}
      */
     draw: async function () {
-        var token = localStorage.getItem('local_current_user') || localStorage.getItem('token') || '';
+        var token = (typeof authToken !== 'undefined' && authToken) ? authToken : (localStorage.getItem('token') || '');
         var res = await fetch('/api/me/daily-fortune', {
         method: 'POST',
         headers: {

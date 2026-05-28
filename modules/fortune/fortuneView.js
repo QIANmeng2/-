@@ -133,6 +133,83 @@
     },
 
     /**
+     * 从顶部签到按钮触发卜卦（不依赖 fortuneMount 容器）
+     * 如果 fortuneMount 存在则播放动画，否则直接走 API 显示 toast
+     */
+    drawFromTop: async function () {
+      // 未登录
+      if (typeof currentUser === 'undefined' || !currentUser) {
+        if (typeof openAuthModal === 'function') openAuthModal('login');
+        if (typeof showToast === 'function') showToast('请先登录', 'info');
+        return;
+      }
+
+      if (!window.FortuneStore) return;
+
+      var state = window.FortuneStore.getState();
+      if (state.status === 'claimed') {
+        if (typeof showToast === 'function') {
+          showToast('今日已卜卦 — ' + (state.fortuneType ? (FORTUNE_CONFIG[state.fortuneType] || {}).label || '' : '') + '，明日再来', 'info');
+        }
+        return;
+      }
+
+      // 播放动画（如果 fortuneMount 容器存在）
+      var el = document.getElementById(_containerId || 'fortuneMount');
+      if (el && window.FortuneAnim) {
+        await window.FortuneAnim.play(el);
+      }
+
+      // 调用 API
+      try {
+        var result = await window.FortuneStore.draw();
+        // 更新梦币显示
+        if (currentUser && result && result.newBalance) {
+          currentUser.dream_coins = result.newBalance;
+        }
+        if (typeof updateUI === 'function') updateUI();
+        // 显示 toast
+        if (typeof showToast === 'function') {
+          var cfg = FORTUNE_CONFIG[result.fortune_type] || FORTUNE_CONFIG.fair;
+          showToast(cfg.icon + ' ' + cfg.label + '！获得 ' + result.reward + ' 梦币 💎', 'success');
+        }
+      } catch (e) {
+        if (typeof showToast === 'function') {
+          showToast(e.message || '卜卦失败，请重试', 'error');
+        }
+      }
+    },
+
+    /**
+     * 检查今日卜卦状态（供 app.js updateUI 调用）
+     * 更新顶部签到按钮文案和样式
+     */
+    checkTodayState: async function () {
+      if (!window.FortuneAPI || typeof currentUser === 'undefined' || !currentUser) return;
+      try {
+        var data = await window.FortuneAPI.getStatus();
+        var btn = document.getElementById('btnCheckin');
+        if (!btn) return;
+        if (data && data.claimed_today) {
+          var cfg = FORTUNE_CONFIG[data.fortune_type] || {};
+          btn.textContent = (cfg.icon || '') + ' 今日' + (cfg.label || '') + ' ✓';
+          btn.style.opacity = '0.6';
+          btn.style.cursor = 'default';
+          btn.onclick = function () {
+            if (typeof showToast === 'function') {
+              showToast('今日已卜卦 — ' + (cfg.label || '') + '，明日再来', 'info');
+            }
+          };
+        } else {
+          btn.textContent = '卜卦领币';
+          btn.style.opacity = '1';
+          btn.style.cursor = 'pointer';
+          btn.onclick = FortuneView.drawFromTop;
+        }
+      } catch (e) { /* 静默失败 */ }
+    },
+
+    /**
      * 点击「开始卜卦」
      */
     onDraw: async function () {
