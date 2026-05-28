@@ -162,16 +162,18 @@
 
       // 调用 API
       try {
-        var result = await window.FortuneStore.draw();
+        await window.FortuneStore.draw();
+        // 从 Store 读取最终状态（避免 result 竞态为 undefined）
+        var finalState = window.FortuneStore.getState();
         // 更新梦币显示
-        if (currentUser && result && result.newBalance) {
-          currentUser.dream_coins = result.newBalance;
+        if (currentUser && finalState.newBalance) {
+          currentUser.dream_coins = finalState.newBalance;
         }
         if (typeof updateUI === 'function') updateUI();
         // 显示 toast
-        if (typeof showToast === 'function') {
-          var cfg = FORTUNE_CONFIG[result.fortune_type] || FORTUNE_CONFIG.fair;
-          showToast(cfg.icon + ' ' + cfg.label + '！获得 ' + result.reward + ' 梦币 💎', 'success');
+        if (typeof showToast === 'function' && finalState.fortuneType) {
+          var cfg = FORTUNE_CONFIG[finalState.fortuneType] || FORTUNE_CONFIG.fair;
+          showToast(cfg.icon + ' ' + cfg.label + '！获得 ' + finalState.reward + ' 梦币 💎', 'success');
         }
       } catch (e) {
         if (typeof showToast === 'function') {
