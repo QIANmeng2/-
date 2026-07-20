@@ -1,0 +1,13 @@
+{
+  "cards": 262,
+  "left": 131,
+  "right": 131,
+  "heroAssets": 130,
+  "customCards": 2,
+  "layouts": [
+    "small",
+    "large"
+  ],
+  "sourceCardsHash": "583d184a30e3e482ec7aef3ffbb92a9b955e4f7507c88ccb77ea240b5d60e88b",
+  "sanitized": true
+}

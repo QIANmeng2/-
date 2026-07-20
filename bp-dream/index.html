@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d0e10">
+  <link rel="canonical" href="https://app.neondream.cn/">
+  <meta name="description" content="BP板-Dream 网页体验版">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self' https://175.178.52.116">
+  <title>BP板-Dream 网页体验版</title>
+  <link rel="icon" href="./assets/icon.png" type="image/png">
+  <link rel="stylesheet" href="./app.css">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand" aria-label="BP板-Dream 网页体验版">
+        <span class="brand-name">BP板-Dream</span>
+        <span class="web-label">网页体验版</span>
+      </div>
+      <div class="top-actions">
+        <button id="theme-toggle" class="icon-button" type="button" title="切换明暗主题" aria-label="切换明暗主题">
+          <svg class="theme-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+        </button>
+      </div>
+    </header>
+
+    <main id="board" aria-label="英雄 BP 板">
+      <section class="board-side left" data-side="left" aria-label="左侧英雄">
+        <div class="hero-grid" data-grid="left"></div>
+      </section>
+      <div class="center-line" aria-hidden="true"></div>
+      <section class="board-side right" data-side="right" aria-label="右侧英雄">
+        <div class="hero-grid" data-grid="right"></div>
+      </section>
+    </main>
+
+    <nav class="bottom-dock" aria-label="常用操作">
+      <button id="reset-used" class="dock-button quiet" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v6h6"></path></svg>
+        <span>清空点灰</span>
+      </button>
+      <button id="download-app" class="dock-button download" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"></path><path d="M5 21h14"></path></svg>
+        <span>下载 Windows 版</span>
+      </button>
+    </nav>
+
+    <button id="about-button" class="about-button" type="button" aria-label="关于" title="关于">
+      <span>i</span>
+    </button>
+
+    <dialog id="about-dialog">
+      <div class="dialog-head">
+        <div>
+          <strong>BP板-Dream</strong>
+          <span>网页体验版</span>
+        </div>
+        <button id="about-close" class="icon-button compact" type="button" aria-label="关闭" title="关闭">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg>
+        </button>
+      </div>
+      <div class="about-copy">
+        <p>网页体验版适合临时 BP 记录。轻点卡片即可独立点灰，关闭页面后自动清空。</p>
+      </div>
+      <section class="desktop-promo" aria-labelledby="desktop-promo-title">
+        <div class="desktop-promo-head">
+          <span>完整体验</span>
+          <strong id="desktop-promo-title">下载 BP板-Dream 本地版</strong>
+        </div>
+        <ul class="feature-list">
+          <li>自由摆放、分组和批量编辑英雄卡片</li>
+          <li>设置被克制关系、重点标记与点灰联动</li>
+          <li>查看 KPL BP 推荐与正式服英雄调整</li>
+          <li>导入导出配置、个人同步与自动更新</li>
+        </ul>
+        <button id="about-download-app" class="dialog-download" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"></path><path d="M5 21h14"></path></svg>
+          <span>下载 Windows 本地版</span>
+        </button>
+      </section>
+      <div class="about-copy compact-copy">
+        <p>开发者：浅梦<br>全媒体平台搜浅梦</p>
+      </div>
+      <div class="version-row">
+        <span id="web-version">网页数据</span>
+        <span id="desktop-version">本地版</span>
+      </div>
+    </dialog>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+  </div>
+  <script src="./app.js"></script>
+</body>
+</html>
