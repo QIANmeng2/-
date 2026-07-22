@@ -1,8 +1,6 @@
 'use strict';
 
-const DESKTOP_RELEASE_API = 'https://api.github.com/repos/QIANmeng2/-/releases/latest';
-const DESKTOP_ASSET_NAME = 'BP-Dream-Windows-Setup.exe';
-const DESKTOP_DOWNLOAD_FALLBACK = `https://github.com/QIANmeng2/-/releases/latest/download/${DESKTOP_ASSET_NAME}`;
+const UPDATE_ROOT = 'https://download.neondream.cn/bp-dream-updates/win/';
 const ADMIN_URL = 'https://175.178.52.116/bp-dream-admin/';
 const THEME_KEY = 'bp-web-theme';
 const USED_KEY = 'bp-web-used-card-ids-v2';
@@ -17,7 +15,7 @@ const state = {
   layoutMode: 'small',
   used: new Set(JSON.parse(sessionStorage.getItem(USED_KEY) || '[]').map(String)),
   resetArmedUntil: 0,
-  desktopUrl: DESKTOP_DOWNLOAD_FALLBACK,
+  desktopPath: '',
   desktopVersion: ''
 };
 
@@ -194,27 +192,29 @@ function setTheme(theme) {
 
 async function resolveDesktopRelease() {
   try {
-    const response = await fetch(DESKTOP_RELEASE_API, {
-      cache: 'no-store',
-      headers: { Accept: 'application/vnd.github+json' }
-    });
-    if (!response.ok) throw new Error('release');
-    const release = await response.json();
-    const asset = Array.isArray(release.assets)
-      ? release.assets.find(item => item && item.name === DESKTOP_ASSET_NAME)
-      : null;
-    if (!asset?.browser_download_url) throw new Error('asset');
-    state.desktopUrl = asset.browser_download_url;
-    state.desktopVersion = String(release.tag_name || '').replace(/^desktop-v/i, '');
+    const response = await fetch(`${UPDATE_ROOT}latest.yml`, { cache: 'no-store' });
+    if (!response.ok) throw new Error('manifest');
+    const manifest = await response.text();
+    const pathMatch = manifest.match(/^path:\s*(.+?)\s*$/m);
+    const versionMatch = manifest.match(/^version:\s*(.+?)\s*$/m);
+    if (!pathMatch) throw new Error('path');
+    state.desktopPath = pathMatch[1].trim();
+    state.desktopVersion = versionMatch ? versionMatch[1].trim() : '';
     document.querySelector('#desktop-version').textContent = state.desktopVersion ? `本地版 V${state.desktopVersion}` : '本地版';
   } catch (error) {
-    state.desktopUrl = DESKTOP_DOWNLOAD_FALLBACK;
-    document.querySelector('#desktop-version').textContent = 'Windows 本地版';
+    state.desktopPath = '';
+    document.querySelector('#desktop-version').textContent = '本地版更新信息暂不可用';
   }
 }
 
 function downloadDesktopApp() {
-  window.location.href = state.desktopUrl || DESKTOP_DOWNLOAD_FALLBACK;
+  if (!state.desktopPath) {
+    showToast('正在读取最新版本，请稍后再试');
+    resolveDesktopRelease();
+    return;
+  }
+  const encoded = state.desktopPath.split('/').map(encodeURIComponent).join('/');
+  window.location.href = `${UPDATE_ROOT}${encoded}`;
 }
 
 function openAdmin() {
