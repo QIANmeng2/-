@@ -1,4 +1,4 @@
-const CACHE = 'reaction-course-shell-v8'
+const CACHE = 'reaction-course-shell-v9'
 const scopePath = new URL(self.registration.scope).pathname
 const BASE = scopePath.endsWith('/') ? scopePath : `${scopePath}/`
 const SHELL = [BASE, `${BASE}manifest.webmanifest`, `${BASE}icons/icon.svg`, `${BASE}icons/icon-192.png`, `${BASE}icons/icon-512.png`]
@@ -16,7 +16,7 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const request = event.request
   const url = new URL(request.url)
-  if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return
+  if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.includes('/api/') || url.pathname.endsWith('/coach.html') || /\/assets\/coach[-.]/.test(url.pathname)) return
   if (request.mode === 'navigate') {
     event.respondWith(fetch(request).then((response) => {
       const copy = response.clone()
