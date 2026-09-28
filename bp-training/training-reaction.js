@@ -10,9 +10,10 @@
   }
   async function authorize() {
     const current = active;
-    if (!current || current.mode !== 'coach' || !window.trainingAPI?.reactionSession) return;
+    if (!current || current.mode !== 'coach') return;
     try {
-      const result = await window.trainingAPI.reactionSession();
+      const result = window.trainingAPI?.reactionSession ? await window.trainingAPI.reactionSession()
+        : window.trainingWebAuthorization ? { ok: true, session: await window.trainingWebAuthorization.session() } : { ok: false, message: '需要有效 BP 授权。' };
       if (active !== current) return;
       current.frame.contentWindow.postMessage(result.ok
         ? { type: 'bp-reaction-session', session: result.session }
@@ -24,7 +25,7 @@
   window.addEventListener('message', event => {
     if (!active || event.origin !== origin || event.source !== active.frame.contentWindow) return;
     if (event.data?.type === 'bp-reaction-ready') { active.ready = true; active.loading.hidden = true; clearTimeout(active.timeout); sendTheme(); authorize(); }
-    if (event.data?.type === 'bp-reaction-renew') authorize();
+    if (event.data?.type === 'bp-reaction-renew') { window.trainingWebAuthorization?.clear(); authorize(); }
   });
   new MutationObserver(sendTheme).observe(document.body, { attributes: true, attributeFilter: ['class'] });
   function dispose() {
