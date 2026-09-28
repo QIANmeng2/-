@@ -23,9 +23,7 @@
   gate.append(frame, note, retry); document.body.append(gate);
   let checking = false;
   const message = async event => {
-    if (event.origin !== origin || event.source !== frame.contentWindow) return;
-    if (event.data?.type === 'bp-reaction-ready') { frame.contentWindow.postMessage({ type: 'bp-reaction-parent' }, origin); return; }
-    if (event.data?.type !== 'bp-reaction-authenticated' || !event.data.session?.token || checking) return;
+    if (event.origin !== origin || event.source !== frame.contentWindow || event.data?.type !== 'bp-reaction-authenticated' || !event.data.session?.token || checking) return;
     checking = true;
     try {
       const response = await fetch(api + 'overview', { cache: 'no-store', headers: { Authorization: 'Bearer ' + event.data.session.token } });
