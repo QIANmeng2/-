@@ -9,7 +9,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self' https://download.neondream.cn">
   <title>BP板-Dream 网页体验版</title>
   <link rel="icon" href="./assets/icon.png" type="image/png">
-  <link rel="stylesheet" href="./app.css?v=56b92bbe29ec">
+  <link rel="stylesheet" href="./app.css?v=000e80283a75">
 </head>
 <body>
   <div id="app">
@@ -42,7 +42,7 @@
       </button>
       <button id="download-app" class="dock-button download" type="button">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"></path><path d="M5 21h14"></path></svg>
-        <span>下载 Windows 版</span>
+        <span>下载本地版</span>
       </button>
     </nav>
 
@@ -76,7 +76,7 @@
         </ul>
         <button id="about-download-app" class="dialog-download" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"></path><path d="M5 21h14"></path></svg>
-          <span>下载 Windows 本地版</span>
+          <span>选择下载版本</span>
         </button>
       </section>
       <div class="about-copy compact-copy">
@@ -88,9 +88,28 @@
       </div>
     </dialog>
 
+    <dialog id="download-dialog" aria-labelledby="download-title">
+      <div class="dialog-head">
+        <div><strong id="download-title">下载 Windows 版</strong></div>
+        <button id="download-close" class="icon-button compact" type="button" aria-label="关闭" title="关闭">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"></path></svg>
+        </button>
+      </div>
+      <div class="download-choices">
+        <button id="download-free" class="download-choice" type="button" disabled>
+          <span><strong>免费版</strong><span id="download-free-version">读取中</span></span>
+          <small>基础 BP 功能</small>
+        </button>
+        <button id="download-authorized" class="download-choice" type="button" disabled>
+          <span><strong>授权版</strong><span id="download-authorized-version">读取中</span></span>
+          <small>安装后需激活码</small>
+        </button>
+      </div>
+    </dialog>
+
     <div id="toast" role="status" aria-live="polite"></div>
   </div>
   <script src="./device-layout.js?v=a8ae76b0511e"></script>
-  <script src="./app.js?v=a0b4d94f2613"></script>
+  <script src="./app.js?v=378a8555ae82"></script>
 </body>
 </html>

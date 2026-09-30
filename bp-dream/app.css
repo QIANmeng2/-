@@ -214,6 +214,14 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.52); backdrop-filter: blur(3px); 
 .dialog-download { width: 100%; height: 38px; display: flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid rgba(242, 163, 55, 0.44); border-radius: 6px; color: #ffca76; background: var(--accent-soft); cursor: pointer; }
 .dialog-download:hover { border-color: var(--accent); }
 body.light .dialog-download { color: #945508; }
+.download-choices { display: grid; gap: 10px; padding: 16px; }
+.download-choice { width: 100%; padding: 14px 15px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); text-align: left; cursor: pointer; }
+.download-choice:hover:not(:disabled),.download-choice:focus-visible { border-color: var(--accent); background: var(--accent-soft); }
+.download-choice:disabled { opacity: .58; cursor: default; }
+.download-choice > span { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.download-choice strong { font-size: 15px; }
+.download-choice span span,.download-choice small { color: var(--muted); font-size: 12px; }
+.download-choice small { display: block; margin-top: 5px; }
 .version-row { display: flex; justify-content: space-between; gap: 12px; padding: 11px 16px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
 
 #toast {

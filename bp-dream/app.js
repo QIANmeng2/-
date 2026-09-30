@@ -15,8 +15,7 @@ const state = {
   layoutMode: 'small',
   used: new Set(JSON.parse(sessionStorage.getItem(USED_KEY) || '[]').map(String)),
   resetArmedUntil: 0,
-  desktopPath: '',
-  desktopVersion: ''
+  desktopReleases: { free: null, authorized: null }
 };
 
 const board = document.querySelector('#board');
@@ -25,6 +24,7 @@ const grids = {
   right: document.querySelector('[data-grid="right"]')
 };
 const aboutDialog = document.querySelector('#about-dialog');
+const downloadDialog = document.querySelector('#download-dialog');
 const toast = document.querySelector('#toast');
 let toastTimer = null;
 let aboutHoldTimer = null;
@@ -190,31 +190,43 @@ function setTheme(theme) {
   document.querySelector('meta[name="theme-color"]').content = light ? '#f2f3f5' : '#0d0e10';
 }
 
-async function resolveDesktopRelease() {
+async function resolveDesktopRelease(kind) {
+  const filename = kind === 'authorized' ? 'consent.yml' : 'latest.yml';
+  const versionLabel = document.querySelector(kind === 'authorized' ? '#download-authorized-version' : '#download-free-version');
+  const button = document.querySelector(kind === 'authorized' ? '#download-authorized' : '#download-free');
   try {
-    const response = await fetch(`${UPDATE_ROOT}latest.yml`, { cache: 'no-store' });
+    const response = await fetch(`${UPDATE_ROOT}${filename}`, { cache: 'no-store' });
     if (!response.ok) throw new Error('manifest');
     const manifest = await response.text();
     const pathMatch = manifest.match(/^path:\s*(.+?)\s*$/m);
     const versionMatch = manifest.match(/^version:\s*(.+?)\s*$/m);
-    if (!pathMatch) throw new Error('path');
-    state.desktopPath = pathMatch[1].trim();
-    state.desktopVersion = versionMatch ? versionMatch[1].trim() : '';
-    document.querySelector('#desktop-version').textContent = state.desktopVersion ? `本地版 V${state.desktopVersion}` : '本地版';
+    const version = versionMatch?.[1].trim() || '';
+    const path = pathMatch?.[1].trim() || '';
+    if (!/^\d+\.\d+\.\d+$/.test(version) || !/^[^/\\]+\.exe$/i.test(path) || !path.includes(version)) throw new Error('manifest');
+    if (kind === 'free' ? version !== '1.5.20' : Number(version.split('.')[0]) < 2) throw new Error('unavailable');
+    state.desktopReleases[kind] = { path, version };
+    versionLabel.textContent = `V${version}`;
+    button.disabled = false;
+    if (kind === 'free') document.querySelector('#desktop-version').textContent = `免费版 V${version}`;
   } catch (error) {
-    state.desktopPath = '';
-    document.querySelector('#desktop-version').textContent = '本地版更新信息暂不可用';
+    state.desktopReleases[kind] = null;
+    button.disabled = true;
+    versionLabel.textContent = kind === 'authorized' ? '暂未发布' : '暂不可用';
+    if (kind === 'free') document.querySelector('#desktop-version').textContent = '免费版更新信息暂不可用';
   }
 }
 
-function downloadDesktopApp() {
-  if (!state.desktopPath) {
-    showToast('正在读取最新版本，请稍后再试');
-    resolveDesktopRelease();
-    return;
-  }
-  const encoded = state.desktopPath.split('/').map(encodeURIComponent).join('/');
-  window.location.href = `${UPDATE_ROOT}${encoded}`;
+function openDownloadDialog() {
+  if (aboutDialog.open) aboutDialog.close();
+  downloadDialog.showModal();
+  resolveDesktopRelease('free');
+  resolveDesktopRelease('authorized');
+}
+
+function downloadDesktopApp(kind) {
+  const release = state.desktopReleases[kind];
+  if (!release) return;
+  window.location.href = `${UPDATE_ROOT}${encodeURIComponent(release.path)}`;
 }
 
 function openAdmin() {
@@ -226,8 +238,12 @@ function bindEvents() {
   document.querySelector('#theme-toggle').addEventListener('click', () => {
     setTheme(document.body.classList.contains('light') ? 'dark' : 'light');
   });
-  document.querySelector('#download-app').addEventListener('click', downloadDesktopApp);
-  document.querySelector('#about-download-app').addEventListener('click', downloadDesktopApp);
+  document.querySelector('#download-app').addEventListener('click', openDownloadDialog);
+  document.querySelector('#about-download-app').addEventListener('click', openDownloadDialog);
+  document.querySelector('#download-free').addEventListener('click', () => downloadDesktopApp('free'));
+  document.querySelector('#download-authorized').addEventListener('click', () => downloadDesktopApp('authorized'));
+  document.querySelector('#download-close').addEventListener('click', () => downloadDialog.close());
+  downloadDialog.addEventListener('click', event => { if (event.target === downloadDialog) downloadDialog.close(); });
   document.querySelector('#reset-used').addEventListener('click', () => {
     const now = Date.now();
     if (now > state.resetArmedUntil) {
@@ -285,7 +301,8 @@ async function init() {
   state.layout = payload.layout || {};
   document.querySelector('#web-version').textContent = `网页数据 ${payload.generatedAt?.slice(0, 10) || ''}`;
   renderCards();
-  resolveDesktopRelease();
+  resolveDesktopRelease('free');
+  resolveDesktopRelease('authorized');
 }
 
 init().catch(error => {
