@@ -1,7 +1,7 @@
 {
-  "name": "反应训练",
+  "name": "选手训练",
   "short_name": "训练",
-  "description": "三关式电竞选手反应训练",
+  "description": "训练任务与反应测试",
   "lang": "zh-CN",
   "start_url": "./",
   "scope": "./",
