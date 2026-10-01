@@ -5,15 +5,16 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://app.neondream.cn/reaction-training/; frame-src https://app.neondream.cn/reaction-training/; connect-src https://download.neondream.cn; object-src 'none'; base-uri 'none'">
   <title>训练</title>
-  <link rel="stylesheet" href="training.b30f182a8308.css">
+  <link rel="stylesheet" href="training.ae3f9328143c.css">
   <script defer src="training-catalog.80c800f5b7a8.js"></script>
   <script defer src="training-migration.6c0d58eb852b.js"></script>
-  <script defer src="training-reaction.79b63d6c3039.js"></script>
+  <script defer src="training-reaction.dfe7ab3a717f.js"></script>
   <script defer src="training-web-gate.a4a358ec670d.js"></script>
-  <script defer src="training-view.ca6d5268fef1.js"></script>
+  <script defer src="training-view.de389578bb78.js"></script>
 </head>
 <body class="web-locked">
-  <header><h1>训练</h1><div class="header-actions"><button id="edit" aria-pressed="false">编辑</button><details id="more"><summary>更多</summary><div class="menu"><button id="phone-open">选手手机入口</button><button id="publish-catalog">发布到团队</button><button id="load-shared">载入团队内容</button><button id="backup">导出备份</button><button id="restore">导入备份</button><button id="history">恢复上次编辑前内容</button><button id="legacy-export" hidden>导出旧内容</button></div></details><button id="training-close" class="icon-button" aria-label="关闭训练" title="关闭训练" hidden>×</button></div><input id="importfile" type="file" accept=".json,application/json" hidden></header>
+  <header><h1>训练</h1><div class="header-actions"><span id="sync-status" role="status" hidden></span><button id="sync-retry" hidden>重试</button><button id="edit" aria-pressed="false">编辑</button><button id="phone-open">选手入口</button><button id="training-close" class="icon-button" aria-label="关闭训练" title="关闭训练" hidden>×</button></div><input id="importfile" type="file" accept=".json,application/json" hidden></header>
+  <div id="more" hidden><button id="publish-catalog"></button><button id="load-shared"></button><button id="backup"></button><button id="restore"></button><button id="history"></button><button id="legacy-export" hidden></button></div>
   <nav class="training-primary" aria-label="训练页面"><button id="schedule-open">训练安排</button><button id="players-open">选手与队伍</button><button id="catalog-open">训练内容</button></nav>
   <dialog id="phone-dialog"><div class="phone-heading"><h2>选手手机入口</h2><button id="phone-close" aria-label="关闭" class="icon-button">×</button></div><img src="https://app.neondream.cn/reaction-training/reaction-training-qr.png" width="200" height="200" alt="选手训练二维码"><button id="phone-copy">复制链接</button><a href="https://app.neondream.cn/reaction-training/" target="_blank" rel="noopener">打开选手页面</a></dialog>
   <nav id="category-tabs" aria-label="训练分类"></nav>
