@@ -1,6 +1,6 @@
 'use strict';
 
-const UPDATE_ROOT = 'https://download.neondream.cn/bp-dream-updates/win/';
+const UPDATE_ROOT = 'https://download.neondream.cn/bp-dream-updates/';
 const ADMIN_URL = 'https://175.178.52.116/bp-dream-admin/';
 const THEME_KEY = 'bp-web-theme';
 const USED_KEY = 'bp-web-used-card-ids-v2';
@@ -15,7 +15,10 @@ const state = {
   layoutMode: 'small',
   used: new Set(JSON.parse(sessionStorage.getItem(USED_KEY) || '[]').map(String)),
   resetArmedUntil: 0,
-  desktopReleases: { free: null, authorized: null }
+  desktopReleases: { free: null, authorized: null },
+  downloadPlatform: null,
+  downloadArchitecture: 'arm64',
+  downloadRequest: 0
 };
 
 const board = document.querySelector('#board');
@@ -191,42 +194,67 @@ function setTheme(theme) {
 }
 
 async function resolveDesktopRelease(kind) {
-  const filename = kind === 'authorized' ? 'consent.yml' : 'latest.yml';
+  const platform = state.downloadPlatform;
+  if (!platform) return;
+  const architecture = state.downloadArchitecture;
+  const request = state.downloadRequest;
+  const filename = `${kind === 'authorized' ? 'consent' : 'latest'}${platform === 'mac' ? '-mac' : ''}.yml`;
   const versionLabel = document.querySelector(kind === 'authorized' ? '#download-authorized-version' : '#download-free-version');
   const button = document.querySelector(kind === 'authorized' ? '#download-authorized' : '#download-free');
   try {
-    const response = await fetch(`${UPDATE_ROOT}${filename}`, { cache: 'no-store' });
-    if (!response.ok) throw new Error('manifest');
+    const response = await fetch(`${UPDATE_ROOT}${platform}/${filename}`, { cache: 'no-store', signal: AbortSignal.timeout(12000) });
+    if (!response.ok) throw new Error(response.status === 404 ? 'unpublished' : 'manifest');
     const manifest = await response.text();
     const pathMatch = manifest.match(/^path:\s*(.+?)\s*$/m);
     const versionMatch = manifest.match(/^version:\s*(.+?)\s*$/m);
     const version = versionMatch?.[1].trim() || '';
-    const path = pathMatch?.[1].trim() || '';
-    if (!/^\d+\.\d+\.\d+$/.test(version) || !/^[^/\\]+\.exe$/i.test(path) || !path.includes(version)) throw new Error('manifest');
+    const files = [...manifest.matchAll(/^\s*- url:\s*(.+?)\s*$/gm)].map(match => match[1].trim());
+    const path = platform === 'mac' ? files.find(file => file.endsWith(`-mac-${architecture}.dmg`)) || files.find(file => file.endsWith(`-mac-${architecture}.zip`)) || '' : pathMatch?.[1].trim() || '';
+    const validPath = platform === 'mac' ? /^[^/\\]+\.(dmg|zip)$/i : /^[^/\\]+\.exe$/i;
+    if (!/^\d+\.\d+\.\d+$/.test(version) || !validPath.test(path) || !path.includes(version) || /[?#]/.test(path)) throw new Error('manifest');
     if (kind === 'free' ? version !== '1.5.20' : Number(version.split('.')[0]) < 2) throw new Error('unavailable');
-    state.desktopReleases[kind] = { path, version };
+    if (request !== state.downloadRequest) return;
+    state.desktopReleases[kind] = { path, version, platform, architecture };
     versionLabel.textContent = `V${version}`;
     button.disabled = false;
     if (kind === 'free') document.querySelector('#desktop-version').textContent = `免费版 V${version}`;
   } catch (error) {
+    if (request !== state.downloadRequest) return;
     state.desktopReleases[kind] = null;
     button.disabled = true;
     versionLabel.textContent = kind === 'authorized' ? '暂未发布' : '暂不可用';
-    if (kind === 'free') document.querySelector('#desktop-version').textContent = '免费版更新信息暂不可用';
+    if (platform === 'mac' && error.message === 'unpublished') document.querySelector('#download-status').textContent = 'macOS 安装包尚未发布，暂不可下载';
+    else document.querySelector('#download-status').textContent = '下载信息读取失败，请重新选择系统重试';
   }
+}
+
+function selectDownloadPlatform(platform) {
+  if (!['win', 'mac'].includes(platform)) return;
+  state.downloadPlatform = platform;
+  state.downloadArchitecture = document.querySelector('#download-architecture').value;
+  state.downloadRequest += 1;
+  state.desktopReleases = { free: null, authorized: null };
+  document.querySelectorAll('[data-download-platform]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.downloadPlatform === platform)));
+  document.querySelector('#download-mac-architecture').hidden = platform !== 'mac';
+  document.querySelector('#download-choices').hidden = false;
+  document.querySelector('#download-status').textContent = platform === 'mac' ? 'macOS' : 'Windows 64 位';
+  ['free', 'authorized'].forEach(kind => {
+    document.querySelector(`#download-${kind}`).disabled = true;
+    document.querySelector(`#download-${kind}-version`).textContent = '读取中';
+    resolveDesktopRelease(kind);
+  });
 }
 
 function openDownloadDialog() {
   if (aboutDialog.open) aboutDialog.close();
   downloadDialog.showModal();
-  resolveDesktopRelease('free');
-  resolveDesktopRelease('authorized');
+  if (state.downloadPlatform) selectDownloadPlatform(state.downloadPlatform);
 }
 
 function downloadDesktopApp(kind) {
   const release = state.desktopReleases[kind];
-  if (!release) return;
-  window.location.href = `${UPDATE_ROOT}${encodeURIComponent(release.path)}`;
+  if (!release || release.platform !== state.downloadPlatform || release.architecture !== state.downloadArchitecture) return;
+  window.location.href = `${UPDATE_ROOT}${release.platform}/${encodeURIComponent(release.path)}`;
 }
 
 function openAdmin() {
@@ -243,6 +271,8 @@ function bindEvents() {
   document.querySelector('#download-free').addEventListener('click', () => downloadDesktopApp('free'));
   document.querySelector('#download-authorized').addEventListener('click', () => downloadDesktopApp('authorized'));
   document.querySelector('#download-close').addEventListener('click', () => downloadDialog.close());
+  document.querySelectorAll('[data-download-platform]').forEach(button => button.addEventListener('click', () => selectDownloadPlatform(button.dataset.downloadPlatform)));
+  document.querySelector('#download-architecture').addEventListener('change', () => selectDownloadPlatform('mac'));
   downloadDialog.addEventListener('click', event => { if (event.target === downloadDialog) downloadDialog.close(); });
   document.querySelector('#reset-used').addEventListener('click', () => {
     const now = Date.now();
@@ -301,8 +331,7 @@ async function init() {
   state.layout = payload.layout || {};
   document.querySelector('#web-version').textContent = `网页数据 ${payload.generatedAt?.slice(0, 10) || ''}`;
   renderCards();
-  resolveDesktopRelease('free');
-  resolveDesktopRelease('authorized');
+  document.querySelector('#desktop-version').textContent = '免费版 V1.5.20';
 }
 
 init().catch(error => {

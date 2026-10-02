@@ -90,18 +90,26 @@
 
     <dialog id="download-dialog" aria-labelledby="download-title">
       <div class="dialog-head">
-        <div><strong id="download-title">下载 Windows 版</strong></div>
+        <div><strong id="download-title">下载电脑版</strong></div>
         <button id="download-close" class="icon-button compact" type="button" aria-label="关闭" title="关闭">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"></path></svg>
         </button>
       </div>
-      <div class="download-choices">
+      <div class="download-platforms" role="group" aria-label="选择系统">
+        <button type="button" data-download-platform="win" aria-pressed="false">Windows</button>
+        <button type="button" data-download-platform="mac" aria-pressed="false">macOS</button>
+      </div>
+      <label id="download-mac-architecture" class="download-architecture" hidden>芯片
+        <select id="download-architecture"><option value="arm64">Apple Silicon（M 系列）</option><option value="x64">Intel</option></select>
+      </label>
+      <p id="download-status" class="download-status" role="status">请选择系统</p>
+      <div id="download-choices" class="download-choices" hidden>
         <button id="download-free" class="download-choice" type="button" disabled>
-          <span><strong>免费版</strong><span id="download-free-version">读取中</span></span>
+          <span><strong>免费版</strong><span id="download-free-version">V1.5.20</span></span>
           <small>基础 BP 功能</small>
         </button>
         <button id="download-authorized" class="download-choice" type="button" disabled>
-          <span><strong>授权版</strong><span id="download-authorized-version">读取中</span></span>
+          <span><strong>授权版</strong><span id="download-authorized-version"></span></span>
           <small>安装后需激活码</small>
         </button>
       </div>
