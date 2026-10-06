@@ -1,4 +1,4 @@
-const CACHE = 'reaction-course-shell-v20'
+const CACHE = 'reaction-course-shell-v21'
 const scopePath = new URL(self.registration.scope).pathname
 const BASE = scopePath.endsWith('/') ? scopePath : `${scopePath}/`
 const SHELL = [BASE, `${BASE}manifest.webmanifest`, `${BASE}icons/icon.svg`, `${BASE}icons/icon-192.png`, `${BASE}icons/icon-512.png`]
@@ -17,12 +17,14 @@ self.addEventListener('fetch', (event) => {
   const request = event.request
   const url = new URL(request.url)
   if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.includes('/api/') || url.pathname.endsWith('/coach.html') || /\/assets\/coach[-.]/.test(url.pathname)) return
-  if (request.mode === 'navigate') {
-    event.respondWith(fetch(request).then((response) => {
+  if (request.mode === 'navigate' || /\/assets\/player[-.].*\.js$/.test(url.pathname)) {
+    const freshUrl = new URL(request.url)
+    freshUrl.searchParams.set('_release', CACHE)
+    event.respondWith(fetch(new Request(freshUrl, { cache: 'no-store', credentials: request.credentials })).then((response) => {
       const copy = response.clone()
-      caches.open(CACHE).then((cache) => cache.put(BASE, copy))
+      caches.open(CACHE).then((cache) => cache.put(request.mode === 'navigate' ? BASE : request, copy))
       return response
-    }).catch(() => caches.match(BASE)))
+    }).catch(() => caches.match(request.mode === 'navigate' ? BASE : request)))
     return
   }
   event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => {
