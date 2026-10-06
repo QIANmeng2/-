@@ -1,4 +1,4 @@
-const CACHE = 'reaction-course-shell-v18'
+const CACHE = 'reaction-course-shell-v19'
 const scopePath = new URL(self.registration.scope).pathname
 const BASE = scopePath.endsWith('/') ? scopePath : `${scopePath}/`
 const SHELL = [BASE, `${BASE}manifest.webmanifest`, `${BASE}icons/icon.svg`, `${BASE}icons/icon-192.png`, `${BASE}icons/icon-512.png`]
